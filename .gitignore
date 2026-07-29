@@ -1,1 +1,8 @@
 .superpowers/
+node_modules/
+.pnpm-store/
+dist/
+.next/
+coverage/
+*.tsbuildinfo
+!.env.example

@@ -1,0 +1,11 @@
+{
+  "name": "@point-quest/api-client",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "node -e \"\"",
+    "lint": "node -e \"\"",
+    "typecheck": "node -e \"\"",
+    "test": "node -e \"\""
+  }
+}

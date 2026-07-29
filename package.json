@@ -1,0 +1,16 @@
+{
+  "name": "point-quest",
+  "private": true,
+  "packageManager": "pnpm@10.28.2",
+  "engines": {
+    "node": ">=24 <26"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @point-quest/api --filter @point-quest/web dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "test:e2e": "playwright test"
+  }
+}
