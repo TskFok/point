@@ -1,0 +1,200 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  ADMIN
+  STUDENT
+}
+
+enum ClientType {
+  WEB
+  ANDROID
+}
+
+enum AnswerMode {
+  FIRST_ATTEMPT
+  WRONG_RETRY
+}
+
+enum PointLedgerType {
+  ANSWER_REWARD
+  ORDER_REDEEM
+  ORDER_REFUND
+}
+
+enum OrderStatus {
+  PENDING_PICKUP
+  COMPLETED
+  CANCELLED
+}
+
+model User {
+  id                 String             @id @default(cuid())
+  username           String             @unique
+  passwordHash       String
+  role               UserRole
+  pointsBalance      Int                @default(0)
+  isActive           Boolean            @default(true)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  refreshTokens      RefreshToken[]
+  createdQuestions   Question[]         @relation("QuestionCreator")
+  questionProgresses QuestionProgress[]
+  answerAttempts     AnswerAttempt[]
+  pointConfigs       PointConfig[]      @relation("PointConfigUpdater")
+  pointLedgers       PointLedger[]
+  orders             Order[]            @relation("OrderOwner")
+  ordersUpdated      Order[]            @relation("OrderUpdater")
+}
+
+model RefreshToken {
+  id                String         @id @default(cuid())
+  userId            String
+  tokenHash         String         @unique
+  clientType        ClientType
+  expiresAt         DateTime
+  revokedAt         DateTime?
+  replacedByTokenId String?
+  createdAt         DateTime       @default(now())
+  user              User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  replacedByToken   RefreshToken?  @relation("RefreshTokenReplacement", fields: [replacedByTokenId], references: [id])
+  replacedTokens    RefreshToken[] @relation("RefreshTokenReplacement")
+
+  @@index([userId])
+}
+
+model Question {
+  id          String             @id @default(cuid())
+  stem        String
+  explanation String
+  basePoints  Int
+  isActive    Boolean            @default(true)
+  createdBy   String
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  creator     User               @relation("QuestionCreator", fields: [createdBy], references: [id])
+  options     QuestionOption[]
+  progresses  QuestionProgress[]
+  attempts    AnswerAttempt[]
+
+  @@index([isActive])
+}
+
+model QuestionOption {
+  id         String          @id @default(cuid())
+  questionId String
+  label      String
+  content    String
+  position   Int
+  isCorrect  Boolean         @default(false)
+  question   Question        @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  attempts   AnswerAttempt[]
+
+  @@unique([questionId, position])
+}
+
+model QuestionProgress {
+  id              String    @id @default(cuid())
+  userId          String
+  questionId      String
+  firstCorrect    Boolean
+  errorCount      Int       @default(0)
+  masteredAt      DateTime?
+  firstAnsweredAt DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  question        Question  @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, questionId])
+}
+
+model AnswerAttempt {
+  id                 String         @id @default(cuid())
+  userId             String
+  questionId         String
+  selectedOptionId   String
+  mode               AnswerMode
+  isCorrect          Boolean
+  basePointsSnapshot Int
+  multiplierSnapshot Int
+  pointsAwarded      Int
+  idempotencyKey     String
+  createdAt          DateTime       @default(now())
+  user               User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  question           Question       @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  selectedOption     QuestionOption @relation(fields: [selectedOptionId], references: [id], onDelete: Restrict)
+  pointLedger        PointLedger?
+
+  @@unique([userId, idempotencyKey])
+  @@index([questionId])
+}
+
+model PointConfig {
+  id         String   @id @default(cuid())
+  multiplier Int
+  updatedBy  String
+  createdAt  DateTime @default(now())
+  updater    User     @relation("PointConfigUpdater", fields: [updatedBy], references: [id], onDelete: Restrict)
+
+  @@index([createdAt, id])
+}
+
+model PointLedger {
+  id              String          @id @default(cuid())
+  userId          String
+  type            PointLedgerType
+  delta           Int
+  balanceAfter    Int
+  answerAttemptId String?         @unique
+  orderId         String?
+  createdAt       DateTime        @default(now())
+  user            User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  answerAttempt   AnswerAttempt?  @relation(fields: [answerAttemptId], references: [id], onDelete: Restrict)
+  order           Order?          @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@unique([orderId, type])
+  @@index([userId, createdAt])
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  imageKey    String
+  stock       Int
+  pointsCost  Int
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  orders      Order[]
+
+  @@index([isActive])
+}
+
+model Order {
+  id                      String        @id @default(cuid())
+  orderNo                 String        @unique
+  userId                  String
+  productId               String
+  productNameSnapshot     String
+  productImageKeySnapshot String
+  pointsCostSnapshot      Int
+  status                  OrderStatus   @default(PENDING_PICKUP)
+  idempotencyKey          String
+  createdAt               DateTime      @default(now())
+  completedAt             DateTime?
+  cancelledAt             DateTime?
+  updatedBy               String?
+  user                    User          @relation("OrderOwner", fields: [userId], references: [id], onDelete: Restrict)
+  product                 Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
+  updater                 User?         @relation("OrderUpdater", fields: [updatedBy], references: [id], onDelete: Restrict)
+  pointLedgers            PointLedger[]
+
+  @@unique([userId, idempotencyKey])
+  @@index([status, createdAt])
+}

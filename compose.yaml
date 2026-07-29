@@ -1,3 +1,37 @@
 name: point-quest
 
-services: {}
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: point
+      POSTGRES_PASSWORD: point
+      POSTGRES_USER: point
+    ports:
+      - '5432:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U point -d point']
+      interval: 2s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - point-postgres-data:/var/lib/postgresql/data
+
+  db-test:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: point_test
+      POSTGRES_PASSWORD: point
+      POSTGRES_USER: point
+    ports:
+      - '5433:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U point -d point_test']
+      interval: 2s
+      timeout: 5s
+      retries: 10
+    tmpfs:
+      - /var/lib/postgresql/data
+
+volumes:
+  point-postgres-data:
