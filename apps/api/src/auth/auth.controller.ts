@@ -16,6 +16,7 @@ import {
 } from './auth.service';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { Public } from './decorators/public.decorator';
+import { MayUseRefreshCookie } from './decorators/refresh-cookie.decorator';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -101,6 +102,7 @@ export class AuthController {
 
   @Post('refresh')
   @Public()
+  @MayUseRefreshCookie()
   async refresh(
     @Body() body: RefreshDto,
     @Req() request: Request,
@@ -121,6 +123,7 @@ export class AuthController {
   @Post('logout')
   @HttpCode(200)
   @Public()
+  @MayUseRefreshCookie()
   async logout(
     @Body() body: RefreshDto,
     @Req() request: Request,

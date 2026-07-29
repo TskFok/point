@@ -80,6 +80,22 @@ function expectErrorContract(
   }
 }
 
+async function createWebAgent(
+  server: Parameters<typeof request>[0],
+): Promise<ReturnType<typeof request.agent>> {
+  await request(server)
+    .post('/api/v1/auth/register')
+    .send({ username: 'web_student', password: 'StrongPass123!' })
+    .expect(201);
+
+  const webAgent = request.agent(server);
+  await webAgent
+    .post('/api/v1/auth/login')
+    .send({ username: 'web_student', password: 'StrongPass123!' })
+    .expect(201);
+  return webAgent;
+}
+
 describe('认证 API', () => {
   let app: INestApplication;
   let server: Parameters<typeof request>[0];
@@ -259,6 +275,42 @@ describe('认证 API', () => {
     ).toBe(true);
   });
 
+  it('Cookie 模式 refresh 标准路由缺少 CSRF 时返回 403', async () => {
+    const webAgent = await createWebAgent(server);
+
+    await webAgent.post('/api/v1/auth/refresh').send({}).expect(403);
+  });
+
+  it('Cookie 模式 refresh 尾斜杠路由缺少 CSRF 时返回 403', async () => {
+    const webAgent = await createWebAgent(server);
+
+    await webAgent.post('/api/v1/auth/refresh/').send({}).expect(403);
+  });
+
+  it('Cookie 模式 refresh 大写路由缺少 CSRF 时返回 403', async () => {
+    const webAgent = await createWebAgent(server);
+
+    await webAgent.post('/API/V1/AUTH/REFRESH').send({}).expect(403);
+  });
+
+  it('Cookie 模式 logout 标准路由缺少 CSRF 时返回 403', async () => {
+    const webAgent = await createWebAgent(server);
+
+    await webAgent.post('/api/v1/auth/logout').send({}).expect(403);
+  });
+
+  it('Cookie 模式 logout 尾斜杠路由缺少 CSRF 时返回 403', async () => {
+    const webAgent = await createWebAgent(server);
+
+    await webAgent.post('/api/v1/auth/logout/').send({}).expect(403);
+  });
+
+  it('Cookie 模式 logout 大写路由缺少 CSRF 时返回 403', async () => {
+    const webAgent = await createWebAgent(server);
+
+    await webAgent.post('/API/V1/AUTH/LOGOUT').send({}).expect(403);
+  });
+
   it('携带旧认证 Cookie 仍可访问公开注册、登录和 Android Token 端点', async () => {
     const staleCookies = [
       'pq_access=expired-or-invalid',
@@ -370,7 +422,7 @@ describe('认证 API', () => {
     expect(oldStoredToken.revokedAt).not.toBeNull();
   });
 
-  it('轮换 Refresh Token 并且数据库只保存 SHA-256 摘要', async () => {
+  it('Android Body Refresh Token 优先于旧 Cookie 且数据库只保存 SHA-256 摘要', async () => {
     await request(server)
       .post('/api/v1/auth/register')
       .send({ username: 'refresh_student', password: 'StrongPass123!' })
@@ -393,6 +445,7 @@ describe('认证 API', () => {
 
     const refreshResponse = await request(server)
       .post('/api/v1/auth/refresh')
+      .set('Cookie', ['pq_refresh=stale-refresh-cookie'])
       .send({ refreshToken: oldRefreshToken })
       .expect(201);
     const refreshBody = refreshResponse.body as unknown as {
@@ -671,7 +724,7 @@ describe('认证 API', () => {
     expect(denied.headers['access-control-allow-origin']).toBeUndefined();
   });
 
-  it('Android JSON logout 撤销令牌但不发送 Web Cookie 清理头', async () => {
+  it('Android JSON logout 优先使用 Body Token 且不发送 Cookie 清理头', async () => {
     await request(server)
       .post('/api/v1/auth/register')
       .send({ username: 'android_logout', password: 'StrongPass123!' })
@@ -686,6 +739,7 @@ describe('认证 API', () => {
 
     const logoutResponse = await request(server)
       .post('/api/v1/auth/logout')
+      .set('Cookie', ['pq_refresh=stale-refresh-cookie'])
       .send({ refreshToken: tokenBody.refreshToken })
       .expect(200, { success: true });
     expect(logoutResponse.headers['set-cookie']).toBeUndefined();

@@ -4,7 +4,9 @@ import {
   ForbiddenException,
   Injectable,
 } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { timingSafeEqual } from 'node:crypto';
+import { MAY_USE_REFRESH_COOKIE_KEY } from '../decorators/refresh-cookie.decorator';
 import type { AuthenticatedRequest } from './access-token.guard';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
@@ -17,6 +19,8 @@ function equalTokens(headerToken: string, cookieToken: string): boolean {
 
 @Injectable()
 export class CsrfGuard implements CanActivate {
+  constructor(private readonly reflector: Reflector) {}
+
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     if (SAFE_METHODS.has(request.method.toUpperCase())) {
@@ -29,11 +33,12 @@ export class CsrfGuard implements CanActivate {
       body !== null &&
       'refreshToken' in body &&
       typeof body.refreshToken === 'string';
-    const isRefreshTokenEndpoint = /\/auth\/(?:refresh|logout)$/.test(
-      request.path,
+    const mayUseRefreshCookie = this.reflector.getAllAndOverride<boolean>(
+      MAY_USE_REFRESH_COOKIE_KEY,
+      [context.getHandler(), context.getClass()],
     );
     const usesRefreshCookie =
-      isRefreshTokenEndpoint &&
+      mayUseRefreshCookie &&
       Boolean(request.cookies?.pq_refresh) &&
       !hasBodyRefreshToken;
     const usesAuthCookie = usesRefreshCookie || request.authSource === 'cookie';
