@@ -6,7 +6,6 @@ import {
   Post,
   Req,
   Res,
-  UseGuards,
 } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import type { Request, Response } from 'express';
@@ -16,10 +15,10 @@ import {
   type TokenPair,
 } from './auth.service';
 import { CurrentUser } from './decorators/current-user.decorator';
+import { Public } from './decorators/public.decorator';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { RegisterDto } from './dto/register.dto';
-import { AccessTokenGuard } from './guards/access-token.guard';
 import type { RequestUser } from './strategies/access-token.strategy';
 
 const ACCESS_COOKIE_MILLISECONDS = 15 * 60 * 1000;
@@ -78,11 +77,13 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
+  @Public()
   register(@Body() body: RegisterDto) {
     return this.authService.register(body);
   }
 
   @Post('login')
+  @Public()
   async login(
     @Body() body: LoginDto,
     @Res({ passthrough: true }) response: Response,
@@ -93,11 +94,13 @@ export class AuthController {
   }
 
   @Post('token')
+  @Public()
   token(@Body() body: LoginDto) {
     return this.authService.login(body, 'ANDROID');
   }
 
   @Post('refresh')
+  @Public()
   async refresh(
     @Body() body: RefreshDto,
     @Req() request: Request,
@@ -117,18 +120,20 @@ export class AuthController {
 
   @Post('logout')
   @HttpCode(200)
+  @Public()
   async logout(
     @Body() body: RefreshDto,
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
   ) {
     await this.authService.logout(rawRefreshToken(request, body));
-    clearWebCookies(response);
+    if (!body.refreshToken && request.cookies?.pq_refresh) {
+      clearWebCookies(response);
+    }
     return { success: true };
   }
 
   @Get('me')
-  @UseGuards(AccessTokenGuard)
   me(@CurrentUser() user: RequestUser) {
     return { user };
   }

@@ -8,10 +8,10 @@ import type { ClientType, User, UserRole } from '@prisma/client';
 import { compare, hash } from 'bcryptjs';
 import { randomBytes } from 'node:crypto';
 import { sign } from 'jsonwebtoken';
+import { readJwtSecret } from '../config/runtime-config';
 import { PrismaService } from '../prisma/prisma.service';
 import type { LoginDto } from './dto/login.dto';
 import type { RegisterDto } from './dto/register.dto';
-import { readJwtSecret } from './strategies/access-token.strategy';
 import { hashRefreshToken } from './token-hash';
 
 const ACCESS_TOKEN_SECONDS = 15 * 60;

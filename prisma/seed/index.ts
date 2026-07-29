@@ -4,6 +4,7 @@ import { PrismaClient } from '@prisma/client';
 import { hash } from 'bcryptjs';
 import { productSeeds } from './products';
 import { optionSeeds, questionSeeds, seedAdminId } from './questions';
+import { seedAdminCredentials, seedStudentCredentials } from './users';
 
 const connectionString =
   process.env.DATABASE_URL ??
@@ -13,21 +14,21 @@ const prisma = new PrismaClient({ adapter });
 
 async function main(): Promise<void> {
   const [adminPasswordHash, studentPasswordHash] = await Promise.all([
-    hash('Admin123!', 12),
-    hash('Student123!', 12),
+    hash(seedAdminCredentials.password, 12),
+    hash(seedStudentCredentials.password, 12),
   ]);
 
   await prisma.user.createMany({
     data: [
       {
         id: seedAdminId,
-        username: 'admin',
+        username: seedAdminCredentials.username,
         passwordHash: adminPasswordHash,
         role: 'ADMIN',
       },
       {
         id: 'seed-user-student',
-        username: 'student',
+        username: seedStudentCredentials.username,
         passwordHash: studentPasswordHash,
         role: 'STUDENT',
       },
@@ -65,7 +66,10 @@ async function main(): Promise<void> {
   console.log(
     JSON.stringify({
       seeded: { users, questions, options, products },
-      demoUsers: ['admin', 'student'],
+      demoUsers: [
+        seedAdminCredentials.username,
+        seedStudentCredentials.username,
+      ],
     }),
   );
 }

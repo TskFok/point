@@ -1,7 +1,8 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import type { UserRole } from '@prisma/client';
 import type { Request } from 'express';
-import { verify } from 'jsonwebtoken';
+import { TokenExpiredError, verify } from 'jsonwebtoken';
+import { readJwtSecret } from '../../config/runtime-config';
 import { PrismaService } from '../../prisma/prisma.service';
 
 export type RequestUser = {
@@ -19,18 +20,17 @@ type AccessTokenPayload = {
   type: 'access';
 };
 
-export function readJwtSecret(): string {
-  const secret = process.env.AUTH_JWT_SECRET;
-  if (!secret || Buffer.byteLength(secret, 'utf8') < 32) {
-    throw new Error('AUTH_JWT_SECRET 必须配置为至少 32 字节的密钥');
-  }
-  return secret;
-}
-
 function unauthorized(): UnauthorizedException {
   return new UnauthorizedException({
     code: 'AUTH_INVALID_TOKEN',
     message: '登录凭证无效或已过期',
+  });
+}
+
+function expired(): UnauthorizedException {
+  return new UnauthorizedException({
+    code: 'AUTH_TOKEN_EXPIRED',
+    message: '登录凭证已过期',
   });
 }
 
@@ -58,7 +58,10 @@ export class AccessTokenStrategy {
       payload = verify(token, readJwtSecret(), {
         algorithms: ['HS256'],
       }) as AccessTokenPayload;
-    } catch {
+    } catch (error) {
+      if (error instanceof TokenExpiredError) {
+        throw expired();
+      }
       throw unauthorized();
     }
     if (

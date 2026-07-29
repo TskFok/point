@@ -16,7 +16,15 @@ import { AccessTokenStrategy } from './strategies/access-token.strategy';
     RolesGuard,
     {
       provide: APP_GUARD,
+      useExisting: AccessTokenGuard,
+    },
+    {
+      provide: APP_GUARD,
       useClass: CsrfGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useExisting: RolesGuard,
     },
   ],
   exports: [AuthService, AccessTokenStrategy, AccessTokenGuard, RolesGuard],

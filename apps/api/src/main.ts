@@ -1,34 +1,13 @@
-import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import cookieParser from 'cookie-parser';
-import { randomUUID } from 'node:crypto';
-import type { NextFunction, Request, Response } from 'express';
 import { AppModule } from './app.module';
-import { readJwtSecret } from './auth/strategies/access-token.strategy';
+import { configureApiApp } from './common/http/configure-api-app';
+import { readRuntimeConfig } from './config/runtime-config';
 
 async function bootstrap() {
-  readJwtSecret();
+  const config = readRuntimeConfig();
   const app = await NestFactory.create(AppModule);
 
-  app.setGlobalPrefix('api/v1');
-  app.use(cookieParser());
-  app.useGlobalPipes(
-    new ValidationPipe({
-      transform: true,
-      whitelist: true,
-      forbidNonWhitelisted: true,
-    }),
-  );
-  app.use((request: Request, response: Response, next: NextFunction) => {
-    const requestId =
-      typeof request.headers['x-request-id'] === 'string'
-        ? request.headers['x-request-id']
-        : randomUUID();
-
-    response.setHeader('x-request-id', requestId);
-    next();
-  });
-
+  configureApiApp(app, config.webOrigin);
   await app.listen(process.env.PORT ?? 3000);
 }
 void bootstrap();

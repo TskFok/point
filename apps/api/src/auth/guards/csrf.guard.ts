@@ -5,7 +5,7 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { timingSafeEqual } from 'node:crypto';
-import type { Request } from 'express';
+import type { AuthenticatedRequest } from './access-token.guard';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
@@ -18,14 +18,11 @@ function equalTokens(headerToken: string, cookieToken: string): boolean {
 @Injectable()
 export class CsrfGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
-    const request = context.switchToHttp().getRequest<Request>();
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     if (SAFE_METHODS.has(request.method.toUpperCase())) {
       return true;
     }
 
-    const hasBearer = /^Bearer\s+.+$/i.test(
-      request.headers.authorization ?? '',
-    );
     const body = request.body as unknown;
     const hasBodyRefreshToken =
       typeof body === 'object' &&
@@ -39,8 +36,7 @@ export class CsrfGuard implements CanActivate {
       isRefreshTokenEndpoint &&
       Boolean(request.cookies?.pq_refresh) &&
       !hasBodyRefreshToken;
-    const usesAuthCookie =
-      usesRefreshCookie || (!hasBearer && Boolean(request.cookies?.pq_access));
+    const usesAuthCookie = usesRefreshCookie || request.authSource === 'cookie';
     if (!usesAuthCookie) {
       return true;
     }
