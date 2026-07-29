@@ -34,6 +34,8 @@ const testUsernames = [
   'web_student',
   'web_refresh_student',
   'refresh_student',
+  'register_race',
+  'refresh_race',
 ];
 
 describe('认证 API', () => {
@@ -320,5 +322,51 @@ describe('认证 API', () => {
       .post('/api/v1/auth/refresh')
       .send({ refreshToken: oldRefreshToken })
       .expect(401);
+  });
+
+  it('并发注册与并发令牌轮换都只允许一个请求成功', async () => {
+    const registrationResponses = await Promise.all([
+      request(server)
+        .post('/api/v1/auth/register')
+        .send({ username: 'Register_Race', password: 'StrongPass123!' }),
+      request(server)
+        .post('/api/v1/auth/register')
+        .send({ username: 'register_race', password: 'StrongPass123!' }),
+    ]);
+    expect(
+      registrationResponses.map((response) => response.status).sort(),
+    ).toEqual([201, 409]);
+
+    await request(server)
+      .post('/api/v1/auth/register')
+      .send({ username: 'refresh_race', password: 'StrongPass123!' })
+      .expect(201);
+    const tokenResponse = await request(server)
+      .post('/api/v1/auth/token')
+      .send({ username: 'refresh_race', password: 'StrongPass123!' })
+      .expect(201);
+    const tokenBody = tokenResponse.body as unknown as {
+      refreshToken: string;
+    };
+
+    const refreshResponses = await Promise.all([
+      request(server)
+        .post('/api/v1/auth/refresh')
+        .send({ refreshToken: tokenBody.refreshToken }),
+      request(server)
+        .post('/api/v1/auth/refresh')
+        .send({ refreshToken: tokenBody.refreshToken }),
+    ]);
+    expect(refreshResponses.map((response) => response.status).sort()).toEqual([
+      201, 401,
+    ]);
+    await expect(
+      prisma.refreshToken.count({
+        where: {
+          user: { username: 'refresh_race' },
+          revokedAt: null,
+        },
+      }),
+    ).resolves.toBe(1);
   });
 });
