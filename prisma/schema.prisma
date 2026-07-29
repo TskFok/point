@@ -125,7 +125,7 @@ model AnswerAttempt {
   pointsAwarded      Int
   idempotencyKey     String
   createdAt          DateTime       @default(now())
-  user               User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user               User           @relation(fields: [userId], references: [id], onDelete: Restrict)
   question           Question       @relation(fields: [questionId], references: [id], onDelete: Restrict)
   selectedOption     QuestionOption @relation(fields: [selectedOptionId], references: [id], onDelete: Restrict)
   pointLedger        PointLedger?
