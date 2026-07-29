@@ -355,7 +355,7 @@ Android 使用短期 Access Token 和可轮换的 Refresh Token。移动端令�
 4. 写入负数 `PointLedger`。
 5. 创建 `PENDING_PICKUP` 订单及商品快照。
 
-任一步失败都回滚。数据库事务使用适合并发资产修改的隔离级别，并对可重试的序列化冲突进行有限次重试。不得在循环遍历中执行 SQL 查询。
+任一步失败都回滚。数据库事务使用适合并发资产修改的隔离级别。发生序列化冲突时，服务端返回 `409 CONCURRENT_MODIFICATION`，客户端可使用原幂等键重新提交；服务端不得通过循环执行 SQL 重试，也不得在任何循环遍历中查询 SQL。
 
 ### 6.4 订单取消事务
 
@@ -496,6 +496,7 @@ Android 使用短期 Access Token 和可轮换的 Refresh Token。移动端令�
   - `PRODUCT_INACTIVE`
   - `ORDER_INVALID_STATUS`
   - `IDEMPOTENCY_CONFLICT`
+  - `CONCURRENT_MODIFICATION`
 
 ## 11. 测试策略
 
