@@ -7,8 +7,19 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { randomBytes } from 'node:crypto';
 import type { Request, Response } from 'express';
+import { ApiContract } from '../openapi/api-contract.decorator';
+import {
+  LoginRequestDto,
+  RefreshRequestDto,
+  RefreshResponseDto,
+  RegisterRequestDto,
+  SuccessResponseDto,
+  TokenResponseDto,
+  UserResponseDto,
+} from '../openapi/api-contract.models';
 import {
   AuthService,
   type RotatedTokenPair,
@@ -74,17 +85,32 @@ function rawRefreshToken(
 }
 
 @Controller('auth')
+@ApiTags('认证')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
   @Public()
+  @ApiContract({
+    operationId: 'authRegister',
+    summary: '注册学生账号',
+    responseType: UserResponseDto,
+    responseStatus: 201,
+    bodyType: RegisterRequestDto,
+  })
   register(@Body() body: RegisterDto) {
     return this.authService.register(body);
   }
 
   @Post('login')
   @Public()
+  @ApiContract({
+    operationId: 'authLoginWeb',
+    summary: 'Web 登录并写入认证 Cookie',
+    responseType: UserResponseDto,
+    responseStatus: 201,
+    bodyType: LoginRequestDto,
+  })
   async login(
     @Body() body: LoginDto,
     @Res({ passthrough: true }) response: Response,
@@ -96,6 +122,13 @@ export class AuthController {
 
   @Post('token')
   @Public()
+  @ApiContract({
+    operationId: 'authIssueAndroidToken',
+    summary: 'Android 登录并获取令牌',
+    responseType: TokenResponseDto,
+    responseStatus: 201,
+    bodyType: LoginRequestDto,
+  })
   token(@Body() body: LoginDto) {
     return this.authService.login(body, 'ANDROID');
   }
@@ -103,6 +136,14 @@ export class AuthController {
   @Post('refresh')
   @Public()
   @MayUseRefreshCookie()
+  @ApiContract({
+    operationId: 'authRefresh',
+    summary: '轮换 Web Cookie 或 Android 令牌',
+    responseType: RefreshResponseDto,
+    responseStatus: 201,
+    bodyType: RefreshRequestDto,
+    csrf: true,
+  })
   async refresh(
     @Body() body: RefreshDto,
     @Req() request: Request,
@@ -124,6 +165,14 @@ export class AuthController {
   @HttpCode(200)
   @Public()
   @MayUseRefreshCookie()
+  @ApiContract({
+    operationId: 'authLogout',
+    summary: '注销当前 Refresh Token',
+    responseType: SuccessResponseDto,
+    responseStatus: 200,
+    bodyType: RefreshRequestDto,
+    csrf: true,
+  })
   async logout(
     @Body() body: RefreshDto,
     @Req() request: Request,
@@ -137,6 +186,12 @@ export class AuthController {
   }
 
   @Get('me')
+  @ApiContract({
+    operationId: 'authGetCurrentUser',
+    summary: '获取当前用户',
+    responseType: UserResponseDto,
+    authenticated: true,
+  })
   me(@CurrentUser() user: RequestUser) {
     return { user };
   }

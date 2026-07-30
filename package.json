@@ -8,6 +8,8 @@
   "scripts": {
     "dev": "pnpm --parallel --filter @point-quest/api --filter @point-quest/web dev",
     "build": "pnpm -r build",
+    "api:spec": "pnpm --filter @point-quest/api generate:openapi",
+    "api:client": "pnpm --filter @point-quest/api-client generate",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:seed": "prisma db seed",

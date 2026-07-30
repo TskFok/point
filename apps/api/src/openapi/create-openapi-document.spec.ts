@@ -1,0 +1,195 @@
+import { NestFactory } from '@nestjs/core';
+import type { OpenAPIObject } from '@nestjs/swagger';
+import { AppModule } from '../app.module';
+import { configureApiApp } from '../common/http/configure-api-app';
+import { createOpenApiDocument } from './create-openapi-document';
+
+type HttpMethod =
+  'get' | 'put' | 'post' | 'delete' | 'options' | 'head' | 'patch' | 'trace';
+
+type ReferenceObject = { $ref: string };
+type SchemaObject = {
+  properties?: Record<string, unknown>;
+  required?: string[];
+};
+type ParameterObject = {
+  in: string;
+  name: string;
+  required?: boolean;
+};
+type RequestBodyObject = {
+  required?: boolean;
+  content: Record<string, { schema?: unknown }>;
+};
+type ResponseObject = {
+  content?: Record<string, { schema?: unknown }>;
+};
+type OperationObject = {
+  operationId?: string;
+  parameters?: Array<ParameterObject | ReferenceObject>;
+  requestBody?: RequestBodyObject | ReferenceObject;
+  responses: Record<string, ResponseObject | ReferenceObject>;
+  security?: Array<Record<string, string[]>>;
+};
+type PathItemObject = Partial<Record<HttpMethod, OperationObject>>;
+
+const methods: HttpMethod[] = [
+  'get',
+  'put',
+  'post',
+  'delete',
+  'options',
+  'head',
+  'patch',
+  'trace',
+];
+
+function operations(document: OpenAPIObject): OperationObject[] {
+  return Object.values(document.paths).flatMap((path) =>
+    methods.flatMap((method) => {
+      const operation = (path as PathItemObject | undefined)?.[method];
+      return operation ? [operation] : [];
+    }),
+  );
+}
+
+function isReference(value: unknown): value is ReferenceObject {
+  return typeof value === 'object' && value !== null && '$ref' in value;
+}
+
+function responseSchema(response: ResponseObject | ReferenceObject) {
+  if (isReference(response)) {
+    return response;
+  }
+  return response.content?.['application/json']?.schema;
+}
+
+describe('OpenAPI 契约', () => {
+  let document: OpenAPIObject;
+  let close: () => Promise<void>;
+
+  beforeAll(async () => {
+    const app = await NestFactory.create(AppModule, { logger: false });
+    configureApiApp(app, 'http://localhost:3001');
+    document = createOpenApiDocument(app);
+    close = () => app.close();
+  });
+
+  afterAll(async () => close());
+
+  it('完整覆盖 28 个路径下 33 个稳定 operationId 的版本化路由', () => {
+    const allOperations = operations(document);
+    const operationIds = allOperations.map(
+      (operation) => operation.operationId,
+    );
+
+    expect(Object.keys(document.paths)).toHaveLength(28);
+    expect(allOperations).toHaveLength(33);
+    expect(new Set(operationIds).size).toBe(33);
+    expect(operationIds).not.toContain(undefined);
+    expect(
+      Object.keys(document.paths).every((path) => path.startsWith('/api/v1/')),
+    ).toBe(true);
+  });
+
+  it('每个成功响应和统一错误响应都有非空 schema', () => {
+    for (const operation of operations(document)) {
+      const responses = operation.responses ?? {};
+      const success = Object.entries(responses).find(([status]) =>
+        /^2\d\d$/.test(status),
+      )?.[1];
+      expect(success).toBeDefined();
+      expect(responseSchema(success!)).toBeDefined();
+      expect(responseSchema(responses['400'])).toEqual({
+        $ref: '#/components/schemas/ApiErrorDto',
+      });
+    }
+    const apiError = document.components?.schemas?.ApiErrorDto as SchemaObject;
+    expect(apiError.required).toEqual([
+      'code',
+      'message',
+      'requestId',
+      'details',
+    ]);
+  });
+
+  it('声明 Bearer/Cookie 二选一安全方案、幂等键和上传契约', () => {
+    expect(document.components?.securitySchemes).toMatchObject({
+      bearerAuth: { type: 'http', scheme: 'bearer' },
+      cookieAuth: { type: 'apiKey', in: 'cookie', name: 'pq_access' },
+    });
+
+    const createOrder = document.paths['/api/v1/orders']?.post;
+    expect(createOrder?.security).toEqual([
+      { bearerAuth: [] },
+      { cookieAuth: [] },
+    ]);
+    const headers = createOrder?.parameters?.filter(
+      (parameter: ParameterObject | ReferenceObject) =>
+        !isReference(parameter) && parameter.in === 'header',
+    );
+    expect(headers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'Idempotency-Key', required: true }),
+        expect.objectContaining({ name: 'X-CSRF-Token', required: false }),
+      ]),
+    );
+
+    for (const operation of [
+      document.paths['/api/v1/orders']?.post,
+      document.paths['/api/v1/practice/questions/{questionId}/answer']?.post,
+      document.paths['/api/v1/practice/wrong-questions/{questionId}/answer']
+        ?.post,
+    ]) {
+      const idempotencyHeader = operation?.parameters?.find(
+        (parameter) =>
+          !isReference(parameter) &&
+          parameter.in === 'header' &&
+          parameter.name === 'Idempotency-Key',
+      );
+      expect(idempotencyHeader).toMatchObject({ required: true });
+    }
+
+    for (const path of ['/api/v1/auth/refresh', '/api/v1/auth/logout']) {
+      const csrfHeader = document.paths[path]?.post?.parameters?.find(
+        (parameter) =>
+          !isReference(parameter) &&
+          parameter.in === 'header' &&
+          parameter.name === 'X-CSRF-Token',
+      );
+      expect(csrfHeader).toMatchObject({ required: false });
+    }
+
+    const upload = document.paths['/api/v1/admin/uploads/product-images']?.post;
+    expect(upload?.requestBody).toMatchObject({
+      required: true,
+      content: {
+        'multipart/form-data': {
+          schema: {
+            required: ['file'],
+            properties: { file: { type: 'string', format: 'binary' } },
+          },
+        },
+      },
+    });
+  });
+
+  it('所有 JSON requestBody 均引用有字段的命名 schema', () => {
+    for (const operation of operations(document)) {
+      if (!operation.requestBody || isReference(operation.requestBody)) {
+        continue;
+      }
+      const schema = operation.requestBody.content['application/json']?.schema;
+      if (!schema) {
+        continue;
+      }
+      expect(schema).toHaveProperty('$ref');
+      const name = (schema as ReferenceObject).$ref.split('/').at(-1)!;
+      const model = document.components?.schemas?.[name];
+      expect(model).toBeDefined();
+      expect(
+        Object.keys((model as SchemaObject).properties ?? {}),
+      ).not.toHaveLength(0);
+    }
+  });
+});

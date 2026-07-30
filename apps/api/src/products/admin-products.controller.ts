@@ -16,8 +16,21 @@ import {
   type CallHandler,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiTags } from '@nestjs/swagger';
 import { type Observable } from 'rxjs';
 import { Roles } from '../auth/decorators/roles.decorator';
+import {
+  ApiContract,
+  productIdParam,
+  productQueries,
+} from '../openapi/api-contract.decorator';
+import {
+  CreateProductRequestDto,
+  ProductDto,
+  ProductImageUploadResponseDto,
+  ProductListResponseDto,
+  UpdateProductRequestDto,
+} from '../openapi/api-contract.models';
 import {
   MAX_PRODUCT_IMAGE_SIZE,
   validateAndNormalizeProductImage,
@@ -74,20 +87,46 @@ class ProductImageUploadInterceptor
 
 @Controller('admin/products')
 @Roles('ADMIN')
+@ApiTags('管理端-商品')
 export class AdminProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
   @Get()
+  @ApiContract({
+    operationId: 'adminListProducts',
+    summary: '分页查询全部商品',
+    responseType: ProductListResponseDto,
+    authenticated: true,
+    queries: productQueries,
+  })
   list(@Query() query: ListProductsDto) {
     return this.productsService.list(query);
   }
 
   @Post()
+  @ApiContract({
+    operationId: 'adminCreateProduct',
+    summary: '创建商品',
+    responseType: ProductDto,
+    responseStatus: 201,
+    authenticated: true,
+    mutation: true,
+    bodyType: CreateProductRequestDto,
+  })
   create(@Body() body: CreateProductDto) {
     return this.productsService.create(body);
   }
 
   @Patch(':productId')
+  @ApiContract({
+    operationId: 'adminUpdateProduct',
+    summary: '更新商品、库存或上下架状态',
+    responseType: ProductDto,
+    authenticated: true,
+    mutation: true,
+    bodyType: UpdateProductRequestDto,
+    params: [productIdParam],
+  })
   update(
     @Param('productId') productId: string,
     @Body() body: UpdateProductDto,
@@ -98,11 +137,35 @@ export class AdminProductsController {
 
 @Controller('admin/uploads')
 @Roles('ADMIN')
+@ApiTags('管理端-上传')
 export class AdminProductUploadsController {
   constructor(private readonly storage: StorageProvider) {}
 
   @Post('product-images')
   @UseInterceptors(ProductImageUploadInterceptor)
+  @ApiContract({
+    operationId: 'adminUploadProductImage',
+    summary: '上传并规范化商品图片',
+    responseType: ProductImageUploadResponseDto,
+    responseStatus: 201,
+    authenticated: true,
+    mutation: true,
+    multipart: true,
+    body: {
+      required: true,
+      schema: {
+        type: 'object',
+        required: ['file'],
+        properties: {
+          file: {
+            type: 'string',
+            format: 'binary',
+            description: 'JPEG、PNG 或 WebP，最大 5 MiB、2500 万像素、单帧',
+          },
+        },
+      },
+    },
+  })
   async upload(@UploadedFile() file?: UploadedProductImage) {
     if (!file?.buffer) {
       throw uploadValidationFailed('必须上传商品图片');
