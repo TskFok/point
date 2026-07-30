@@ -155,6 +155,7 @@ describe('数据库 Schema 不变量', () => {
         basePointsSnapshot: 10,
         multiplierSnapshot: 1,
         pointsAwarded: 0,
+        balanceAfterSnapshot: 0,
         idempotencyKey: 'schema-audit-attempt',
       },
     });

@@ -529,6 +529,7 @@ describe('管理员题库与积分倍率 API', () => {
         basePointsSnapshot: question.basePoints,
         multiplierSnapshot: 1,
         pointsAwarded: question.basePoints,
+        balanceAfterSnapshot: question.basePoints,
         idempotencyKey: 'task4-answer',
       },
     });
@@ -599,6 +600,7 @@ describe('管理员题库与积分倍率 API', () => {
             basePointsSnapshot: question.basePoints,
             multiplierSnapshot: 1,
             pointsAwarded: question.basePoints,
+            balanceAfterSnapshot: question.basePoints,
             idempotencyKey: 'task4-race-answer',
           },
         });

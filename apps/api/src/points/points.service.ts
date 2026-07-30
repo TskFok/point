@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { type Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -43,6 +47,65 @@ export class PointsService {
         updater: null,
       }
     );
+  }
+
+  async getBalance(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { pointsBalance: true },
+    });
+    if (!user) {
+      throw new NotFoundException({
+        code: 'USER_NOT_FOUND',
+        message: '用户不存在',
+      });
+    }
+    return { balance: user.pointsBalance };
+  }
+
+  async listLedger(userId: string, page: number, pageSize: number) {
+    if (
+      !Number.isInteger(page) ||
+      page < 1 ||
+      page > 100_000 ||
+      !Number.isInteger(pageSize) ||
+      pageSize < 1 ||
+      pageSize > 100
+    ) {
+      throw new BadRequestException({
+        code: 'VALIDATION_FAILED',
+        message: '积分流水分页参数无效',
+      });
+    }
+    const where = { userId };
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.pointLedger.findMany({
+        where,
+        select: {
+          id: true,
+          userId: true,
+          type: true,
+          delta: true,
+          balanceAfter: true,
+          answerAttemptId: true,
+          orderId: true,
+          createdAt: true,
+        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.pointLedger.count({ where }),
+    ]);
+    return {
+      data,
+      meta: {
+        page,
+        pageSize,
+        total,
+        totalPages: total === 0 ? 0 : Math.ceil(total / pageSize),
+      },
+    };
   }
 
   updateMultiplier(multiplier: number, updatedBy: string) {
