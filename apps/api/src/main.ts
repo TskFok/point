@@ -9,7 +9,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   configureApiApp(app, config.webOrigin);
-  configureLocalStaticFiles(app, process.env.PRODUCT_UPLOAD_ROOT);
+  await configureLocalStaticFiles(app, process.env.PRODUCT_UPLOAD_ROOT);
   await app.listen(process.env.PORT ?? 3000);
 }
 void bootstrap();

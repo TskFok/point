@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { crc32 } from 'node:zlib';
 import sharp from 'sharp';
 
 const nodeModule = process.getBuiltinModule('node:module');
@@ -30,8 +31,22 @@ function invalidImage(message: string): ProductImageValidationException {
   return new ProductImageValidationException(message);
 }
 
-function hasExactPngBoundary(buffer: Buffer): boolean {
+function hasValidPngStructure(buffer: Buffer): boolean {
+  const pngSignature = Buffer.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+  ]);
+  if (buffer.length < 45 || !buffer.subarray(0, 8).equals(pngSignature)) {
+    return false;
+  }
+
   let offset = 8;
+  let chunkIndex = 0;
+  let bitDepth: number | undefined;
+  let colorType: number | undefined;
+  let sawIhdr = false;
+  let sawPlte = false;
+  let sawIdat = false;
+  let idatSequenceEnded = false;
   while (offset + 12 <= buffer.length) {
     const chunkLength = buffer.readUInt32BE(offset);
     const chunkType = buffer.toString('ascii', offset + 4, offset + 8);
@@ -39,18 +54,136 @@ function hasExactPngBoundary(buffer: Buffer): boolean {
     if (!Number.isSafeInteger(chunkEnd) || chunkEnd > buffer.length) {
       return false;
     }
-    if (chunkType === 'IEND') {
-      return chunkLength === 0 && chunkEnd === buffer.length;
+    const chunkData = buffer.subarray(offset + 8, offset + 8 + chunkLength);
+    const expectedCrc = buffer.readUInt32BE(offset + 8 + chunkLength);
+    const actualCrc =
+      crc32(buffer.subarray(offset + 4, offset + 8 + chunkLength)) >>> 0;
+    if (expectedCrc !== actualCrc) {
+      return false;
+    }
+
+    const knownCriticalChunks = new Set(['IHDR', 'PLTE', 'IDAT', 'IEND']);
+    const isCritical = (buffer[offset + 4] & 0x20) === 0;
+    if (isCritical && !knownCriticalChunks.has(chunkType)) {
+      return false;
+    }
+
+    if (chunkType === 'IHDR') {
+      if (chunkIndex !== 0 || sawIhdr || chunkLength !== 13) {
+        return false;
+      }
+      const width = chunkData.readUInt32BE(0);
+      const height = chunkData.readUInt32BE(4);
+      bitDepth = chunkData[8];
+      colorType = chunkData[9];
+      const validBitDepths = new Map<number, number[]>([
+        [0, [1, 2, 4, 8, 16]],
+        [2, [8, 16]],
+        [3, [1, 2, 4, 8]],
+        [4, [8, 16]],
+        [6, [8, 16]],
+      ]);
+      if (
+        width === 0 ||
+        height === 0 ||
+        !validBitDepths.get(colorType)?.includes(bitDepth) ||
+        chunkData[10] !== 0 ||
+        chunkData[11] !== 0 ||
+        ![0, 1].includes(chunkData[12])
+      ) {
+        return false;
+      }
+      sawIhdr = true;
+    } else if (!sawIhdr) {
+      return false;
+    } else if (chunkType === 'PLTE') {
+      if (
+        sawPlte ||
+        sawIdat ||
+        [0, 4].includes(colorType ?? -1) ||
+        chunkLength === 0 ||
+        chunkLength > 768 ||
+        chunkLength % 3 !== 0 ||
+        (colorType === 3 && chunkLength / 3 > 2 ** (bitDepth ?? 8))
+      ) {
+        return false;
+      }
+      sawPlte = true;
+    } else if (chunkType === 'IDAT') {
+      if (idatSequenceEnded || (colorType === 3 && !sawPlte)) {
+        return false;
+      }
+      sawIdat = true;
+    } else if (chunkType === 'IEND') {
+      return sawIdat && chunkLength === 0 && chunkEnd === buffer.length;
+    } else if (sawIdat) {
+      idatSequenceEnded = true;
     }
     offset = chunkEnd;
+    chunkIndex += 1;
   }
   return false;
 }
 
-function hasExactWebpBoundary(buffer: Buffer): boolean {
-  if (buffer.length < 20 || buffer.readUInt32LE(4) + 8 !== buffer.length) {
+type ParsedWebpChunk = {
+  data: Buffer;
+  type: string;
+};
+
+type WebpImageInfo = {
+  hasAlpha: boolean;
+  height: number;
+  width: number;
+};
+
+function getVp8Info(chunk: ParsedWebpChunk): WebpImageInfo | undefined {
+  if (
+    chunk.data.length < 10 ||
+    chunk.data[3] !== 0x9d ||
+    chunk.data[4] !== 0x01 ||
+    chunk.data[5] !== 0x2a
+  ) {
+    return undefined;
+  }
+  const width = chunk.data.readUInt16LE(6) & 0x3fff;
+  const height = chunk.data.readUInt16LE(8) & 0x3fff;
+  if (width === 0 || height === 0) {
+    return undefined;
+  }
+  return { width, height, hasAlpha: false };
+}
+
+function getVp8lInfo(chunk: ParsedWebpChunk): WebpImageInfo | undefined {
+  if (chunk.data.length < 5 || chunk.data[0] !== 0x2f) {
+    return undefined;
+  }
+  const headerBits = chunk.data.readUInt32LE(1);
+  if (headerBits >>> 29 !== 0) {
+    return undefined;
+  }
+  return {
+    width: (headerBits & 0x3fff) + 1,
+    height: ((headerBits >>> 14) & 0x3fff) + 1,
+    hasAlpha: ((headerBits >>> 28) & 1) === 1,
+  };
+}
+
+/**
+ * 只接受 WebP 静态图片子集：simple VP8/VP8L，或按规范排序的
+ * VP8X + ICCP? + ALPH? + VP8/VP8L + EXIF? + XMP?。
+ * 未知块一律拒绝，避免解码器容忍语义与这里的发布边界发生分歧。
+ */
+function hasValidWebpStructure(buffer: Buffer): boolean {
+  if (
+    buffer.length < 20 ||
+    buffer.toString('ascii', 0, 4) !== 'RIFF' ||
+    buffer.toString('ascii', 8, 12) !== 'WEBP' ||
+    buffer.readUInt32LE(4) + 8 !== buffer.length
+  ) {
     return false;
   }
+
+  const chunks: ParsedWebpChunk[] = [];
   let offset = 12;
   while (offset < buffer.length) {
     if (offset + 8 > buffer.length) {
@@ -61,17 +194,106 @@ function hasExactWebpBoundary(buffer: Buffer): boolean {
     if (!Number.isSafeInteger(chunkEnd) || chunkEnd > buffer.length) {
       return false;
     }
+    if (chunkLength % 2 === 1 && buffer[offset + 8 + chunkLength] !== 0) {
+      return false;
+    }
+    chunks.push({
+      type: buffer.toString('ascii', offset, offset + 4),
+      data: buffer.subarray(offset + 8, offset + 8 + chunkLength),
+    });
     offset = chunkEnd;
   }
-  return offset === buffer.length;
+  if (offset !== buffer.length || chunks.length === 0) {
+    return false;
+  }
+
+  const mainChunks = chunks.filter(({ type }) =>
+    ['VP8 ', 'VP8L'].includes(type),
+  );
+  if (mainChunks.length !== 1) {
+    return false;
+  }
+  const mainChunk = mainChunks[0];
+  const imageInfo =
+    mainChunk.type === 'VP8 ' ? getVp8Info(mainChunk) : getVp8lInfo(mainChunk);
+  if (!imageInfo) {
+    return false;
+  }
+
+  if (chunks.length === 1) {
+    return true;
+  }
+  if (chunks[0].type !== 'VP8X' || chunks[0].data.length !== 10) {
+    return false;
+  }
+
+  const vp8x = chunks[0].data;
+  const flags = vp8x[0];
+  const canvasWidth = vp8x.readUIntLE(4, 3) + 1;
+  const canvasHeight = vp8x.readUIntLE(7, 3) + 1;
+  if (
+    (flags & 0xc1) !== 0 ||
+    (flags & 0x02) !== 0 ||
+    vp8x[1] !== 0 ||
+    vp8x[2] !== 0 ||
+    vp8x[3] !== 0 ||
+    canvasWidth !== imageInfo.width ||
+    canvasHeight !== imageInfo.height
+  ) {
+    return false;
+  }
+
+  const allowedOrder = new Map([
+    ['ICCP', 1],
+    ['ALPH', 2],
+    ['VP8 ', 3],
+    ['VP8L', 3],
+    ['EXIF', 4],
+    ['XMP ', 5],
+  ]);
+  const counts = new Map<string, number>();
+  let previousOrder = 0;
+  for (const chunk of chunks.slice(1)) {
+    const order = allowedOrder.get(chunk.type);
+    if (order === undefined || order < previousOrder) {
+      return false;
+    }
+    previousOrder = order;
+    const count = (counts.get(chunk.type) ?? 0) + 1;
+    if (count > 1) {
+      return false;
+    }
+    counts.set(chunk.type, count);
+  }
+
+  const hasIccp = counts.has('ICCP');
+  const hasAlph = counts.has('ALPH');
+  const hasExif = counts.has('EXIF');
+  const hasXmp = counts.has('XMP ');
+  const flagMatches = (mask: number, present: boolean) =>
+    ((flags & mask) !== 0) === present;
+  if (
+    !flagMatches(0x20, hasIccp) ||
+    !flagMatches(0x08, hasExif) ||
+    !flagMatches(0x04, hasXmp) ||
+    (mainChunk.type === 'VP8 ' &&
+      (!flagMatches(0x10, hasAlph) || (hasAlph && counts.get('VP8 ') !== 1))) ||
+    (mainChunk.type === 'VP8L' &&
+      (hasAlph || !flagMatches(0x10, imageInfo.hasAlpha)))
+  ) {
+    return false;
+  }
+  return true;
 }
 
-function hasExactJpegBoundary(buffer: Buffer): boolean {
-  if (buffer.length < 4) {
+function hasValidJpegStructure(buffer: Buffer): boolean {
+  if (buffer.length < 4 || buffer[0] !== 0xff || buffer[1] !== 0xd8) {
     return false;
   }
   let offset = 2;
   let inScan = false;
+  let sawFrame = false;
+  let sawScan = false;
   while (offset < buffer.length) {
     if (inScan) {
       if (buffer[offset] !== 0xff) {
@@ -91,7 +313,7 @@ function hasExactJpegBoundary(buffer: Buffer): boolean {
         continue;
       }
       if (marker === 0xd9) {
-        return offset + 1 === buffer.length;
+        return sawFrame && sawScan && offset + 1 === buffer.length;
       }
       offset = markerStart;
       inScan = false;
@@ -110,16 +332,29 @@ function hasExactJpegBoundary(buffer: Buffer): boolean {
     const marker = buffer[offset];
     offset += 1;
     if (marker === 0xd9) {
-      return offset === buffer.length;
+      return false;
     }
     if (
+      marker === 0x00 ||
       marker === 0x01 ||
       marker === 0xd8 ||
-      (marker >= 0xd0 && marker <= 0xd7)
+      (marker >= 0xd0 && marker <= 0xd7) ||
+      offset + 2 > buffer.length
     ) {
-      continue;
+      return false;
     }
-    if (marker === 0x00 || offset + 2 > buffer.length) {
+    const isApplicationMarker = marker >= 0xe0 && marker <= 0xef;
+    const isAllowedTableOrMetadataMarker = [0xc4, 0xdb, 0xdd, 0xfe].includes(
+      marker,
+    );
+    const isFrameMarker = marker === 0xc0 || marker === 0xc2;
+    const isScanMarker = marker === 0xda;
+    if (
+      !isApplicationMarker &&
+      !isAllowedTableOrMetadataMarker &&
+      !isFrameMarker &&
+      !isScanMarker
+    ) {
       return false;
     }
     const segmentLength = buffer.readUInt16BE(offset);
@@ -130,8 +365,33 @@ function hasExactJpegBoundary(buffer: Buffer): boolean {
     if (segmentEnd > buffer.length) {
       return false;
     }
+    if (isFrameMarker) {
+      if (sawFrame || segmentLength < 11) {
+        return false;
+      }
+      const componentCount = buffer[offset + 7];
+      if (
+        componentCount === 0 ||
+        segmentLength !== 8 + 3 * componentCount ||
+        buffer.readUInt16BE(offset + 3) === 0 ||
+        buffer.readUInt16BE(offset + 5) === 0
+      ) {
+        return false;
+      }
+      sawFrame = true;
+    }
+    if (isScanMarker) {
+      if (!sawFrame || segmentLength < 8) {
+        return false;
+      }
+      const componentCount = buffer[offset + 2];
+      if (componentCount === 0 || segmentLength !== 6 + 2 * componentCount) {
+        return false;
+      }
+      sawScan = true;
+    }
     offset = segmentEnd;
-    if (marker === 0xda) {
+    if (isScanMarker) {
       inScan = true;
     }
   }
@@ -143,12 +403,12 @@ function hasExactContainerBoundary(
   extension: ValidatedProductImage['extension'],
 ): boolean {
   if (extension === 'jpg') {
-    return hasExactJpegBoundary(buffer);
+    return hasValidJpegStructure(buffer);
   }
   if (extension === 'png') {
-    return hasExactPngBoundary(buffer);
+    return hasValidPngStructure(buffer);
   }
-  return hasExactWebpBoundary(buffer);
+  return hasValidWebpStructure(buffer);
 }
 
 export async function validateProductImage(
