@@ -361,6 +361,8 @@ Android 使用短期 Access Token 和可轮换的 Refresh Token。移动端令�
 
 任一步失败都回滚。数据库事务使用适合并发资产修改的隔离级别。发生序列化冲突时，服务端返回 `409 CONCURRENT_MODIFICATION`，客户端可使用原幂等键重新提交；服务端不得通过循环执行 SQL 重试，也不得在任何循环遍历中查询 SQL。
 
+订单和 `ORDER_REDEEM` 流水处于同一个 Serializable 事务；受外键约束影响，实际写入顺序为先创建订单、再创建关联流水。相同幂等键和相同商品重放时，响应中的兑换后余额必须读取 `ORDER_REDEEM.balanceAfter` 历史快照，不能读取用户当前余额。订单展示编号由至少 128 bit 的密码学随机值直接生成，不通过循环查询数据库探测冲突；极低概率的唯一冲突按 `CONCURRENT_MODIFICATION` 返回。
+
 ### 6.4 订单取消事务
 
 1. 仅允许管理员操作 `PENDING_PICKUP` 订单。
@@ -369,6 +371,8 @@ Android 使用短期 Access Token 和可轮换的 Refresh Token。移动端令�
 4. 写入正数 `ORDER_REFUND` 流水。
 
 任一步失败都回滚。
+
+完成和取消都使用 `PENDING_PICKUP` 条件状态更新，并在同一事务内写入一致的操作时间和 `updatedBy`。取消仅在状态更新成功后退款、回补库存并写入唯一的 `ORDER_REFUND` 流水；余额或库存回补可能超出数据库整数上限时整个事务回滚并返回并发资产冲突。
 
 ## 7. API 设计
 

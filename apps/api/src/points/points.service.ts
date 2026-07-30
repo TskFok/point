@@ -7,6 +7,9 @@ import { type Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 type PointConfigClient = PrismaService | Prisma.TransactionClient;
+type PointAssetClient = Prisma.TransactionClient;
+
+const POSTGRES_INTEGER_MAX = 2_147_483_647;
 
 const configSelection = {
   id: true,
@@ -106,6 +109,52 @@ export class PointsService {
         totalPages: total === 0 ? 0 : Math.ceil(total / pageSize),
       },
     };
+  }
+
+  async debitForOrder(
+    tx: PointAssetClient,
+    userId: string,
+    points: number,
+  ): Promise<number | null> {
+    if (!Number.isInteger(points) || points <= 0) {
+      throw new BadRequestException({
+        code: 'VALIDATION_FAILED',
+        message: '订单扣减积分必须是正整数',
+      });
+    }
+    const users = await tx.user.updateManyAndReturn({
+      where: {
+        id: userId,
+        pointsBalance: { gte: points },
+      },
+      data: { pointsBalance: { decrement: points } },
+      select: { pointsBalance: true },
+      limit: 1,
+    });
+    return users.length === 1 ? users[0].pointsBalance : null;
+  }
+
+  async refundForOrder(
+    tx: PointAssetClient,
+    userId: string,
+    points: number,
+  ): Promise<number | null> {
+    if (!Number.isInteger(points) || points <= 0) {
+      throw new BadRequestException({
+        code: 'VALIDATION_FAILED',
+        message: '订单退款积分必须是正整数',
+      });
+    }
+    const users = await tx.user.updateManyAndReturn({
+      where: {
+        id: userId,
+        pointsBalance: { lte: POSTGRES_INTEGER_MAX - points },
+      },
+      data: { pointsBalance: { increment: points } },
+      select: { pointsBalance: true },
+      limit: 1,
+    });
+    return users.length === 1 ? users[0].pointsBalance : null;
   }
 
   updateMultiplier(multiplier: number, updatedBy: string) {
