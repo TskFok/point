@@ -266,6 +266,7 @@ Android 使用短期 Access Token 和可轮换的 Refresh Token。移动端令�
 - `multiplierSnapshot`
 - `pointsAwarded`
 - `balanceAfterSnapshot`：本次答题完成后的余额快照，用于幂等重放时返回原始完整结果
+- `errorCountSnapshot`：本次答题结果中的累计错误次数快照，用于错题重练幂等重放
 - `idempotencyKey`
 - `createdAt`
 
@@ -344,9 +345,11 @@ Android 使用短期 Access Token 和可轮换的 Refresh Token。移动端令�
 
 1. 校验该题存在 `firstCorrect=false` 的进度。
 2. 若已掌握，返回 `409 QUESTION_ALREADY_MASTERED`。
-3. 写入重练 `AnswerAttempt`。
+3. 写入包含答题后余额与累计错误次数快照的重练 `AnswerAttempt`。
 4. 答错时原子增加 `errorCount`；答对时写入 `masteredAt`。
 5. 不写入答题奖励积分流水。
+
+重练请求使用相同幂等键重放时，根据答题记录中的快照返回原始完整结果；后续错误次数或余额变化不改变历史响应。
 
 ### 6.3 商品兑换事务
 
