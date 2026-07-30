@@ -178,11 +178,7 @@ function isUniqueConflictFor(
     );
   }
   if (typeof target === 'string') {
-    return (
-      target === constraintName ||
-      (target.includes(modelName) &&
-        fields.every((field) => target.includes(field)))
-    );
+    return target === constraintName;
   }
   return false;
 }

@@ -134,6 +134,74 @@ describe('PracticeService', () => {
     expect(unrelatedPrisma.answerAttempt.findUnique).not.toHaveBeenCalled();
   });
 
+  it('精确字符串约束名映射为已经作答', async () => {
+    const progressConflict = {
+      code: 'P2002',
+      meta: {
+        modelName: 'QuestionProgress',
+        target: 'QuestionProgress_userId_questionId_key',
+      },
+    };
+    const prisma = {
+      $transaction: jest.fn().mockRejectedValue(progressConflict),
+      answerAttempt: {
+        findUnique: jest.fn().mockResolvedValue(null),
+      },
+    };
+    const service = new PracticeService(
+      prisma as unknown as PrismaService,
+      {} as PointsService,
+    );
+
+    const error = await caughtHttpException(
+      service.answerFirst(
+        'student-1',
+        'question-1',
+        'option-1',
+        'idempotency-1',
+      ),
+    );
+
+    expect(error).toBeInstanceOf(ConflictException);
+    expect(error.getResponse()).toMatchObject({
+      code: 'QUESTION_ALREADY_ANSWERED',
+    });
+  });
+
+  it.each([
+    ['合法约束名追加 suffix', 'QuestionProgress_userId_questionId_key_suffix'],
+    ['相似字段名', 'QuestionProgress_userIdentifier_questionIdentifier_key'],
+    ['字段顺序拼接', 'QuestionProgress_questionId_userId_key'],
+  ])('字符串 target 为%s时不做业务冲突映射', async (_name, target) => {
+    const ambiguousConflict = {
+      code: 'P2002',
+      meta: {
+        modelName: 'QuestionProgress',
+        target,
+      },
+    };
+    const prisma = {
+      $transaction: jest.fn().mockRejectedValue(ambiguousConflict),
+      answerAttempt: {
+        findUnique: jest.fn(),
+      },
+    };
+    const service = new PracticeService(
+      prisma as unknown as PrismaService,
+      {} as PointsService,
+    );
+
+    await expect(
+      service.answerFirst(
+        'student-1',
+        'question-1',
+        'option-1',
+        'idempotency-1',
+      ),
+    ).rejects.toBe(ambiguousConflict);
+    expect(prisma.answerAttempt.findUnique).not.toHaveBeenCalled();
+  });
+
   it('P2002 缺失 modelName 时即使字段相同也不做业务冲突映射', async () => {
     const incompleteConflict = {
       code: 'P2002',
