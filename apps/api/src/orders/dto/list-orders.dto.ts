@@ -1,16 +1,20 @@
 import { OrderStatus } from '@prisma/client';
 import { Transform, Type, type TransformFnParams } from 'class-transformer';
 import {
-  IsDateString,
   IsEnum,
   IsInt,
+  IsISO8601,
   IsOptional,
   IsString,
+  Matches,
   Max,
   MaxLength,
   Min,
   MinLength,
 } from 'class-validator';
+
+const ZONED_ISO_TIMESTAMP_PATTERN =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
 
 function trimText({ value }: TransformFnParams): unknown {
   return typeof value === 'string' ? value.trim() : (value as unknown);
@@ -53,11 +57,13 @@ export class ListAdminOrdersDto extends ListOrdersDto {
 
   @IsOptional()
   @Transform(trimText)
-  @IsDateString({ strict: true })
+  @Matches(ZONED_ISO_TIMESTAMP_PATTERN)
+  @IsISO8601({ strict: true, strictSeparator: true })
   createdFrom?: string;
 
   @IsOptional()
   @Transform(trimText)
-  @IsDateString({ strict: true })
+  @Matches(ZONED_ISO_TIMESTAMP_PATTERN)
+  @IsISO8601({ strict: true, strictSeparator: true })
   createdTo?: string;
 }

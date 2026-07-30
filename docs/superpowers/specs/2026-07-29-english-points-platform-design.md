@@ -359,7 +359,7 @@ Android 使用短期 Access Token 和可轮换的 Refresh Token。移动端令�
 4. 写入负数 `PointLedger`。
 5. 创建 `PENDING_PICKUP` 订单及商品快照。
 
-任一步失败都回滚。数据库事务使用适合并发资产修改的隔离级别。发生序列化冲突时，服务端返回 `409 CONCURRENT_MODIFICATION`，客户端可使用原幂等键重新提交；服务端不得通过循环执行 SQL 重试，也不得在任何循环遍历中查询 SQL。
+任一步失败都回滚。数据库事务使用适合并发资产修改的隔离级别。所有同时修改商品与用户资产的订单事务统一按 `Product -> User` 顺序取得行锁，避免兑换与取消形成反向锁等待。发生序列化冲突或 PostgreSQL `40P01` 死锁时，服务端精确返回 `409 CONCURRENT_MODIFICATION`，客户端可使用原幂等键重新提交；服务端不得通过循环执行 SQL 重试，也不得在任何循环遍历中查询 SQL。
 
 订单和 `ORDER_REDEEM` 流水处于同一个 Serializable 事务；受外键约束影响，实际写入顺序为先创建订单、再创建关联流水。相同幂等键和相同商品重放时，响应中的兑换后余额必须读取 `ORDER_REDEEM.balanceAfter` 历史快照，不能读取用户当前余额。订单展示编号由至少 128 bit 的密码学随机值直接生成，不通过循环查询数据库探测冲突；极低概率的唯一冲突按 `CONCURRENT_MODIFICATION` 返回。
 
@@ -434,6 +434,8 @@ Android 使用短期 Access Token 和可轮换的 Refresh Token。移动端令�
 - `POST /api/v1/admin/orders/:orderId/cancel`
 
 列表接口统一支持分页。管理端题目、商品和订单支持搜索、状态筛选与稳定排序。
+
+管理端订单日期筛选参数 `createdFrom`、`createdTo` 表示绝对时间点，必须使用同时包含日期、时间和时区的完整 ISO 8601 字符串，例如 `2026-07-15T08:30:00.000Z` 或 `2026-07-15T16:30:00+08:00`；仅日期和不带时区的本地时间均无效。开始与结束边界分别使用 `gte`、`lte`，两端都包含。
 
 ## 8. Web 页面与路由
 

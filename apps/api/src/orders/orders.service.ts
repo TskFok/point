@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { OrderStatus, Prisma } from '@prisma/client';
+import { isISO8601 } from 'class-validator';
 import { PointsService } from '../points/points.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -16,6 +17,8 @@ import { generateOrderNumber } from './order-number';
 const MAX_ID_LENGTH = 191;
 const MAX_IDEMPOTENCY_KEY_LENGTH = 128;
 const MAX_DATABASE_INTEGER = 2_147_483_647;
+const ZONED_ISO_TIMESTAMP_PATTERN =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
 
 const learnerOrderSelection = {
   id: true,
@@ -172,6 +175,12 @@ function normalizeDate(value: unknown, fieldName: string): Date | undefined {
     return undefined;
   }
   const normalized = normalizeBoundedString(value, fieldName, 40);
+  if (
+    !ZONED_ISO_TIMESTAMP_PATTERN.test(normalized) ||
+    !isISO8601(normalized, { strict: true, strictSeparator: true })
+  ) {
+    throw validationFailed(`${fieldName}必须是带时区的完整 ISO 8601 时间点`);
+  }
   const date = new Date(normalized);
   if (!Number.isFinite(date.getTime())) {
     throw validationFailed(`${fieldName}必须是有效的 ISO 8601 日期时间`);
@@ -185,22 +194,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function hasPrismaCode(error: unknown, code: string): boolean {
   return isRecord(error) && error.code === code;
-}
-
-function isSerializationConflict(error: unknown): boolean {
-  if (hasPrismaCode(error, 'P2034')) {
-    return true;
-  }
-  if (!isRecord(error) || error.code !== 'P2010' || !isRecord(error.meta)) {
-    return false;
-  }
-  const driverError = error.meta.driverAdapterError;
-  const cause = isRecord(driverError) ? driverError.cause : undefined;
-  return (
-    isRecord(cause) &&
-    cause.kind === 'TransactionWriteConflict' &&
-    cause.originalCode === '40001'
-  );
 }
 
 function isUniqueConflictFor(
@@ -255,6 +248,48 @@ function isRefundLedgerUniqueConflict(error: unknown): boolean {
     ['orderId', 'type'],
     'PointLedger_orderId_type_key',
   );
+}
+
+export type OrderDatabaseConflict =
+  | 'ORDER_IDEMPOTENCY'
+  | 'ORDER_NUMBER'
+  | 'REFUND_LEDGER'
+  | 'SERIALIZATION'
+  | 'DEADLOCK';
+
+export function classifyOrderDatabaseConflict(
+  error: unknown,
+): OrderDatabaseConflict | null {
+  if (isOrderIdempotencyUniqueConflict(error)) {
+    return 'ORDER_IDEMPOTENCY';
+  }
+  if (isOrderNumberUniqueConflict(error)) {
+    return 'ORDER_NUMBER';
+  }
+  if (isRefundLedgerUniqueConflict(error)) {
+    return 'REFUND_LEDGER';
+  }
+  if (hasPrismaCode(error, 'P2034')) {
+    return 'SERIALIZATION';
+  }
+  if (!isRecord(error) || error.code !== 'P2010' || !isRecord(error.meta)) {
+    return null;
+  }
+  const driverError = error.meta.driverAdapterError;
+  const cause = isRecord(driverError) ? driverError.cause : undefined;
+  if (!isRecord(cause)) {
+    return null;
+  }
+  if (
+    cause.kind === 'TransactionWriteConflict' &&
+    cause.originalCode === '40001'
+  ) {
+    return 'SERIALIZATION';
+  }
+  if (cause.originalCode === '40P01') {
+    return 'DEADLOCK';
+  }
+  return null;
 }
 
 function mapLearnerOrder(order: LearnerOrderRecord) {
@@ -425,9 +460,11 @@ export class OrdersService {
         },
       );
     } catch (error) {
+      const conflict = classifyOrderDatabaseConflict(error);
       if (
-        isOrderIdempotencyUniqueConflict(error) ||
-        isSerializationConflict(error)
+        conflict === 'ORDER_IDEMPOTENCY' ||
+        conflict === 'SERIALIZATION' ||
+        conflict === 'DEADLOCK'
       ) {
         const replay = await this.findReplay(
           this.prisma,
@@ -440,7 +477,7 @@ export class OrdersService {
         }
         throw concurrentModification();
       }
-      if (isOrderNumberUniqueConflict(error)) {
+      if (conflict === 'ORDER_NUMBER') {
         throw concurrentModification();
       }
       throw error;
@@ -613,7 +650,8 @@ export class OrdersService {
         },
       );
     } catch (error) {
-      if (isSerializationConflict(error)) {
+      const conflict = classifyOrderDatabaseConflict(error);
+      if (conflict === 'SERIALIZATION' || conflict === 'DEADLOCK') {
         await this.throwCurrentOrderState(this.prisma, normalizedOrderId);
         throw concurrentModification();
       }
@@ -660,14 +698,6 @@ export class OrdersService {
             await this.throwCurrentOrderState(tx, normalizedOrderId);
           }
 
-          const balanceAfter = await this.pointsService.refundForOrder(
-            tx,
-            orderToRefund.userId,
-            orderToRefund.pointsCostSnapshot,
-          );
-          if (balanceAfter === null) {
-            throw concurrentModification();
-          }
           const products = await tx.product.updateMany({
             where: {
               id: orderToRefund.productId,
@@ -676,6 +706,14 @@ export class OrdersService {
             data: { stock: { increment: 1 } },
           });
           if (products.count !== 1) {
+            throw concurrentModification();
+          }
+          const balanceAfter = await this.pointsService.refundForOrder(
+            tx,
+            orderToRefund.userId,
+            orderToRefund.pointsCostSnapshot,
+          );
+          if (balanceAfter === null) {
             throw concurrentModification();
           }
           await tx.pointLedger.create({
@@ -703,9 +741,11 @@ export class OrdersService {
         },
       );
     } catch (error) {
+      const conflict = classifyOrderDatabaseConflict(error);
       if (
-        isSerializationConflict(error) ||
-        isRefundLedgerUniqueConflict(error)
+        conflict === 'SERIALIZATION' ||
+        conflict === 'DEADLOCK' ||
+        conflict === 'REFUND_LEDGER'
       ) {
         await this.throwCurrentOrderState(this.prisma, normalizedOrderId);
         throw concurrentModification();

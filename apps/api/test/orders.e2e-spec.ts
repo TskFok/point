@@ -501,6 +501,49 @@ describe('兑换订单 API', () => {
       });
   });
 
+  it.each([
+    ['仅日期', '2026-07-15'],
+    ['无时区时间', '2026-07-15T08:30:00'],
+  ])('管理员订单筛选拒绝%s输入', async (_name, value) => {
+    await request(requireServer())
+      .get('/api/v1/admin/orders')
+      .query({ createdFrom: value })
+      .set('Authorization', adminBearer)
+      .expect(400)
+      .expect((response) => {
+        expectErrorContract(response, 'VALIDATION_FAILED');
+      });
+  });
+
+  it('管理员订单日期筛选接受带偏移时区的完整时间点', async () => {
+    const product = await createProduct('task8-timezone-filter', {
+      stock: 1,
+      pointsCost: 10,
+    });
+    const order = (
+      await redeem(product.id, 'timezone-filter-order').expect(201)
+    ).body as unknown as OrderBody;
+    const boundary = new Date('2026-07-15T08:30:00.000Z');
+    await requirePrisma().order.update({
+      where: { id: order.id },
+      data: { createdAt: boundary },
+    });
+
+    const response = await request(requireServer())
+      .get('/api/v1/admin/orders')
+      .query({
+        createdFrom: '2026-07-15T16:30:00+08:00',
+        createdTo: '2026-07-15T16:30:00.000+08:00',
+      })
+      .set('Authorization', adminBearer)
+      .expect(200);
+    expect(
+      (response.body as unknown as { data: OrderBody[] }).data.map(
+        ({ id }) => id,
+      ),
+    ).toContain(order.id);
+  });
+
   it('管理员完成订单写入同一操作人和时间，完成后不可取消', async () => {
     const product = await createProduct('task8-complete', {
       stock: 1,

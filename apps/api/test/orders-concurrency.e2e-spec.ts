@@ -1,9 +1,11 @@
 import { type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { Prisma } from '@prisma/client';
 import { hash } from 'bcryptjs';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApiApp } from '../src/common/http/configure-api-app';
+import { classifyOrderDatabaseConflict } from '../src/orders/orders.service';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 const defaultTestDatabaseUrl =
@@ -87,6 +89,31 @@ describe('订单资产并发', () => {
       .send({ productId });
   }
 
+  function expectStableConcurrencyError(response: request.Response): void {
+    const body = response.body as unknown as { code?: unknown };
+    expect(['CONCURRENT_MODIFICATION', 'OUT_OF_STOCK']).toContain(body.code);
+  }
+
+  function expectStableTransitionError(response: request.Response): void {
+    const body = response.body as unknown as { code?: unknown };
+    expect(['CONCURRENT_MODIFICATION', 'ORDER_INVALID_STATUS']).toContain(
+      body.code,
+    );
+  }
+
+  async function countWaitingDatabaseLocks(): Promise<number> {
+    const rows = await prisma.$queryRaw<Array<{ count: number }>>(
+      Prisma.sql`
+        SELECT COUNT(*)::integer AS "count"
+        FROM pg_stat_activity
+        WHERE datname = current_database()
+          AND pid <> pg_backend_pid()
+          AND wait_event_type = 'Lock'
+      `,
+    );
+    return rows[0]?.count ?? 0;
+  }
+
   beforeAll(async () => {
     previousDatabaseUrl = process.env.DATABASE_URL;
     previousJwtSecret = process.env.AUTH_JWT_SECRET;
@@ -165,6 +192,9 @@ describe('订单资产并发', () => {
     expect(
       responses.every(({ status }) => status === 201 || status === 409),
     ).toBe(true);
+    responses
+      .filter(({ status }) => status === 409)
+      .forEach(expectStableConcurrencyError);
     await expect(
       prisma.product.findUniqueOrThrow({
         where: { id: product.id },
@@ -235,6 +265,9 @@ describe('订单资产并发', () => {
     expect(
       responses.every(({ status }) => status === 201 || status === 409),
     ).toBe(true);
+    responses
+      .filter(({ status }) => status === 409)
+      .forEach(expectStableTransitionError);
     await expect(
       prisma.user.findUniqueOrThrow({
         where: { id: userId },
@@ -267,5 +300,217 @@ describe('订单资产并发', () => {
       completedAt: null,
     });
     expect(savedOrder.cancelledAt).toBeInstanceOf(Date);
+  });
+
+  it('精确识别 Prisma PostgreSQL 适配器实际暴露的 40P01 死锁', async () => {
+    const product = await createProduct(
+      'task8-concurrency-driver-deadlock',
+      1,
+      80,
+    );
+    let confirmProductLocked!: () => void;
+    let confirmUserLocked!: () => void;
+    const productLocked = new Promise<void>((resolve) => {
+      confirmProductLocked = resolve;
+    });
+    const userLocked = new Promise<void>((resolve) => {
+      confirmUserLocked = resolve;
+    });
+
+    const productThenUser = prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw(
+          Prisma.sql`SELECT "id" FROM "Product" WHERE "id" = ${product.id} FOR UPDATE`,
+        );
+        confirmProductLocked();
+        await userLocked;
+        await tx.$queryRaw(
+          Prisma.sql`SELECT "id" FROM "User" WHERE "id" = ${userId} FOR UPDATE`,
+        );
+      },
+      { maxWait: 5_000, timeout: 10_000 },
+    );
+    const userThenProduct = prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw(
+          Prisma.sql`SELECT "id" FROM "User" WHERE "id" = ${userId} FOR UPDATE`,
+        );
+        confirmUserLocked();
+        await productLocked;
+        await tx.$queryRaw(
+          Prisma.sql`SELECT "id" FROM "Product" WHERE "id" = ${product.id} FOR UPDATE`,
+        );
+      },
+      { maxWait: 5_000, timeout: 10_000 },
+    );
+
+    const results = await Promise.allSettled([
+      productThenUser,
+      userThenProduct,
+    ]);
+    const rejected = results.filter(
+      (result): result is PromiseRejectedResult => result.status === 'rejected',
+    );
+    expect(rejected).toHaveLength(1);
+    expect(classifyOrderDatabaseConflict(rejected[0].reason)).toBe('DEADLOCK');
+  });
+
+  it('兑换与取消交叉并发不暴露死锁错误且资产按成功操作守恒', async () => {
+    const product = await createProduct('task8-concurrency-cross', 2, 80);
+    const firstOrder = (
+      await redeem(product.id, 'cross-first-order').expect(201)
+    ).body as unknown as { id: string };
+
+    let releaseProductLock!: () => void;
+    let confirmProductLock!: () => void;
+    const productLocked = new Promise<void>((resolve) => {
+      confirmProductLock = resolve;
+    });
+    const releaseLock = new Promise<void>((resolve) => {
+      releaseProductLock = resolve;
+    });
+    const blocker = prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw(
+          Prisma.sql`
+            SELECT "id"
+            FROM "Product"
+            WHERE "id" = ${product.id}
+            FOR UPDATE
+          `,
+        );
+        confirmProductLock();
+        await releaseLock;
+      },
+      { maxWait: 5_000, timeout: 10_000 },
+    );
+    await productLocked;
+
+    const redeemRequest = redeem(product.id, 'cross-second-order').then(
+      (response) => response,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(await countWaitingDatabaseLocks()).toBeGreaterThanOrEqual(1);
+    const cancelRequest = request(server)
+      .post(`/api/v1/admin/orders/${firstOrder.id}/cancel`)
+      .set('Authorization', adminBearer)
+      .then((response) => response);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(await countWaitingDatabaseLocks()).toBeGreaterThanOrEqual(2);
+    releaseProductLock();
+
+    const [redeemResponse, cancelResponse] = await Promise.all([
+      redeemRequest,
+      cancelRequest,
+    ]);
+    await blocker;
+    expect([201, 409]).toContain(redeemResponse.status);
+    expect([201, 409]).toContain(cancelResponse.status);
+    expect(redeemResponse.status).not.toBe(500);
+    expect(cancelResponse.status).not.toBe(500);
+    if (redeemResponse.status === 409) {
+      expectStableConcurrencyError(redeemResponse);
+    }
+    if (cancelResponse.status === 409) {
+      expectStableTransitionError(cancelResponse);
+    }
+
+    const successfulRedeems = redeemResponse.status === 201 ? 1 : 0;
+    const successfulCancels = cancelResponse.status === 201 ? 1 : 0;
+    await expect(
+      prisma.user.findUniqueOrThrow({
+        where: { id: userId },
+        select: { pointsBalance: true },
+      }),
+    ).resolves.toEqual({
+      pointsBalance: 120 - successfulRedeems * 80 + successfulCancels * 80,
+    });
+    await expect(
+      prisma.product.findUniqueOrThrow({
+        where: { id: product.id },
+        select: { stock: true },
+      }),
+    ).resolves.toEqual({
+      stock: 1 - successfulRedeems + successfulCancels,
+    });
+    expect(
+      await prisma.order.count({
+        where: { userId, productId: product.id },
+      }),
+    ).toBe(1 + successfulRedeems);
+    expect(
+      await prisma.pointLedger.count({
+        where: { orderId: firstOrder.id, type: 'ORDER_REFUND' },
+      }),
+    ).toBe(successfulCancels);
+  });
+
+  it('完成与取消竞态只有一个终态且资产符合胜出操作', async () => {
+    const product = await createProduct(
+      'task8-concurrency-complete-cancel',
+      1,
+      80,
+    );
+    const order = (
+      await redeem(product.id, 'complete-cancel-create').expect(201)
+    ).body as unknown as { id: string };
+    const responses = await Promise.all([
+      request(server)
+        .post(`/api/v1/admin/orders/${order.id}/complete`)
+        .set('Authorization', adminBearer),
+      request(server)
+        .post(`/api/v1/admin/orders/${order.id}/cancel`)
+        .set('Authorization', adminBearer),
+    ]);
+    expect(responses.filter(({ status }) => status === 201)).toHaveLength(1);
+    expect(
+      responses.every(({ status }) => status === 201 || status === 409),
+    ).toBe(true);
+    responses
+      .filter(({ status }) => status === 409)
+      .forEach(expectStableTransitionError);
+
+    const saved = await prisma.order.findUniqueOrThrow({
+      where: { id: order.id },
+      select: {
+        status: true,
+        completedAt: true,
+        cancelledAt: true,
+        updatedBy: true,
+      },
+    });
+    expect(saved.updatedBy).toBe(adminId);
+    if (saved.status === 'COMPLETED') {
+      expect(saved.completedAt).toBeInstanceOf(Date);
+      expect(saved.cancelledAt).toBeNull();
+      await expect(
+        prisma.user.findUniqueOrThrow({
+          where: { id: userId },
+          select: { pointsBalance: true },
+        }),
+      ).resolves.toEqual({ pointsBalance: 120 });
+      await expect(
+        prisma.product.findUniqueOrThrow({
+          where: { id: product.id },
+          select: { stock: true },
+        }),
+      ).resolves.toEqual({ stock: 0 });
+    } else {
+      expect(saved.status).toBe('CANCELLED');
+      expect(saved.cancelledAt).toBeInstanceOf(Date);
+      expect(saved.completedAt).toBeNull();
+      await expect(
+        prisma.user.findUniqueOrThrow({
+          where: { id: userId },
+          select: { pointsBalance: true },
+        }),
+      ).resolves.toEqual({ pointsBalance: 200 });
+      await expect(
+        prisma.product.findUniqueOrThrow({
+          where: { id: product.id },
+          select: { stock: true },
+        }),
+      ).resolves.toEqual({ stock: 1 });
+    }
   });
 });
