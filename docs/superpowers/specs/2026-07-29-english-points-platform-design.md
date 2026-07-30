@@ -265,6 +265,7 @@ Android 使用短期 Access Token 和可轮换的 Refresh Token。移动端令�
 - `basePointsSnapshot`
 - `multiplierSnapshot`
 - `pointsAwarded`
+- `balanceAfterSnapshot`：本次答题完成后的余额快照，用于幂等重放时返回原始完整结果
 - `idempotencyKey`
 - `createdAt`
 
@@ -330,13 +331,13 @@ Android 使用短期 Access Token 和可轮换的 Refresh Token。移动端令�
 
 1. 校验题目启用、选项属于题目，并读取当前基础积分与倍率快照。
 2. 尝试创建唯一的 `QuestionProgress`。
-3. 写入包含基础积分、倍率和最终奖励快照的 `AnswerAttempt`。
+3. 写入包含基础积分、倍率、最终奖励和答题后余额快照的 `AnswerAttempt`。
 4. 若正确，原子增加余额并写入 `PointLedger`。
 5. 提交事务后返回结果。
 
 如果同一题已存在首次进度：
 
-- 相同幂等键返回原请求结果。
+- 相同幂等键根据答题记录中的余额快照返回原请求完整结果；即使之后余额变化，重放响应也保持一致。
 - 不同幂等键返回 `409 QUESTION_ALREADY_ANSWERED`。
 
 ### 6.2 错题重练事务
