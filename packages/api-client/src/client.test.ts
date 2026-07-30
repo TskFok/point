@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ApiClientError, createApiClient } from "./client.js";
 
 describe("createApiClient", () => {
-  it("完整暴露当前 33 个版本化 API 操作", () => {
+  it("完整暴露当前版本化 API 客户端方法", () => {
     const client = createApiClient({
       baseUrl: "http://localhost:3001/api/v1",
       fetch: vi.fn(),
@@ -36,7 +36,8 @@ describe("createApiClient", () => {
         "listWrongQuestions",
         "loginWeb",
         "logout",
-        "refresh",
+        "refreshAndroid",
+        "refreshWeb",
         "register",
         "retryWrongQuestion",
         "updateAdminPointConfig",
@@ -133,9 +134,19 @@ describe("createApiClient", () => {
   it("Web Refresh 使用 Cookie 与 CSRF，Android Refresh 不使用两者", async () => {
     const fetchSpy = vi
       .fn()
-      .mockImplementation(() =>
-        Promise.resolve(
-          new Response(JSON.stringify({ user: userResponse }), { status: 201 }),
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ user: userResponse }), { status: 201 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            accessToken: "access-token",
+            accessTokenExpiresIn: 900,
+            refreshToken: "r".repeat(32),
+            refreshTokenExpiresAt: "2026-08-30T00:00:00.000Z",
+            user: userResponse,
+          }),
+          { status: 201 },
         ),
       );
     const client = createApiClient({
@@ -144,8 +155,8 @@ describe("createApiClient", () => {
       getCsrfToken: () => "csrf-value",
     });
 
-    await client.refresh();
-    await client.refresh({ refreshToken: "r".repeat(32) });
+    await client.refreshWeb();
+    await client.refreshAndroid("r".repeat(32));
 
     expect(fetchSpy.mock.calls[0]?.[1]).toMatchObject({
       credentials: "include",
@@ -186,16 +197,18 @@ describe("createApiClient", () => {
     expect(init.headers).not.toHaveProperty("Content-Type");
   });
 
-  it("204 空响应安全返回 undefined", async () => {
+  it("logout 按真实契约读取 200 JSON 成功响应", async () => {
     const fetchSpy = vi
       .fn()
-      .mockResolvedValue(new Response(null, { status: 204 }));
+      .mockResolvedValue(
+        new Response(JSON.stringify({ success: true }), { status: 200 }),
+      );
     const client = createApiClient({
       baseUrl: "http://localhost:3001/api/v1",
       fetch: fetchSpy,
     });
 
-    await expect(client.logout({})).resolves.toBeUndefined();
+    await expect(client.logout({})).resolves.toEqual({ success: true });
   });
 
   it("非 2xx 抛出保留状态和统一错误体的类型化错误", async () => {

@@ -7,18 +7,18 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, getSchemaPath } from '@nestjs/swagger';
 import { randomBytes } from 'node:crypto';
 import type { Request, Response } from 'express';
 import { ApiContract } from '../openapi/api-contract.decorator';
 import {
   LoginRequestDto,
   RefreshRequestDto,
-  RefreshResponseDto,
   RegisterRequestDto,
   SuccessResponseDto,
   TokenResponseDto,
   UserResponseDto,
+  WebSessionResponseDto,
 } from '../openapi/api-contract.models';
 import {
   AuthService,
@@ -35,6 +35,24 @@ import type { RequestUser } from './strategies/access-token.strategy';
 
 const ACCESS_COOKIE_MILLISECONDS = 15 * 60 * 1000;
 const REFRESH_COOKIE_MILLISECONDS = 30 * 24 * 60 * 60 * 1000;
+const REFRESH_CSRF_DESCRIPTION =
+  '使用 pq_refresh Cookie 刷新或注销时必填；body refreshToken 模式勿填';
+const SESSION_COOKIE_HEADER = {
+  description:
+    '设置或刷新 pq_access（HttpOnly）、pq_refresh（HttpOnly）与 pq_csrf（可由 JavaScript 读取）Cookie',
+  schema: {
+    type: 'array',
+    items: { type: 'string' },
+  },
+};
+const CLEAR_SESSION_COOKIE_HEADER = {
+  description:
+    'pq_refresh Cookie 模式注销时清除 pq_access、pq_refresh 与 pq_csrf Cookie；body refreshToken 模式不改写 Cookie',
+  schema: {
+    type: 'array',
+    items: { type: 'string' },
+  },
+};
 
 function cookieOptions(httpOnly: boolean, maxAge: number) {
   return {
@@ -107,9 +125,15 @@ export class AuthController {
   @ApiContract({
     operationId: 'authLoginWeb',
     summary: 'Web 登录并写入认证 Cookie',
-    responseType: UserResponseDto,
+    description:
+      '认证成功后设置 pq_access（HttpOnly）、pq_refresh（HttpOnly）和 pq_csrf（可由 JavaScript 读取）Cookie。',
+    responseType: WebSessionResponseDto,
     responseStatus: 201,
     bodyType: LoginRequestDto,
+    response: {
+      type: WebSessionResponseDto,
+      headers: { 'Set-Cookie': SESSION_COOKIE_HEADER },
+    },
   })
   async login(
     @Body() body: LoginDto,
@@ -139,10 +163,23 @@ export class AuthController {
   @ApiContract({
     operationId: 'authRefresh',
     summary: '轮换 Web Cookie 或 Android 令牌',
-    responseType: RefreshResponseDto,
+    description:
+      '不提供 body refreshToken 时使用 pq_refresh Cookie，并刷新 pq_access、pq_refresh、pq_csrf；提供 body refreshToken 时返回 Android TokenPair 且不改写 Cookie。',
     responseStatus: 201,
     bodyType: RefreshRequestDto,
     csrf: true,
+    csrfDescription: REFRESH_CSRF_DESCRIPTION,
+    extraModels: [WebSessionResponseDto, TokenResponseDto],
+    response: {
+      description: 'Web 会话或 Android TokenPair',
+      schema: {
+        oneOf: [
+          { $ref: getSchemaPath(WebSessionResponseDto) },
+          { $ref: getSchemaPath(TokenResponseDto) },
+        ],
+      },
+      headers: { 'Set-Cookie': SESSION_COOKIE_HEADER },
+    },
   })
   async refresh(
     @Body() body: RefreshDto,
@@ -168,10 +205,17 @@ export class AuthController {
   @ApiContract({
     operationId: 'authLogout',
     summary: '注销当前 Refresh Token',
+    description:
+      'pq_refresh Cookie 模式会注销并清除 pq_access、pq_refresh、pq_csrf；body refreshToken 模式仅注销对应 Token 且不改写 Cookie。',
     responseType: SuccessResponseDto,
     responseStatus: 200,
     bodyType: RefreshRequestDto,
     csrf: true,
+    csrfDescription: REFRESH_CSRF_DESCRIPTION,
+    response: {
+      type: SuccessResponseDto,
+      headers: { 'Set-Cookie': CLEAR_SESSION_COOKIE_HEADER },
+    },
   })
   async logout(
     @Body() body: RefreshDto,

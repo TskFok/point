@@ -4,8 +4,9 @@
       "AdminOrderDto": {
         "properties": {
           "balance": {
+            "format": "int32",
             "minimum": 0,
-            "type": "number"
+            "type": "integer"
           },
           "cancelledAt": {
             "format": "date-time",
@@ -28,8 +29,9 @@
             "type": "string"
           },
           "pointsCostSnapshot": {
+            "format": "int32",
             "minimum": 1,
-            "type": "number"
+            "type": "integer"
           },
           "productId": {
             "type": "string"
@@ -98,7 +100,8 @@
       "AdminQuestionDto": {
         "properties": {
           "basePoints": {
-            "type": "number"
+            "format": "int32",
+            "type": "integer"
           },
           "createdAt": {
             "format": "date-time",
@@ -158,7 +161,8 @@
             "type": "string"
           },
           "position": {
-            "type": "number"
+            "format": "int32",
+            "type": "integer"
           },
           "questionId": {
             "type": "string"
@@ -190,8 +194,9 @@
       "AnswerResultDto": {
         "properties": {
           "balance": {
+            "format": "int32",
             "minimum": 0,
-            "type": "number"
+            "type": "integer"
           },
           "correct": {
             "type": "boolean"
@@ -200,15 +205,17 @@
             "type": "string"
           },
           "errorCount": {
+            "format": "int32",
             "minimum": 0,
-            "type": "number"
+            "type": "integer"
           },
           "explanation": {
             "type": "string"
           },
           "pointsAwarded": {
+            "format": "int32",
             "minimum": 0,
-            "type": "number"
+            "type": "integer"
           },
           "selectedOptionId": {
             "type": "string"
@@ -274,7 +281,7 @@
           },
           "imageKey": {
             "maxLength": 200,
-            "pattern": "^products/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.(jpg|png|webp)$",
+            "pattern": "^products\\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.(?:jpg|png|webp)$",
             "type": "string"
           },
           "isActive": {
@@ -286,14 +293,16 @@
             "type": "string"
           },
           "pointsCost": {
+            "format": "int32",
             "maximum": 2147483647,
             "minimum": 0,
-            "type": "number"
+            "type": "integer"
           },
           "stock": {
+            "format": "int32",
             "maximum": 2147483647,
             "minimum": 0,
-            "type": "number"
+            "type": "integer"
           }
         },
         "required": [
@@ -309,9 +318,10 @@
         "properties": {
           "basePoints": {
             "default": 10,
+            "format": "int32",
             "maximum": 1000,
             "minimum": 1,
-            "type": "number"
+            "type": "integer"
           },
           "explanation": {
             "maxLength": 5000,
@@ -368,7 +378,8 @@
       "LearnerQuestionDto": {
         "properties": {
           "basePoints": {
-            "type": "number"
+            "format": "int32",
+            "type": "integer"
           },
           "id": {
             "type": "string"
@@ -403,7 +414,8 @@
             "type": "string"
           },
           "position": {
-            "type": "number"
+            "format": "int32",
+            "type": "integer"
           }
         },
         "required": [
@@ -438,8 +450,9 @@
       "OrderDto": {
         "properties": {
           "balance": {
+            "format": "int32",
             "minimum": 0,
-            "type": "number"
+            "type": "integer"
           },
           "cancelledAt": {
             "format": "date-time",
@@ -462,8 +475,9 @@
             "type": "string"
           },
           "pointsCostSnapshot": {
+            "format": "int32",
             "minimum": 1,
-            "type": "number"
+            "type": "integer"
           },
           "productId": {
             "type": "string"
@@ -544,24 +558,28 @@
         "properties": {
           "page": {
             "example": 1,
+            "format": "int32",
             "minimum": 1,
-            "type": "number"
+            "type": "integer"
           },
           "pageSize": {
             "example": 20,
+            "format": "int32",
             "maximum": 100,
             "minimum": 1,
-            "type": "number"
+            "type": "integer"
           },
           "total": {
             "example": 42,
+            "format": "int32",
             "minimum": 0,
-            "type": "number"
+            "type": "integer"
           },
           "totalPages": {
             "example": 3,
+            "format": "int32",
             "minimum": 0,
-            "type": "number"
+            "type": "integer"
           }
         },
         "required": [
@@ -575,8 +593,9 @@
       "PointBalanceDto": {
         "properties": {
           "balance": {
+            "format": "int32",
             "minimum": 0,
-            "type": "number"
+            "type": "integer"
           }
         },
         "required": [
@@ -596,9 +615,10 @@
             "type": "string"
           },
           "multiplier": {
+            "format": "int32",
             "maximum": 10,
             "minimum": 1,
-            "type": "number"
+            "type": "integer"
           },
           "updatedBy": {
             "nullable": true,
@@ -645,15 +665,17 @@
             "type": "string"
           },
           "balanceAfter": {
+            "format": "int32",
             "minimum": 0,
-            "type": "number"
+            "type": "integer"
           },
           "createdAt": {
             "format": "date-time",
             "type": "string"
           },
           "delta": {
-            "type": "number"
+            "format": "int32",
+            "type": "integer"
           },
           "id": {
             "type": "string"
@@ -707,28 +729,34 @@
       "PracticeSummaryDto": {
         "properties": {
           "activeTotal": {
+            "format": "int32",
             "minimum": 0,
-            "type": "number"
+            "type": "integer"
           },
           "balance": {
+            "format": "int32",
             "minimum": 0,
-            "type": "number"
+            "type": "integer"
           },
           "firstAnsweredCount": {
+            "format": "int32",
             "minimum": 0,
-            "type": "number"
+            "type": "integer"
           },
           "masteredWrongCount": {
+            "format": "int32",
             "minimum": 0,
-            "type": "number"
+            "type": "integer"
           },
           "pendingWrongCount": {
+            "format": "int32",
             "minimum": 0,
-            "type": "number"
+            "type": "integer"
           },
           "unansweredCount": {
+            "format": "int32",
             "minimum": 0,
-            "type": "number"
+            "type": "integer"
           }
         },
         "required": [
@@ -763,12 +791,14 @@
             "type": "string"
           },
           "pointsCost": {
+            "format": "int32",
             "minimum": 0,
-            "type": "number"
+            "type": "integer"
           },
           "stock": {
+            "format": "int32",
             "minimum": 0,
-            "type": "number"
+            "type": "integer"
           },
           "updatedAt": {
             "format": "date-time",
@@ -829,8 +859,9 @@
             "type": "string"
           },
           "pointsBalance": {
+            "format": "int32",
             "minimum": 0,
-            "type": "number"
+            "type": "integer"
           },
           "role": {
             "enum": [
@@ -886,9 +917,10 @@
             "type": "string"
           },
           "position": {
+            "format": "int32",
             "maximum": 5,
             "minimum": 0,
-            "type": "number"
+            "type": "integer"
           }
         },
         "required": [
@@ -907,32 +939,6 @@
             "type": "string"
           }
         },
-        "type": "object"
-      },
-      "RefreshResponseDto": {
-        "properties": {
-          "accessToken": {
-            "type": "string"
-          },
-          "accessTokenExpiresIn": {
-            "description": "访问令牌剩余有效秒数",
-            "minimum": 1,
-            "type": "number"
-          },
-          "refreshToken": {
-            "type": "string"
-          },
-          "refreshTokenExpiresAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "user": {
-            "$ref": "#/components/schemas/PublicUserDto"
-          }
-        },
-        "required": [
-          "user"
-        ],
         "type": "object"
       },
       "RegisterRequestDto": {
@@ -976,8 +982,9 @@
           },
           "accessTokenExpiresIn": {
             "description": "访问令牌剩余有效秒数",
+            "format": "int32",
             "minimum": 1,
-            "type": "number"
+            "type": "integer"
           },
           "refreshToken": {
             "type": "string"
@@ -1002,9 +1009,10 @@
       "UpdatePointConfigRequestDto": {
         "properties": {
           "multiplier": {
+            "format": "int32",
             "maximum": 10,
             "minimum": 1,
-            "type": "number"
+            "type": "integer"
           }
         },
         "required": [
@@ -1013,6 +1021,7 @@
         "type": "object"
       },
       "UpdateProductRequestDto": {
+        "minProperties": 1,
         "properties": {
           "description": {
             "maxLength": 5000,
@@ -1021,6 +1030,7 @@
           },
           "imageKey": {
             "maxLength": 200,
+            "pattern": "^products\\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.(?:jpg|png|webp)$",
             "type": "string"
           },
           "isActive": {
@@ -1032,24 +1042,28 @@
             "type": "string"
           },
           "pointsCost": {
+            "format": "int32",
             "maximum": 2147483647,
             "minimum": 0,
-            "type": "number"
+            "type": "integer"
           },
           "stock": {
+            "format": "int32",
             "maximum": 2147483647,
             "minimum": 0,
-            "type": "number"
+            "type": "integer"
           }
         },
         "type": "object"
       },
       "UpdateQuestionRequestDto": {
+        "minProperties": 1,
         "properties": {
           "basePoints": {
+            "format": "int32",
             "maximum": 1000,
             "minimum": 1,
-            "type": "number"
+            "type": "integer"
           },
           "explanation": {
             "maxLength": 5000,
@@ -1087,11 +1101,23 @@
         ],
         "type": "object"
       },
+      "WebSessionResponseDto": {
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/PublicUserDto"
+          }
+        },
+        "required": [
+          "user"
+        ],
+        "type": "object"
+      },
       "WrongQuestionItemDto": {
         "properties": {
           "errorCount": {
+            "format": "int32",
             "minimum": 1,
-            "type": "number"
+            "type": "integer"
           },
           "firstAnsweredAt": {
             "format": "date-time",
@@ -1145,6 +1171,12 @@
         "in": "cookie",
         "name": "pq_access",
         "type": "apiKey"
+      },
+      "refreshCookieAuth": {
+        "description": "Web 刷新与注销流程使用的 HttpOnly Refresh Token Cookie",
+        "in": "cookie",
+        "name": "pq_refresh",
+        "type": "apiKey"
       }
     }
   },
@@ -1166,6 +1198,7 @@
             "required": false,
             "schema": {
               "default": 1,
+              "format": "int32",
               "maximum": 100000,
               "minimum": 1,
               "type": "integer"
@@ -1177,6 +1210,7 @@
             "required": false,
             "schema": {
               "default": 20,
+              "format": "int32",
               "maximum": 100,
               "minimum": 1,
               "type": "integer"
@@ -1929,6 +1963,7 @@
             "required": false,
             "schema": {
               "default": 1,
+              "format": "int32",
               "maximum": 1000000,
               "minimum": 1,
               "type": "integer"
@@ -1940,6 +1975,7 @@
             "required": false,
             "schema": {
               "default": 20,
+              "format": "int32",
               "maximum": 100,
               "minimum": 1,
               "type": "integer"
@@ -2319,6 +2355,7 @@
             "required": false,
             "schema": {
               "default": 1,
+              "format": "int32",
               "maximum": 100000,
               "minimum": 1,
               "type": "integer"
@@ -2330,6 +2367,7 @@
             "required": false,
             "schema": {
               "default": 20,
+              "format": "int32",
               "maximum": 100,
               "minimum": 1,
               "type": "integer"
@@ -2924,6 +2962,7 @@
     },
     "/api/v1/auth/login": {
       "post": {
+        "description": "认证成功后设置 pq_access（HttpOnly）、pq_refresh（HttpOnly）和 pq_csrf（可由 JavaScript 读取）Cookie。",
         "operationId": "authLoginWeb",
         "parameters": [],
         "requestBody": {
@@ -2941,11 +2980,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/UserResponseDto"
+                  "$ref": "#/components/schemas/WebSessionResponseDto"
                 }
               }
             },
-            "description": "成功"
+            "description": "成功",
+            "headers": {
+              "Set-Cookie": {
+                "description": "设置或刷新 pq_access（HttpOnly）、pq_refresh（HttpOnly）与 pq_csrf（可由 JavaScript 读取）Cookie",
+                "schema": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              }
+            }
           },
           "400": {
             "content": {
@@ -3026,10 +3076,11 @@
     },
     "/api/v1/auth/logout": {
       "post": {
+        "description": "pq_refresh Cookie 模式会注销并清除 pq_access、pq_refresh、pq_csrf；body refreshToken 模式仅注销对应 Token 且不改写 Cookie。",
         "operationId": "authLogout",
         "parameters": [
           {
-            "description": "使用 Cookie 身份认证执行写操作时必填；Bearer 模式勿填",
+            "description": "使用 pq_refresh Cookie 刷新或注销时必填；body refreshToken 模式勿填",
             "in": "header",
             "name": "X-CSRF-Token",
             "required": false,
@@ -3058,7 +3109,18 @@
                 }
               }
             },
-            "description": "成功"
+            "description": "成功",
+            "headers": {
+              "Set-Cookie": {
+                "description": "pq_refresh Cookie 模式注销时清除 pq_access、pq_refresh 与 pq_csrf Cookie；body refreshToken 模式不改写 Cookie",
+                "schema": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              }
+            }
           },
           "400": {
             "content": {
@@ -3239,10 +3301,11 @@
     },
     "/api/v1/auth/refresh": {
       "post": {
+        "description": "不提供 body refreshToken 时使用 pq_refresh Cookie，并刷新 pq_access、pq_refresh、pq_csrf；提供 body refreshToken 时返回 Android TokenPair 且不改写 Cookie。",
         "operationId": "authRefresh",
         "parameters": [
           {
-            "description": "使用 Cookie 身份认证执行写操作时必填；Bearer 模式勿填",
+            "description": "使用 pq_refresh Cookie 刷新或注销时必填；body refreshToken 模式勿填",
             "in": "header",
             "name": "X-CSRF-Token",
             "required": false,
@@ -3267,11 +3330,29 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RefreshResponseDto"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/WebSessionResponseDto"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TokenResponseDto"
+                    }
+                  ]
                 }
               }
             },
-            "description": "成功"
+            "description": "Web 会话或 Android TokenPair",
+            "headers": {
+              "Set-Cookie": {
+                "description": "设置或刷新 pq_access（HttpOnly）、pq_refresh（HttpOnly）与 pq_csrf（可由 JavaScript 读取）Cookie",
+                "schema": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              }
+            }
           },
           "400": {
             "content": {
@@ -3656,6 +3737,7 @@
             "required": false,
             "schema": {
               "default": 1,
+              "format": "int32",
               "maximum": 100000,
               "minimum": 1,
               "type": "integer"
@@ -3667,6 +3749,7 @@
             "required": false,
             "schema": {
               "default": 20,
+              "format": "int32",
               "maximum": 100,
               "minimum": 1,
               "type": "integer"
@@ -4120,6 +4203,7 @@
             "required": false,
             "schema": {
               "default": 1,
+              "format": "int32",
               "maximum": 100000,
               "minimum": 1,
               "type": "integer"
@@ -4131,6 +4215,7 @@
             "required": false,
             "schema": {
               "default": 20,
+              "format": "int32",
               "maximum": 100,
               "minimum": 1,
               "type": "integer"
@@ -4595,6 +4680,7 @@
             "required": false,
             "schema": {
               "default": 1,
+              "format": "int32",
               "maximum": 100000,
               "minimum": 1,
               "type": "integer"
@@ -4606,6 +4692,7 @@
             "required": false,
             "schema": {
               "default": 20,
+              "format": "int32",
               "maximum": 100,
               "minimum": 1,
               "type": "integer"
@@ -4877,6 +4964,7 @@
             "required": false,
             "schema": {
               "default": 1,
+              "format": "int32",
               "maximum": 1000000,
               "minimum": 1,
               "type": "integer"
@@ -4888,6 +4976,7 @@
             "required": false,
             "schema": {
               "default": 20,
+              "format": "int32",
               "maximum": 100,
               "minimum": 1,
               "type": "integer"

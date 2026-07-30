@@ -1,6 +1,9 @@
 export {
   ApiClientError,
+  ApiNetworkError,
+  ApiProtocolError,
   createApiClient,
+  operationRegistry,
   type ApiClient,
   type ApiClientOptions,
   type ApiError,

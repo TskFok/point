@@ -1,4 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { PRODUCT_IMAGE_KEY_PATTERN } from '../products/dto/create-product.dto';
+
+const int32 = {
+  type: 'integer' as const,
+  format: 'int32',
+};
 
 export class ApiErrorDto {
   @ApiProperty({ example: 'VALIDATION_FAILED' })
@@ -15,16 +21,16 @@ export class ApiErrorDto {
 }
 
 export class PageMetaDto {
-  @ApiProperty({ minimum: 1, example: 1 })
+  @ApiProperty({ ...int32, minimum: 1, example: 1 })
   page!: number;
 
-  @ApiProperty({ minimum: 1, maximum: 100, example: 20 })
+  @ApiProperty({ ...int32, minimum: 1, maximum: 100, example: 20 })
   pageSize!: number;
 
-  @ApiProperty({ minimum: 0, example: 42 })
+  @ApiProperty({ ...int32, minimum: 0, example: 42 })
   total!: number;
 
-  @ApiProperty({ minimum: 0, example: 3 })
+  @ApiProperty({ ...int32, minimum: 0, example: 3 })
   totalPages!: number;
 }
 
@@ -38,7 +44,7 @@ export class PublicUserDto {
   @ApiProperty({ enum: ['ADMIN', 'STUDENT'] })
   role!: 'ADMIN' | 'STUDENT';
 
-  @ApiProperty({ minimum: 0 })
+  @ApiProperty({ ...int32, minimum: 0 })
   pointsBalance!: number;
 }
 
@@ -54,26 +60,18 @@ export class TokenResponseDto extends UserResponseDto {
   @ApiProperty()
   refreshToken!: string;
 
-  @ApiProperty({ minimum: 1, description: '访问令牌剩余有效秒数' })
+  @ApiProperty({
+    ...int32,
+    minimum: 1,
+    description: '访问令牌剩余有效秒数',
+  })
   accessTokenExpiresIn!: number;
 
   @ApiProperty({ format: 'date-time' })
   refreshTokenExpiresAt!: string;
 }
 
-export class RefreshResponseDto extends UserResponseDto {
-  @ApiPropertyOptional()
-  accessToken?: string;
-
-  @ApiPropertyOptional()
-  refreshToken?: string;
-
-  @ApiPropertyOptional({ minimum: 1, description: '访问令牌剩余有效秒数' })
-  accessTokenExpiresIn?: number;
-
-  @ApiPropertyOptional({ format: 'date-time' })
-  refreshTokenExpiresAt?: string;
-}
+export class WebSessionResponseDto extends UserResponseDto {}
 
 export class SuccessResponseDto {
   @ApiProperty({ example: true })
@@ -128,7 +126,7 @@ export class QuestionOptionWriteRequestDto {
   @ApiProperty({ minLength: 1, maxLength: 1000 })
   content!: string;
 
-  @ApiProperty({ minimum: 0, maximum: 5 })
+  @ApiProperty({ ...int32, minimum: 0, maximum: 5 })
   position!: number;
 
   @ApiProperty()
@@ -142,7 +140,7 @@ export class CreateQuestionRequestDto {
   @ApiProperty({ minLength: 1, maxLength: 5000 })
   explanation!: string;
 
-  @ApiProperty({ minimum: 1, maximum: 1000, default: 10 })
+  @ApiProperty({ ...int32, minimum: 1, maximum: 1000, default: 10 })
   basePoints!: number;
 
   @ApiProperty({
@@ -164,7 +162,7 @@ export class UpdateQuestionRequestDto {
   @ApiPropertyOptional({ minLength: 1, maxLength: 5000 })
   explanation?: string;
 
-  @ApiPropertyOptional({ minimum: 1, maximum: 1000 })
+  @ApiPropertyOptional({ ...int32, minimum: 1, maximum: 1000 })
   basePoints?: number;
 
   @ApiPropertyOptional({
@@ -192,7 +190,7 @@ export class AdminQuestionOptionDto {
   @ApiProperty()
   content!: string;
 
-  @ApiProperty()
+  @ApiProperty(int32)
   position!: number;
 
   @ApiProperty()
@@ -209,7 +207,7 @@ export class AdminQuestionDto {
   @ApiProperty()
   explanation!: string;
 
-  @ApiProperty()
+  @ApiProperty(int32)
   basePoints!: number;
 
   @ApiProperty()
@@ -246,7 +244,7 @@ export class LearnerQuestionOptionDto {
   @ApiProperty()
   content!: string;
 
-  @ApiProperty()
+  @ApiProperty(int32)
   position!: number;
 }
 
@@ -257,7 +255,7 @@ export class LearnerQuestionDto {
   @ApiProperty()
   stem!: string;
 
-  @ApiProperty()
+  @ApiProperty(int32)
   basePoints!: number;
 
   @ApiProperty({ type: () => [LearnerQuestionOptionDto] })
@@ -282,13 +280,13 @@ export class AnswerResultDto {
   @ApiProperty()
   explanation!: string;
 
-  @ApiProperty({ minimum: 0 })
+  @ApiProperty({ ...int32, minimum: 0 })
   errorCount!: number;
 
-  @ApiProperty({ minimum: 0 })
+  @ApiProperty({ ...int32, minimum: 0 })
   pointsAwarded!: number;
 
-  @ApiProperty({ minimum: 0 })
+  @ApiProperty({ ...int32, minimum: 0 })
   balance!: number;
 }
 
@@ -296,7 +294,7 @@ export class WrongQuestionItemDto {
   @ApiProperty({ type: () => LearnerQuestionDto })
   question!: LearnerQuestionDto;
 
-  @ApiProperty({ minimum: 1 })
+  @ApiProperty({ ...int32, minimum: 1 })
   errorCount!: number;
 
   @ApiProperty({ format: 'date-time' })
@@ -315,27 +313,27 @@ export class WrongQuestionListResponseDto {
 }
 
 export class PracticeSummaryDto {
-  @ApiProperty({ minimum: 0 })
+  @ApiProperty({ ...int32, minimum: 0 })
   activeTotal!: number;
 
-  @ApiProperty({ minimum: 0 })
+  @ApiProperty({ ...int32, minimum: 0 })
   firstAnsweredCount!: number;
 
-  @ApiProperty({ minimum: 0 })
+  @ApiProperty({ ...int32, minimum: 0 })
   unansweredCount!: number;
 
-  @ApiProperty({ minimum: 0 })
+  @ApiProperty({ ...int32, minimum: 0 })
   pendingWrongCount!: number;
 
-  @ApiProperty({ minimum: 0 })
+  @ApiProperty({ ...int32, minimum: 0 })
   masteredWrongCount!: number;
 
-  @ApiProperty({ minimum: 0 })
+  @ApiProperty({ ...int32, minimum: 0 })
   balance!: number;
 }
 
 export class PointBalanceDto {
-  @ApiProperty({ minimum: 0 })
+  @ApiProperty({ ...int32, minimum: 0 })
   balance!: number;
 }
 
@@ -351,7 +349,7 @@ export class PointConfigDto {
   @ApiProperty({ type: String, nullable: true })
   id!: string | null;
 
-  @ApiProperty({ minimum: 1, maximum: 10 })
+  @ApiProperty({ ...int32, minimum: 1, maximum: 10 })
   multiplier!: number;
 
   @ApiProperty({ type: String, nullable: true })
@@ -368,7 +366,7 @@ export class PointConfigDto {
 }
 
 export class UpdatePointConfigRequestDto {
-  @ApiProperty({ minimum: 1, maximum: 10 })
+  @ApiProperty({ ...int32, minimum: 1, maximum: 10 })
   multiplier!: number;
 }
 
@@ -382,10 +380,10 @@ export class PointLedgerDto {
   @ApiProperty({ enum: ['ANSWER_REWARD', 'ORDER_REDEEM', 'ORDER_REFUND'] })
   type!: 'ANSWER_REWARD' | 'ORDER_REDEEM' | 'ORDER_REFUND';
 
-  @ApiProperty()
+  @ApiProperty(int32)
   delta!: number;
 
-  @ApiProperty({ minimum: 0 })
+  @ApiProperty({ ...int32, minimum: 0 })
   balanceAfter!: number;
 
   @ApiProperty({ type: String, nullable: true })
@@ -415,15 +413,14 @@ export class CreateProductRequestDto {
 
   @ApiProperty({
     maxLength: 200,
-    pattern:
-      '^products/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.(jpg|png|webp)$',
+    pattern: PRODUCT_IMAGE_KEY_PATTERN.source,
   })
   imageKey!: string;
 
-  @ApiProperty({ minimum: 0, maximum: 2_147_483_647 })
+  @ApiProperty({ ...int32, minimum: 0, maximum: 2_147_483_647 })
   stock!: number;
 
-  @ApiProperty({ minimum: 0, maximum: 2_147_483_647 })
+  @ApiProperty({ ...int32, minimum: 0, maximum: 2_147_483_647 })
   pointsCost!: number;
 
   @ApiPropertyOptional()
@@ -437,13 +434,24 @@ export class UpdateProductRequestDto {
   @ApiPropertyOptional({ minLength: 1, maxLength: 5000 })
   description?: string;
 
-  @ApiPropertyOptional({ maxLength: 200 })
+  @ApiPropertyOptional({
+    maxLength: 200,
+    pattern: PRODUCT_IMAGE_KEY_PATTERN.source,
+  })
   imageKey?: string;
 
-  @ApiPropertyOptional({ minimum: 0, maximum: 2_147_483_647 })
+  @ApiPropertyOptional({
+    ...int32,
+    minimum: 0,
+    maximum: 2_147_483_647,
+  })
   stock?: number;
 
-  @ApiPropertyOptional({ minimum: 0, maximum: 2_147_483_647 })
+  @ApiPropertyOptional({
+    ...int32,
+    minimum: 0,
+    maximum: 2_147_483_647,
+  })
   pointsCost?: number;
 
   @ApiPropertyOptional()
@@ -463,10 +471,10 @@ export class ProductDto {
   @ApiProperty()
   imageKey!: string;
 
-  @ApiProperty({ minimum: 0 })
+  @ApiProperty({ ...int32, minimum: 0 })
   stock!: number;
 
-  @ApiProperty({ minimum: 0 })
+  @ApiProperty({ ...int32, minimum: 0 })
   pointsCost!: number;
 
   @ApiProperty()
@@ -521,7 +529,7 @@ export class OrderDto {
   @ApiProperty()
   productImageKeySnapshot!: string;
 
-  @ApiProperty({ minimum: 1 })
+  @ApiProperty({ ...int32, minimum: 1 })
   pointsCostSnapshot!: number;
 
   @ApiProperty({ enum: ['PENDING_PICKUP', 'COMPLETED', 'CANCELLED'] })
@@ -539,7 +547,7 @@ export class OrderDto {
   @ApiProperty({ type: String, nullable: true })
   updatedBy!: string | null;
 
-  @ApiProperty({ minimum: 0 })
+  @ApiProperty({ ...int32, minimum: 0 })
   balance!: number;
 }
 

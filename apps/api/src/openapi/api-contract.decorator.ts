@@ -4,6 +4,7 @@ import {
   ApiBody,
   ApiConsumes,
   ApiCookieAuth,
+  ApiExtraModels,
   ApiHeader,
   ApiOperation,
   ApiParam,
@@ -12,23 +13,28 @@ import {
   type ApiBodyOptions,
   type ApiParamOptions,
   type ApiQueryOptions,
+  type ApiResponseOptions,
 } from '@nestjs/swagger';
 import { ApiErrorDto } from './api-contract.models';
 
 export type ApiContractOptions = {
   operationId: string;
   summary: string;
-  responseType: Type<unknown>;
+  description?: string;
+  responseType?: Type<unknown>;
+  response?: ApiResponseOptions;
   responseStatus?: number;
   authenticated?: boolean;
   mutation?: boolean;
   csrf?: boolean;
+  csrfDescription?: string;
   bodyType?: Type<unknown>;
   body?: ApiBodyOptions;
   idempotent?: boolean;
   multipart?: boolean;
   params?: ApiParamOptions[];
   queries?: ApiQueryOptions[];
+  extraModels?: Type<unknown>[];
 };
 
 const ERROR_RESPONSES = [
@@ -46,17 +52,21 @@ export function ApiContract(options: ApiContractOptions): MethodDecorator {
     ApiOperation({
       operationId: options.operationId,
       summary: options.summary,
+      description: options.description,
     }),
     ApiResponse({
       status: options.responseStatus ?? 200,
-      type: options.responseType,
       description: '成功',
+      ...(options.response ?? { type: options.responseType }),
     }),
     ...ERROR_RESPONSES.map(({ status, description }) =>
       ApiResponse({ status, description, type: ApiErrorDto }),
     ),
   ];
 
+  if (options.extraModels?.length) {
+    decorators.push(ApiExtraModels(...options.extraModels));
+  }
   if (options.authenticated) {
     decorators.push(ApiBearerAuth('bearerAuth'), ApiCookieAuth('cookieAuth'));
   }
@@ -65,7 +75,9 @@ export function ApiContract(options: ApiContractOptions): MethodDecorator {
       ApiHeader({
         name: 'X-CSRF-Token',
         required: false,
-        description: '使用 Cookie 身份认证执行写操作时必填；Bearer 模式勿填',
+        description:
+          options.csrfDescription ??
+          '使用 Cookie 身份认证执行写操作时必填；Bearer 模式勿填',
         schema: { type: 'string', minLength: 1 },
       }),
     );
@@ -101,12 +113,24 @@ export const pageQueries: ApiQueryOptions[] = [
   {
     name: 'page',
     required: false,
-    schema: { type: 'integer', minimum: 1, maximum: 100_000, default: 1 },
+    schema: {
+      type: 'integer',
+      format: 'int32',
+      minimum: 1,
+      maximum: 100_000,
+      default: 1,
+    },
   },
   {
     name: 'pageSize',
     required: false,
-    schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+    schema: {
+      type: 'integer',
+      format: 'int32',
+      minimum: 1,
+      maximum: 100,
+      default: 20,
+    },
   },
 ];
 
@@ -124,7 +148,13 @@ export const productQueries: ApiQueryOptions[] = [
   {
     name: 'page',
     required: false,
-    schema: { type: 'integer', minimum: 1, maximum: 1_000_000, default: 1 },
+    schema: {
+      type: 'integer',
+      format: 'int32',
+      minimum: 1,
+      maximum: 1_000_000,
+      default: 1,
+    },
   },
   pageQueries[1],
 ];

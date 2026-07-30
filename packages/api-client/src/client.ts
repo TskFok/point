@@ -2,40 +2,177 @@ import type { components, operations, paths } from "./schema.js";
 
 type MaybePromise<T> = T | Promise<T>;
 type OperationName = keyof operations;
-type BodyOf<Name extends OperationName> = operations[Name] extends {
-  requestBody: {
-    content: { "application/json": infer Body };
-  };
-}
-  ? Body
-  : never;
-type QueryOf<Name extends OperationName> = NonNullable<
-  operations[Name]["parameters"]["query"]
->;
-type Idempotent<Body> = Body & { idempotencyKey: string };
 type ApiPath = keyof paths;
+type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+type MethodKey<Method extends HttpMethod> = Lowercase<Method>;
 type ApiErrorBody = components["schemas"]["ApiErrorDto"];
 type FetchImplementation = (
   input: string | URL | Request,
   init?: RequestInit,
 ) => Promise<Response>;
 
+type ValidBinding = {
+  [Path in ApiPath]: {
+    [Method in HttpMethod]: [
+      NonNullable<paths[Path][MethodKey<Method>]>,
+    ] extends [never]
+      ? never
+      : { path: Path; method: Method };
+  }[HttpMethod];
+}[ApiPath];
+
+export const operationRegistry = {
+  adminListOrders: { path: "/api/v1/admin/orders", method: "GET" },
+  adminGetOrder: {
+    path: "/api/v1/admin/orders/{orderId}",
+    method: "GET",
+  },
+  adminCancelOrder: {
+    path: "/api/v1/admin/orders/{orderId}/cancel",
+    method: "POST",
+  },
+  adminCompleteOrder: {
+    path: "/api/v1/admin/orders/{orderId}/complete",
+    method: "POST",
+  },
+  adminGetPointConfig: {
+    path: "/api/v1/admin/points/config",
+    method: "GET",
+  },
+  adminUpdatePointConfig: {
+    path: "/api/v1/admin/points/config",
+    method: "PUT",
+  },
+  adminListProducts: { path: "/api/v1/admin/products", method: "GET" },
+  adminCreateProduct: { path: "/api/v1/admin/products", method: "POST" },
+  adminUpdateProduct: {
+    path: "/api/v1/admin/products/{productId}",
+    method: "PATCH",
+  },
+  adminListQuestions: { path: "/api/v1/admin/questions", method: "GET" },
+  adminCreateQuestion: {
+    path: "/api/v1/admin/questions",
+    method: "POST",
+  },
+  adminGetQuestion: {
+    path: "/api/v1/admin/questions/{questionId}",
+    method: "GET",
+  },
+  adminUpdateQuestion: {
+    path: "/api/v1/admin/questions/{questionId}",
+    method: "PATCH",
+  },
+  adminUploadProductImage: {
+    path: "/api/v1/admin/uploads/product-images",
+    method: "POST",
+  },
+  authLoginWeb: { path: "/api/v1/auth/login", method: "POST" },
+  authLogout: { path: "/api/v1/auth/logout", method: "POST" },
+  authGetCurrentUser: { path: "/api/v1/auth/me", method: "GET" },
+  authRefresh: { path: "/api/v1/auth/refresh", method: "POST" },
+  authRegister: { path: "/api/v1/auth/register", method: "POST" },
+  authIssueAndroidToken: { path: "/api/v1/auth/token", method: "POST" },
+  healthGet: { path: "/api/v1/health", method: "GET" },
+  ordersList: { path: "/api/v1/orders", method: "GET" },
+  ordersCreate: { path: "/api/v1/orders", method: "POST" },
+  ordersGet: { path: "/api/v1/orders/{orderId}", method: "GET" },
+  pointsGetBalance: { path: "/api/v1/points/balance", method: "GET" },
+  pointsListLedger: { path: "/api/v1/points/ledger", method: "GET" },
+  practiceAnswerQuestion: {
+    path: "/api/v1/practice/questions/{questionId}/answer",
+    method: "POST",
+  },
+  practiceGetRandomQuestion: {
+    path: "/api/v1/practice/random",
+    method: "GET",
+  },
+  practiceGetSummary: { path: "/api/v1/practice/summary", method: "GET" },
+  practiceListWrongQuestions: {
+    path: "/api/v1/practice/wrong-questions",
+    method: "GET",
+  },
+  practiceRetryWrongQuestion: {
+    path: "/api/v1/practice/wrong-questions/{questionId}/answer",
+    method: "POST",
+  },
+  productsList: { path: "/api/v1/products", method: "GET" },
+  productsGet: { path: "/api/v1/products/{productId}", method: "GET" },
+} as const satisfies Record<OperationName, ValidBinding>;
+
+type ParameterOf<
+  Name extends OperationName,
+  Kind extends "path" | "query" | "header",
+> = NonNullable<operations[Name]["parameters"][Kind]>;
+
+type JsonBodyOf<Name extends OperationName> = operations[Name] extends {
+  requestBody: {
+    content: { "application/json": infer Body };
+  };
+}
+  ? Body
+  : never;
+
+type MultipartBodyOf<Name extends OperationName> = operations[Name] extends {
+  requestBody: {
+    content: { "multipart/form-data": infer Body };
+  };
+}
+  ? Body
+  : never;
+
+type SuccessStatus = 200 | 201 | 202 | 204;
+type SuccessResponseOf<Name extends OperationName> =
+  operations[Name]["responses"][Extract<
+    keyof operations[Name]["responses"],
+    SuccessStatus
+  >];
+type JsonContentOf<Response> = Response extends {
+  content: { "application/json": infer Body };
+}
+  ? Body
+  : undefined;
+type SuccessBodyOf<Name extends OperationName> = JsonContentOf<
+  SuccessResponseOf<Name>
+>;
+
+type IsOptionalObject<Value> = object extends Value ? true : false;
+type Option<
+  Key extends string,
+  Value,
+  Optional extends boolean = false,
+> = [Value] extends [never]
+  ? { [Property in Key]?: never }
+  : Optional extends true
+    ? { [Property in Key]?: Value }
+    : { [Property in Key]: Value };
+
+type TypedRequestOptions<Name extends OperationName> = Option<
+  "pathParams",
+  ParameterOf<Name, "path">
+> &
+  Option<"query", ParameterOf<Name, "query">, true> &
+  Option<
+    "headers",
+    ParameterOf<Name, "header">,
+    IsOptionalObject<ParameterOf<Name, "header">>
+  > &
+  Option<"body", JsonBodyOf<Name>> &
+  Option<"formData", MultipartBodyOf<Name> extends never ? never : FormData> & {
+    authMode?:
+      | "public"
+      | "web-login"
+      | "authenticated"
+      | "refresh-cookie"
+      | "body-refresh-token";
+  };
+
+type Idempotent<Body> = Body & { idempotencyKey: string };
+
 export type ApiClientOptions = {
   baseUrl: string;
   fetch?: FetchImplementation;
   getAccessToken?: () => MaybePromise<string | null | undefined>;
   getCsrfToken?: () => MaybePromise<string | null | undefined>;
-};
-
-type RequestOptions = {
-  method?: "GET" | "POST" | "PUT" | "PATCH";
-  authenticated?: boolean;
-  cookieCredentials?: boolean;
-  mutation?: boolean;
-  body?: unknown;
-  formData?: FormData;
-  query?: Record<string, unknown>;
-  headers?: Record<string, string>;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -52,12 +189,37 @@ function isApiErrorBody(value: unknown): value is ApiErrorBody {
   );
 }
 
+function isTokenResponse(
+  value: unknown,
+): value is components["schemas"]["TokenResponseDto"] {
+  return (
+    isRecord(value) &&
+    typeof value.accessToken === "string" &&
+    typeof value.refreshToken === "string" &&
+    typeof value.accessTokenExpiresIn === "number" &&
+    typeof value.refreshTokenExpiresAt === "string"
+  );
+}
+
 function withoutTrailingSlash(value: string): string {
   return value.replace(/\/+$/, "");
 }
 
-function relativePath(path: ApiPath): string {
+function relativePath(path: string): string {
   return path.slice("/api/v1".length);
+}
+
+function interpolatePath(
+  template: ApiPath,
+  parameters: Record<string, unknown> | undefined,
+): string {
+  return template.replace(/\{([^}]+)\}/g, (_placeholder, key: string) => {
+    const value = parameters?.[key];
+    if (typeof value !== "string" || value.length === 0) {
+      throw new TypeError(`缺少 path 参数：${key}`);
+    }
+    return encodeURIComponent(value);
+  });
 }
 
 function serializeQuery(query: Record<string, unknown> | undefined): string {
@@ -78,18 +240,11 @@ function serializeQuery(query: Record<string, unknown> | undefined): string {
   return serialized ? `?${serialized}` : "";
 }
 
-async function parseResponseBody(response: Response): Promise<unknown> {
-  if (response.status === 204) {
-    return undefined;
-  }
-  const text = await response.text();
-  if (!text) {
-    return undefined;
-  }
+function parseJson(text: string): unknown {
   try {
     return JSON.parse(text) as unknown;
   } catch {
-    return text;
+    return undefined;
   }
 }
 
@@ -105,37 +260,73 @@ export class ApiClientError extends Error {
   }
 }
 
+export class ApiNetworkError extends Error {
+  override readonly cause: unknown;
+  readonly url: string;
+
+  constructor(url: string, cause: unknown) {
+    super("网络请求失败", { cause });
+    this.name = "ApiNetworkError";
+    this.url = url;
+    this.cause = cause;
+  }
+}
+
+export class ApiProtocolError extends Error {
+  readonly status: number;
+  readonly responseText: string;
+
+  constructor(status: number, responseText: string, message: string) {
+    super(message);
+    this.name = "ApiProtocolError";
+    this.status = status;
+    this.responseText = responseText;
+  }
+}
+
 export function createApiClient(options: ApiClientOptions) {
   const baseUrl = withoutTrailingSlash(options.baseUrl);
   const fetchImplementation = options.fetch ?? globalThis.fetch;
 
-  async function request<Result>(
-    path: ApiPath,
-    requestOptions: RequestOptions = {},
-  ): Promise<Result> {
-    const method = requestOptions.method ?? "GET";
-    const headers: Record<string, string> = {
-      Accept: "application/json",
-      ...requestOptions.headers,
-    };
-    let credentials: RequestCredentials = requestOptions.cookieCredentials
-      ? "include"
-      : "omit";
+  async function request<Name extends OperationName>(
+    operationId: Name,
+    requestOptions: TypedRequestOptions<Name>,
+  ): Promise<SuccessBodyOf<Name>> {
+    const binding = operationRegistry[operationId];
+    const path = interpolatePath(
+      binding.path,
+      requestOptions.pathParams as Record<string, unknown> | undefined,
+    );
+    const query = serializeQuery(
+      requestOptions.query as Record<string, unknown> | undefined,
+    );
+    const url = `${baseUrl}${relativePath(path)}${query}`;
+    const headers: Record<string, string> = { Accept: "application/json" };
+    for (const [name, value] of Object.entries(requestOptions.headers ?? {})) {
+      if (value !== undefined) {
+        headers[name] = String(value);
+      }
+    }
 
-    if (requestOptions.authenticated) {
+    const authMode = requestOptions.authMode ?? "public";
+    let credentials: RequestCredentials =
+      authMode === "web-login" || authMode === "refresh-cookie"
+        ? "include"
+        : "omit";
+    if (authMode === "authenticated") {
       const accessToken = await options.getAccessToken?.();
       if (accessToken) {
         headers.Authorization = `Bearer ${accessToken}`;
-        credentials = "omit";
       } else {
         credentials = "include";
       }
     }
-
-    const usesCookie =
+    const mutation = binding.method !== "GET";
+    const needsCsrf =
+      mutation &&
       credentials === "include" &&
-      (requestOptions.authenticated || requestOptions.cookieCredentials);
-    if (usesCookie && requestOptions.mutation) {
+      (authMode === "authenticated" || authMode === "refresh-cookie");
+    if (needsCsrf) {
       const csrfToken = await options.getCsrfToken?.();
       if (csrfToken) {
         headers["X-CSRF-Token"] = csrfToken;
@@ -150,16 +341,23 @@ export function createApiClient(options: ApiClientOptions) {
       body = JSON.stringify(requestOptions.body);
     }
 
-    const response = await fetchImplementation(
-      `${baseUrl}${relativePath(path)}${serializeQuery(requestOptions.query)}`,
-      {
-        method,
+    let response: Response;
+    try {
+      response = await fetchImplementation(url, {
+        method: binding.method,
         credentials,
         headers,
         body,
-      },
-    );
-    const responseBody = await parseResponseBody(response);
+      });
+    } catch (cause) {
+      throw new ApiNetworkError(url, cause);
+    }
+
+    if (response.status === 204) {
+      return undefined as SuccessBodyOf<Name>;
+    }
+    const responseText = await response.text();
+    const responseBody = responseText ? parseJson(responseText) : undefined;
     if (!response.ok) {
       const errorBody: ApiErrorBody = isApiErrorBody(responseBody)
         ? responseBody
@@ -167,258 +365,224 @@ export function createApiClient(options: ApiClientOptions) {
             code: "HTTP_ERROR",
             message: response.statusText || `HTTP ${response.status}`,
             requestId: response.headers.get("x-request-id") ?? "",
-            details: { response: responseBody },
+            details:
+              responseBody === undefined
+                ? { responseText }
+                : { response: responseBody },
           };
       throw new ApiClientError(response.status, errorBody);
     }
-    return responseBody as Result;
+    if (responseBody === undefined) {
+      throw new ApiProtocolError(
+        response.status,
+        responseText,
+        "成功响应不是有效的 JSON",
+      );
+    }
+    return responseBody as SuccessBodyOf<Name>;
   }
 
   return {
-    getHealth: () =>
-      request<components["schemas"]["HealthResponseDto"]>("/api/v1/health"),
+    getHealth: () => request("healthGet", {}),
 
-    register: (input: BodyOf<"authRegister">) =>
-      request<components["schemas"]["UserResponseDto"]>(
-        "/api/v1/auth/register",
-        { method: "POST", body: input },
-      ),
-    loginWeb: (input: BodyOf<"authLoginWeb">) =>
-      request<components["schemas"]["UserResponseDto"]>("/api/v1/auth/login", {
-        method: "POST",
-        cookieCredentials: true,
+    register: (input: JsonBodyOf<"authRegister">) =>
+      request("authRegister", { body: input }),
+    loginWeb: (input: JsonBodyOf<"authLoginWeb">) =>
+      request("authLoginWeb", {
+        authMode: "web-login",
         body: input,
       }),
-    issueAndroidToken: (input: BodyOf<"authIssueAndroidToken">) =>
-      request<components["schemas"]["TokenResponseDto"]>("/api/v1/auth/token", {
-        method: "POST",
+    issueAndroidToken: (input: JsonBodyOf<"authIssueAndroidToken">) =>
+      request("authIssueAndroidToken", { body: input }),
+    refreshWeb: async () => {
+      const response = await request("authRefresh", {
+        authMode: "refresh-cookie",
+        body: {},
+      });
+      if (isTokenResponse(response)) {
+        throw new ApiProtocolError(
+          201,
+          JSON.stringify(response),
+          "Web refresh 返回了 Android TokenPair",
+        );
+      }
+      return response;
+    },
+    refreshAndroid: async (refreshToken: string) => {
+      const response = await request("authRefresh", {
+        authMode: "body-refresh-token",
+        body: { refreshToken },
+      });
+      if (!isTokenResponse(response)) {
+        throw new ApiProtocolError(
+          201,
+          JSON.stringify(response),
+          "Android refresh 未返回 TokenPair",
+        );
+      }
+      return response;
+    },
+    logout: (input: JsonBodyOf<"authLogout"> = {}) =>
+      request("authLogout", {
+        authMode: input.refreshToken
+          ? "body-refresh-token"
+          : "refresh-cookie",
         body: input,
       }),
-    refresh: (input: BodyOf<"authRefresh"> = {}) =>
-      request<components["schemas"]["RefreshResponseDto"]>(
-        "/api/v1/auth/refresh",
-        {
-          method: "POST",
-          cookieCredentials: !input.refreshToken,
-          mutation: !input.refreshToken,
-          body: input,
-        },
-      ),
-    logout: (input: BodyOf<"authLogout"> = {}) =>
-      request<components["schemas"]["SuccessResponseDto"] | undefined>(
-        "/api/v1/auth/logout",
-        {
-          method: "POST",
-          cookieCredentials: !input.refreshToken,
-          mutation: !input.refreshToken,
-          body: input,
-        },
-      ),
     getCurrentUser: () =>
-      request<components["schemas"]["UserResponseDto"]>("/api/v1/auth/me", {
-        authenticated: true,
-      }),
+      request("authGetCurrentUser", { authMode: "authenticated" }),
 
-    listAdminQuestions: (query: QueryOf<"adminListQuestions"> = {}) =>
-      request<components["schemas"]["QuestionListResponseDto"]>(
-        "/api/v1/admin/questions",
-        { authenticated: true, query },
-      ),
-    createAdminQuestion: (input: BodyOf<"adminCreateQuestion">) =>
-      request<components["schemas"]["AdminQuestionDto"]>(
-        "/api/v1/admin/questions",
-        {
-          method: "POST",
-          authenticated: true,
-          mutation: true,
-          body: input,
-        },
-      ),
+    listAdminQuestions: (
+      query: ParameterOf<"adminListQuestions", "query"> = {},
+    ) =>
+      request("adminListQuestions", {
+        authMode: "authenticated",
+        query,
+      }),
+    createAdminQuestion: (input: JsonBodyOf<"adminCreateQuestion">) =>
+      request("adminCreateQuestion", {
+        authMode: "authenticated",
+        body: input,
+      }),
     getAdminQuestion: (questionId: string) =>
-      request<components["schemas"]["AdminQuestionDto"]>(
-        `/api/v1/admin/questions/${encodeURIComponent(questionId)}` as ApiPath,
-        { authenticated: true },
-      ),
+      request("adminGetQuestion", {
+        authMode: "authenticated",
+        pathParams: { questionId },
+      }),
     updateAdminQuestion: (
       questionId: string,
-      input: BodyOf<"adminUpdateQuestion">,
+      input: JsonBodyOf<"adminUpdateQuestion">,
     ) =>
-      request<components["schemas"]["AdminQuestionDto"]>(
-        `/api/v1/admin/questions/${encodeURIComponent(questionId)}` as ApiPath,
-        {
-          method: "PATCH",
-          authenticated: true,
-          mutation: true,
-          body: input,
-        },
-      ),
+      request("adminUpdateQuestion", {
+        authMode: "authenticated",
+        pathParams: { questionId },
+        body: input,
+      }),
 
     getRandomQuestion: (excludeIds: string[] = []) =>
-      request<components["schemas"]["LearnerQuestionDto"]>(
-        "/api/v1/practice/random",
-        {
-          authenticated: true,
-          query: { excludeIds: excludeIds.length > 0 ? excludeIds : undefined },
-        },
-      ),
+      request("practiceGetRandomQuestion", {
+        authMode: "authenticated",
+        query: { excludeIds: excludeIds.length ? excludeIds.join(",") : undefined },
+      }),
     answerQuestion: (
       questionId: string,
-      input: Idempotent<BodyOf<"practiceAnswerQuestion">>,
+      input: Idempotent<JsonBodyOf<"practiceAnswerQuestion">>,
     ) => {
       const { idempotencyKey, ...body } = input;
-      return request<components["schemas"]["AnswerResultDto"]>(
-        `/api/v1/practice/questions/${encodeURIComponent(questionId)}/answer` as ApiPath,
-        {
-          method: "POST",
-          authenticated: true,
-          mutation: true,
-          body,
-          headers: { "Idempotency-Key": idempotencyKey },
-        },
-      );
+      return request("practiceAnswerQuestion", {
+        authMode: "authenticated",
+        pathParams: { questionId },
+        headers: { "Idempotency-Key": idempotencyKey },
+        body,
+      });
     },
-    listWrongQuestions: (query: QueryOf<"practiceListWrongQuestions"> = {}) =>
-      request<components["schemas"]["WrongQuestionListResponseDto"]>(
-        "/api/v1/practice/wrong-questions",
-        { authenticated: true, query },
-      ),
+    listWrongQuestions: (
+      query: ParameterOf<"practiceListWrongQuestions", "query"> = {},
+    ) =>
+      request("practiceListWrongQuestions", {
+        authMode: "authenticated",
+        query,
+      }),
     retryWrongQuestion: (
       questionId: string,
-      input: Idempotent<BodyOf<"practiceRetryWrongQuestion">>,
+      input: Idempotent<JsonBodyOf<"practiceRetryWrongQuestion">>,
     ) => {
       const { idempotencyKey, ...body } = input;
-      return request<components["schemas"]["AnswerResultDto"]>(
-        `/api/v1/practice/wrong-questions/${encodeURIComponent(questionId)}/answer` as ApiPath,
-        {
-          method: "POST",
-          authenticated: true,
-          mutation: true,
-          body,
-          headers: { "Idempotency-Key": idempotencyKey },
-        },
-      );
+      return request("practiceRetryWrongQuestion", {
+        authMode: "authenticated",
+        pathParams: { questionId },
+        headers: { "Idempotency-Key": idempotencyKey },
+        body,
+      });
     },
     getPracticeSummary: () =>
-      request<components["schemas"]["PracticeSummaryDto"]>(
-        "/api/v1/practice/summary",
-        { authenticated: true },
-      ),
+      request("practiceGetSummary", { authMode: "authenticated" }),
 
     getPointBalance: () =>
-      request<components["schemas"]["PointBalanceDto"]>(
-        "/api/v1/points/balance",
-        { authenticated: true },
-      ),
-    listPointLedger: (query: QueryOf<"pointsListLedger"> = {}) =>
-      request<components["schemas"]["PointLedgerListResponseDto"]>(
-        "/api/v1/points/ledger",
-        { authenticated: true, query },
-      ),
+      request("pointsGetBalance", { authMode: "authenticated" }),
+    listPointLedger: (
+      query: ParameterOf<"pointsListLedger", "query"> = {},
+    ) =>
+      request("pointsListLedger", { authMode: "authenticated", query }),
     getAdminPointConfig: () =>
-      request<components["schemas"]["PointConfigDto"]>(
-        "/api/v1/admin/points/config",
-        { authenticated: true },
-      ),
-    updateAdminPointConfig: (input: BodyOf<"adminUpdatePointConfig">) =>
-      request<components["schemas"]["PointConfigDto"]>(
-        "/api/v1/admin/points/config",
-        {
-          method: "PUT",
-          authenticated: true,
-          mutation: true,
-          body: input,
-        },
-      ),
+      request("adminGetPointConfig", { authMode: "authenticated" }),
+    updateAdminPointConfig: (input: JsonBodyOf<"adminUpdatePointConfig">) =>
+      request("adminUpdatePointConfig", {
+        authMode: "authenticated",
+        body: input,
+      }),
 
-    listProducts: (query: QueryOf<"productsList"> = {}) =>
-      request<components["schemas"]["ProductListResponseDto"]>(
-        "/api/v1/products",
-        { authenticated: true, query },
-      ),
+    listProducts: (query: ParameterOf<"productsList", "query"> = {}) =>
+      request("productsList", { authMode: "authenticated", query }),
     getProduct: (productId: string) =>
-      request<components["schemas"]["ProductDto"]>(
-        `/api/v1/products/${encodeURIComponent(productId)}` as ApiPath,
-        { authenticated: true },
-      ),
-    listAdminProducts: (query: QueryOf<"adminListProducts"> = {}) =>
-      request<components["schemas"]["ProductListResponseDto"]>(
-        "/api/v1/admin/products",
-        { authenticated: true, query },
-      ),
-    createAdminProduct: (input: BodyOf<"adminCreateProduct">) =>
-      request<components["schemas"]["ProductDto"]>("/api/v1/admin/products", {
-        method: "POST",
-        authenticated: true,
-        mutation: true,
+      request("productsGet", {
+        authMode: "authenticated",
+        pathParams: { productId },
+      }),
+    listAdminProducts: (
+      query: ParameterOf<"adminListProducts", "query"> = {},
+    ) =>
+      request("adminListProducts", {
+        authMode: "authenticated",
+        query,
+      }),
+    createAdminProduct: (input: JsonBodyOf<"adminCreateProduct">) =>
+      request("adminCreateProduct", {
+        authMode: "authenticated",
         body: input,
       }),
     updateAdminProduct: (
       productId: string,
-      input: BodyOf<"adminUpdateProduct">,
+      input: JsonBodyOf<"adminUpdateProduct">,
     ) =>
-      request<components["schemas"]["ProductDto"]>(
-        `/api/v1/admin/products/${encodeURIComponent(productId)}` as ApiPath,
-        {
-          method: "PATCH",
-          authenticated: true,
-          mutation: true,
-          body: input,
-        },
-      ),
+      request("adminUpdateProduct", {
+        authMode: "authenticated",
+        pathParams: { productId },
+        body: input,
+      }),
     uploadAdminProductImage: (file: Blob, filename = "product-image") => {
-      const body = new FormData();
-      body.append("file", file, filename);
-      return request<components["schemas"]["ProductImageUploadResponseDto"]>(
-        "/api/v1/admin/uploads/product-images",
-        {
-          method: "POST",
-          authenticated: true,
-          mutation: true,
-          formData: body,
-        },
-      );
-    },
-
-    createOrder: (input: Idempotent<BodyOf<"ordersCreate">>) => {
-      const { idempotencyKey, ...body } = input;
-      return request<components["schemas"]["OrderDto"]>("/api/v1/orders", {
-        method: "POST",
-        authenticated: true,
-        mutation: true,
-        body,
-        headers: { "Idempotency-Key": idempotencyKey },
+      const formData = new FormData();
+      formData.append("file", file, filename);
+      return request("adminUploadProductImage", {
+        authMode: "authenticated",
+        formData,
       });
     },
-    listOrders: (query: QueryOf<"ordersList"> = {}) =>
-      request<components["schemas"]["OrderListResponseDto"]>("/api/v1/orders", {
-        authenticated: true,
-        query,
-      }),
+
+    createOrder: (input: Idempotent<JsonBodyOf<"ordersCreate">>) => {
+      const { idempotencyKey, ...body } = input;
+      return request("ordersCreate", {
+        authMode: "authenticated",
+        headers: { "Idempotency-Key": idempotencyKey },
+        body,
+      });
+    },
+    listOrders: (query: ParameterOf<"ordersList", "query"> = {}) =>
+      request("ordersList", { authMode: "authenticated", query }),
     getOrder: (orderId: string) =>
-      request<components["schemas"]["OrderDto"]>(
-        `/api/v1/orders/${encodeURIComponent(orderId)}` as ApiPath,
-        { authenticated: true },
-      ),
-    listAdminOrders: (query: QueryOf<"adminListOrders"> = {}) =>
-      request<components["schemas"]["AdminOrderListResponseDto"]>(
-        "/api/v1/admin/orders",
-        { authenticated: true, query },
-      ),
+      request("ordersGet", {
+        authMode: "authenticated",
+        pathParams: { orderId },
+      }),
+    listAdminOrders: (
+      query: ParameterOf<"adminListOrders", "query"> = {},
+    ) =>
+      request("adminListOrders", { authMode: "authenticated", query }),
     getAdminOrder: (orderId: string) =>
-      request<components["schemas"]["AdminOrderDto"]>(
-        `/api/v1/admin/orders/${encodeURIComponent(orderId)}` as ApiPath,
-        { authenticated: true },
-      ),
+      request("adminGetOrder", {
+        authMode: "authenticated",
+        pathParams: { orderId },
+      }),
     completeAdminOrder: (orderId: string) =>
-      request<components["schemas"]["AdminOrderDto"]>(
-        `/api/v1/admin/orders/${encodeURIComponent(orderId)}/complete` as ApiPath,
-        { method: "POST", authenticated: true, mutation: true },
-      ),
+      request("adminCompleteOrder", {
+        authMode: "authenticated",
+        pathParams: { orderId },
+      }),
     cancelAdminOrder: (orderId: string) =>
-      request<components["schemas"]["AdminOrderDto"]>(
-        `/api/v1/admin/orders/${encodeURIComponent(orderId)}/cancel` as ApiPath,
-        { method: "POST", authenticated: true, mutation: true },
-      ),
+      request("adminCancelOrder", {
+        authMode: "authenticated",
+        pathParams: { orderId },
+      }),
   };
 }
 

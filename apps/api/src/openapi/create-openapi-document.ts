@@ -28,9 +28,31 @@ export function createOpenApiDocument(app: INestApplication): OpenAPIObject {
       },
       'cookieAuth',
     )
+    .addCookieAuth(
+      'pq_refresh',
+      {
+        type: 'apiKey',
+        in: 'cookie',
+        description: 'Web 刷新与注销流程使用的 HttpOnly Refresh Token Cookie',
+      },
+      'refreshCookieAuth',
+    )
     .build();
 
-  return SwaggerModule.createDocument(app, config, {
+  const document = SwaggerModule.createDocument(app, config, {
     deepScanRoutes: true,
   });
+  const schemas = document.components?.schemas;
+  if (schemas) {
+    for (const name of [
+      'UpdateQuestionRequestDto',
+      'UpdateProductRequestDto',
+    ]) {
+      const schema = schemas[name];
+      if (schema && !('$ref' in schema)) {
+        schema.minProperties = 1;
+      }
+    }
+  }
+  return document;
 }
