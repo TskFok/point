@@ -61,6 +61,11 @@ $ pnpm run test:cov
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
 
+`PRODUCT_UPLOAD_ROOT` 属于本地图片存储的信任边界。该目录必须由 API 服务账户独占，
+并保持 `0700` 权限；不得允许以相同 UID 运行的不可信进程写入，也不得放在共享可写卷
+上。应用会拒绝直接符号链接和多重硬链接的公开文件，作为纵深防御措施，但这些检查不
+能防御已经拥有同等服务账户权限的写者。
+
 If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
 
 ```bash

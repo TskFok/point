@@ -1,5 +1,5 @@
 import { type INestApplication } from '@nestjs/common';
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { link, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -77,6 +77,21 @@ describe('configureLocalStaticFiles', () => {
     } finally {
       await rm(external, { recursive: true, force: true });
     }
+  });
+
+  it('不公开链接计数大于一的商品图片文件', async () => {
+    const products = join(uploadRoot, 'products');
+    const productImage = join(products, fileName);
+    await mkdir(products, { mode: 0o700 });
+    await writeFile(productImage, validPng, { mode: 0o600 });
+    await link(productImage, join(uploadRoot, 'shared-copy.png'));
+    const app = { use: jest.fn() } as unknown as INestApplication;
+
+    await configureLocalStaticFiles(app, uploadRoot);
+
+    await expect(
+      isSafeProductUploadFile(uploadRoot, `/products/${fileName}`),
+    ).resolves.toBe(false);
   });
 
   it('拒绝配置 root 内指向外部目录的 products 符号链接', async () => {

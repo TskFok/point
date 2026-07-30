@@ -1,4 +1,6 @@
+import { crc32 } from 'node:zlib';
 import sharp from 'sharp';
+import * as imageValidatorModule from './image-validator';
 import { validateProductImage } from './image-validator';
 
 const maxSize = 5 * 1024 * 1024;
@@ -16,12 +18,43 @@ const validImages = {
     'base64',
   ),
 };
+const restartJpeg = Buffer.from(
+  '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/wAALCAAIAFABAREA/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/90ABAAB/9oACAEBAAA/AGxeF/BH/QC8N/8AhSwf/G6//9DO1bwdpU10jaJbeBbO2CANHeakly5fJyQyvGAMY4weh55wP//R57UPDEOmWEl3cnwA8UeNy2yyXEhyQOI45mZuvYHAyTwDX//S4mKXSP8An38N/wDgj1D/ABr/0+Uil0j/AJ9/Df8A4I9Q/wAa/9Tn4pdI/wCffw3/AOCPUP8AGv/VyYpdI/59/Df/AII9Q/xr/9apFLpH/Pv4b/8ABHqH+Nf/1yKXSP8An38N/wDgj1D/ABr/0LcUukf8+/hv/wAEeof41//Z',
+  'base64',
+);
+const progressiveRestartJpeg = Buffer.from(
+  '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/wgALCAAIAEgBAREA/8QAFwABAQEBAAAAAAAAAAAAAAAABAIDBf/dAAQAAf/aAAgBAQAAAAHl/wD/0Af/0Tf/0s//0x//1A//1Tf/1o//14//xAAYEAADAQEAAAAAAAAAAAAAAAAAAQMCBP/aAAgBAQABBQJZ4j//0FniP//RWeI//9JZ4j//06zk9f/UUT//1VE//9ZRP//XplTx/8QAJRAAAAMHAwUAAAAAAAAAAAAAAAECBAUxM5GU0QMR4hIUI1FS/9oACAEBAAY/ApLNclgf/9CSzXJYH//Rks1yWB//0pLNclgf/9PwkwoT6XqdWB//1Iu2vIf/1Yu2vIf/1ou2vIf/1zUrsNi+d1HQjH//xAAaEAEBAAIDAAAAAAAAAAAAAAABABEhMXGh/9oACAEBAAE/IZy//9Ccv//RnL//0py//9M245sKz2M//9SK/9WK/9aK/9denyHoFb//2gAIAQEAAAAQ/wD/0P8A/9F//9L/AP/T/wD/1H//1f8A/9Z//9d//8QAGRABAQEBAQEAAAAAAAAAAAAAAREAITFB/9oACAEBAAE/EN7f/9De3//R3t//0t7f/9MZRIj7agQScj497D//1Nl//9XZf//W2X//14N+hRUOegfBhV4O/9k=',
+  'base64',
+);
 let highPixelPng: Buffer;
 
 type WebpChunk = {
   data: Buffer;
   type: string;
 };
+
+type PngChunk = {
+  data: Buffer;
+  type: string;
+};
+
+type ContainerExtension = 'jpg' | 'png' | 'webp';
+
+function hasValidContainer(
+  buffer: Buffer,
+  extension: ContainerExtension,
+): boolean {
+  const validator = (
+    imageValidatorModule as typeof imageValidatorModule & {
+      hasValidImageContainerStructure?: (
+        candidate: Buffer,
+        candidateExtension: ContainerExtension,
+      ) => boolean;
+    }
+  ).hasValidImageContainerStructure;
+  expect(validator).toEqual(expect.any(Function));
+  return validator?.(buffer, extension) ?? true;
+}
 
 function parseWebpChunks(buffer: Buffer): WebpChunk[] {
   const chunks: WebpChunk[] = [];
@@ -54,6 +87,60 @@ function buildWebp(chunks: WebpChunk[], paddingByte = 0): Buffer {
   header.write('RIFF', 0, 4, 'ascii');
   header.writeUInt32LE(body.length, 4);
   return Buffer.concat([header, body]);
+}
+
+function parsePngChunks(buffer: Buffer): PngChunk[] {
+  const chunks: PngChunk[] = [];
+  let offset = 8;
+  while (offset < buffer.length) {
+    const length = buffer.readUInt32BE(offset);
+    chunks.push({
+      type: buffer.toString('ascii', offset + 4, offset + 8),
+      data: Buffer.from(buffer.subarray(offset + 8, offset + 8 + length)),
+    });
+    offset += 12 + length;
+  }
+  return chunks;
+}
+
+function buildPng(chunks: PngChunk[]): Buffer {
+  const signature = Buffer.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+  ]);
+  const encoded = chunks.map(({ type, data }) => {
+    const typeBytes = Buffer.from(type, 'ascii');
+    const header = Buffer.alloc(8);
+    header.writeUInt32BE(data.length);
+    typeBytes.copy(header, 4, 0, 4);
+    const checksum = Buffer.alloc(4);
+    checksum.writeUInt32BE(crc32(Buffer.concat([typeBytes, data])) >>> 0);
+    return Buffer.concat([header, data, checksum]);
+  });
+  return Buffer.concat([signature, ...encoded]);
+}
+
+function insertPngChunkBefore(
+  buffer: Buffer,
+  beforeType: string,
+  chunk: PngChunk,
+): Buffer {
+  const chunks = parsePngChunks(buffer);
+  const index = chunks.findIndex(({ type }) => type === beforeType);
+  if (index < 0) {
+    throw new Error(`找不到 PNG 数据块 ${beforeType}`);
+  }
+  chunks.splice(index, 0, chunk);
+  return buildPng(chunks);
+}
+
+function jpegMarkerOffsets(buffer: Buffer, markerStart: number): number[] {
+  const offsets: number[] = [];
+  for (let index = 0; index + 1 < buffer.length; index += 1) {
+    if (buffer[index] === 0xff && buffer[index + 1] === markerStart) {
+      offsets.push(index);
+    }
+  }
+  return offsets;
 }
 
 function corruptPngCrc(buffer: Buffer, chunkType: string): Buffer {
@@ -174,6 +261,61 @@ describe('validateProductImage', () => {
     ).resolves.toMatchObject({ extension: 'jpg' });
   });
 
+  it('接受非零 DRI、RST0 到 RST7 后模 8 回到 RST0 的合法 JPEG', async () => {
+    const restartMarkers = Array.from({ length: 8 }, (_, index) =>
+      jpegMarkerOffsets(restartJpeg, 0xd0 + index),
+    ).flat();
+
+    expect(jpegMarkerOffsets(restartJpeg, 0xdd)).toHaveLength(1);
+    expect(restartMarkers).toHaveLength(9);
+    expect(hasValidContainer(restartJpeg, 'jpg')).toBe(true);
+    await expect(
+      validateProductImage(restartJpeg, maxSize),
+    ).resolves.toMatchObject({ extension: 'jpg' });
+  });
+
+  it('接受每个 scan 都从 RST0 重启序列的渐进多扫描 JPEG', async () => {
+    expect(
+      jpegMarkerOffsets(progressiveRestartJpeg, 0xda).length,
+    ).toBeGreaterThan(1);
+    expect(hasValidContainer(progressiveRestartJpeg, 'jpg')).toBe(true);
+    await expect(
+      validateProductImage(progressiveRestartJpeg, maxSize),
+    ).resolves.toMatchObject({ extension: 'jpg' });
+  });
+
+  it.each([
+    ['没有 DRI', 'remove-dri'],
+    ['DRI 为零', 'zero-dri'],
+    ['首个标记不是 RST0', 'wrong-start'],
+    ['RST 序列重复', 'repeat'],
+    ['RST 序列跳号', 'skip'],
+  ])('容器状态机拒绝%s但仍含 RST 的 JPEG', (_name, mutation) => {
+    const driOffset = jpegMarkerOffsets(restartJpeg, 0xdd)[0];
+    const restartOffsets = Array.from({ length: 8 }, (_, index) =>
+      jpegMarkerOffsets(restartJpeg, 0xd0 + index),
+    )
+      .flat()
+      .sort((left, right) => left - right);
+    let invalid = Buffer.from(restartJpeg);
+    if (mutation === 'remove-dri') {
+      invalid = Buffer.concat([
+        restartJpeg.subarray(0, driOffset),
+        restartJpeg.subarray(driOffset + 6),
+      ]);
+    } else if (mutation === 'zero-dri') {
+      invalid.writeUInt16BE(0, driOffset + 4);
+    } else if (mutation === 'wrong-start') {
+      invalid[restartOffsets[0] + 1] = 0xd1;
+    } else if (mutation === 'repeat') {
+      invalid[restartOffsets[1] + 1] = 0xd0;
+    } else {
+      invalid[restartOffsets[1] + 1] = 0xd2;
+    }
+
+    expect(hasValidContainer(invalid, 'jpg')).toBe(false);
+  });
+
   it.each([
     ['重复 VP8', { type: 'VP8 ', duplicate: 'VP8 ' }],
     ['重复 VP8L', { type: 'VP8L', duplicate: 'VP8L' }],
@@ -272,6 +414,212 @@ describe('validateProductImage', () => {
         }),
       ),
     );
+  });
+
+  it('接受实际透明但 VP8L alpha hint 为零且 VP8X alpha flag 为真的 WebP', async () => {
+    const transparentLossless = await sharp(Buffer.from([1, 2, 3, 0]), {
+      raw: { width: 1, height: 1, channels: 4 },
+    })
+      .webp({ lossless: true })
+      .toBuffer();
+    const main = parseWebpChunks(transparentLossless)[0];
+    const hintCleared = Buffer.from(main.data);
+    hintCleared[4] &= 0xef;
+    const vp8x = Buffer.alloc(10);
+    vp8x[0] = 0x10;
+    const extended = buildWebp([
+      { type: 'VP8X', data: vp8x },
+      { type: 'VP8L', data: hintCleared },
+    ]);
+
+    await expect(
+      validateProductImage(extended, maxSize),
+    ).resolves.toMatchObject({ extension: 'webp' });
+  });
+
+  it('接受实际不透明、VP8L alpha hint 为一但 VP8X alpha flag 为假的 WebP', async () => {
+    const opaqueLossless = await sharp(Buffer.from([1, 2, 3, 255]), {
+      raw: { width: 1, height: 1, channels: 4 },
+    })
+      .webp({ lossless: true })
+      .toBuffer();
+    const main = parseWebpChunks(opaqueLossless)[0];
+    const hintSet = Buffer.from(main.data);
+    hintSet[4] |= 0x10;
+    const extended = buildWebp([
+      { type: 'VP8X', data: Buffer.alloc(10) },
+      { type: 'VP8L', data: hintSet },
+    ]);
+
+    await expect(
+      validateProductImage(extended, maxSize),
+    ).resolves.toMatchObject({ extension: 'webp' });
+  });
+
+  it('接受 EXIF 与 XMP 元数据按任意相对顺序出现的 WebP', async () => {
+    const withMetadata = await sharp(Buffer.from([1, 2, 3]), {
+      raw: { width: 1, height: 1, channels: 3 },
+    })
+      .withMetadata({ exif: { IFD0: { Copyright: 'point' } } })
+      .withXmp('<x:xmpmeta xmlns:x="adobe:ns:meta/"/>')
+      .webp()
+      .toBuffer();
+    const chunks = parseWebpChunks(withMetadata);
+    const exif = chunks.find(({ type }) => type === 'EXIF');
+    const xmp = chunks.find(({ type }) => type === 'XMP ');
+    expect(exif).toBeDefined();
+    expect(xmp).toBeDefined();
+    const reordered = buildWebp([
+      ...chunks.filter(({ type }) => !['EXIF', 'XMP '].includes(type)),
+      xmp!,
+      exif!,
+    ]);
+
+    await expect(
+      validateProductImage(reordered, maxSize),
+    ).resolves.toMatchObject({ extension: 'webp' });
+  });
+
+  it.each([
+    ['包含非 ASCII 字母', 'v1Ag'],
+    ['第三字母 reserved bit 为小写', 'vpag'],
+  ])('拒绝 PNG chunk type %s', (_name, type) => {
+    const invalid = insertPngChunkBefore(validImages.png, 'IDAT', {
+      type,
+      data: Buffer.alloc(0),
+    });
+
+    expect(hasValidContainer(invalid, 'png')).toBe(false);
+  });
+
+  it.each([
+    ['gAMA', Buffer.from([0x00, 0x00, 0xb1, 0x8f])],
+    ['cHRM', Buffer.alloc(32)],
+    ['sRGB', Buffer.from([0])],
+    ['iCCP', Buffer.from('profile\\0\\0data')],
+  ])('拒绝在 PLTE 之后出现的 PNG %s', async (type, data) => {
+    const palette = await sharp(Buffer.from([0, 0, 0, 255, 255, 255]), {
+      raw: { width: 2, height: 1, channels: 3 },
+    })
+      .png({ palette: true, colours: 2 })
+      .toBuffer();
+    const chunks = parsePngChunks(palette);
+    const plteIndex = chunks.findIndex((chunk) => chunk.type === 'PLTE');
+    chunks.splice(plteIndex + 1, 0, { type, data });
+
+    expect(hasValidContainer(buildPng(chunks), 'png')).toBe(false);
+  });
+
+  it.each([
+    ['gAMA', Buffer.from([0x00, 0x00, 0xb1, 0x8f])],
+    ['cHRM', Buffer.alloc(32)],
+    ['sRGB', Buffer.from([0])],
+    ['iCCP', Buffer.from('profile\\0\\0data')],
+    ['pHYs', Buffer.alloc(9)],
+  ])('拒绝在 IDAT 之后出现的 PNG %s', (type, data) => {
+    const invalid = insertPngChunkBefore(validImages.png, 'IEND', {
+      type,
+      data,
+    });
+
+    expect(hasValidContainer(invalid, 'png')).toBe(false);
+  });
+
+  it('拒绝调色板之后出现的 sBIT 和重复的单例 ancillary chunk', async () => {
+    const palette = await sharp(Buffer.from([0, 0, 0, 255, 255, 255]), {
+      raw: { width: 2, height: 1, channels: 3 },
+    })
+      .png({ palette: true, colours: 2 })
+      .toBuffer();
+    const chunks = parsePngChunks(palette);
+    const plteIndex = chunks.findIndex((chunk) => chunk.type === 'PLTE');
+    const sbitAfterPlte = [...chunks];
+    sbitAfterPlte.splice(plteIndex + 1, 0, {
+      type: 'sBIT',
+      data: Buffer.from([8, 8, 8]),
+    });
+    const duplicateGamma = [...chunks];
+    duplicateGamma.splice(
+      plteIndex,
+      0,
+      { type: 'gAMA', data: Buffer.from([0, 0, 0xb1, 0x8f]) },
+      { type: 'gAMA', data: Buffer.from([0, 0, 0xb1, 0x8f]) },
+    );
+
+    expect(hasValidContainer(buildPng(sbitAfterPlte), 'png')).toBe(false);
+    expect(hasValidContainer(buildPng(duplicateGamma), 'png')).toBe(false);
+  });
+
+  it('拒绝 tRNS/bKGD/hIST 的顺序及色型约束违规', async () => {
+    const trnsOnAlphaImage = insertPngChunkBefore(validImages.png, 'IDAT', {
+      type: 'tRNS',
+      data: Buffer.from([0, 0]),
+    });
+    const palette = await sharp(Buffer.from([0, 0, 0, 255, 255, 255]), {
+      raw: { width: 2, height: 1, channels: 3 },
+    })
+      .png({ palette: true, colours: 2 })
+      .toBuffer();
+    const paletteChunks = parsePngChunks(palette);
+    const plteIndex = paletteChunks.findIndex(({ type }) => type === 'PLTE');
+    const trnsBeforePlte = [...paletteChunks];
+    trnsBeforePlte.splice(plteIndex, 0, {
+      type: 'tRNS',
+      data: Buffer.from([0]),
+    });
+    const backgroundBeforePlte = [...paletteChunks];
+    backgroundBeforePlte.splice(plteIndex, 0, {
+      type: 'bKGD',
+      data: Buffer.from([0]),
+    });
+    const truecolor = await sharp(Buffer.from([1, 2, 3]), {
+      raw: { width: 1, height: 1, channels: 3 },
+    })
+      .png()
+      .toBuffer();
+    const histogramWithoutPlte = insertPngChunkBefore(truecolor, 'IDAT', {
+      type: 'hIST',
+      data: Buffer.from([0, 1]),
+    });
+
+    expect(hasValidContainer(trnsOnAlphaImage, 'png')).toBe(false);
+    expect(hasValidContainer(buildPng(trnsBeforePlte), 'png')).toBe(false);
+    expect(hasValidContainer(buildPng(backgroundBeforePlte), 'png')).toBe(
+      false,
+    );
+    expect(hasValidContainer(histogramWithoutPlte, 'png')).toBe(false);
+  });
+
+  it('拒绝不连续 IDAT 和未知 critical chunk', () => {
+    const chunks = parsePngChunks(validImages.png);
+    const idatIndex = chunks.findIndex(({ type }) => type === 'IDAT');
+    const idat = chunks[idatIndex];
+    chunks.splice(
+      idatIndex,
+      1,
+      { type: 'IDAT', data: idat.data.subarray(0, 1) },
+      { type: 'vpAg', data: Buffer.alloc(0) },
+      { type: 'IDAT', data: idat.data.subarray(1) },
+    );
+    const unknownCritical = insertPngChunkBefore(validImages.png, 'IDAT', {
+      type: 'ABCD',
+      data: Buffer.alloc(0),
+    });
+
+    expect(hasValidContainer(buildPng(chunks), 'png')).toBe(false);
+    expect(hasValidContainer(unknownCritical, 'png')).toBe(false);
+  });
+
+  it('允许命名合法的未知 ancillary chunk 和合法 Adam7 PNG', async () => {
+    const withUnknownAncillary = insertPngChunkBefore(validImages.png, 'IDAT', {
+      type: 'vpAg',
+      data: Buffer.from('private metadata'),
+    });
+
+    expect(hasValidContainer(withUnknownAncillary, 'png')).toBe(true);
+    await expect(
+      validateProductImage(withUnknownAncillary, maxSize),
+    ).resolves.toMatchObject({ extension: 'png' });
   });
 
   it('拒绝 PNG CRC 损坏、未知关键块以及重复关键块', async () => {

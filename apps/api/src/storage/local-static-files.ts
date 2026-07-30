@@ -26,7 +26,11 @@ async function isSafePreparedProductFile(
   const candidate = join(prepared.productDirectory, match[1]);
   try {
     const fileStat = await lstat(candidate);
-    if (fileStat.isSymbolicLink() || !fileStat.isFile()) {
+    if (
+      fileStat.isSymbolicLink() ||
+      !fileStat.isFile() ||
+      fileStat.nlink !== 1
+    ) {
       return false;
     }
     const canonicalFile = await realpath(candidate);
