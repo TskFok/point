@@ -1,5 +1,8 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { Client } from 'pg';
 
 const testDatabaseUrl =
   process.env.TEST_DATABASE_URL ??
@@ -13,6 +16,10 @@ const auditCreatorId = 'schema-audit-creator';
 const auditStudentId = 'schema-audit-student';
 const auditQuestionId = 'schema-audit-question';
 const auditOptionId = 'schema-audit-option';
+const errorCountMigrationPath = resolve(
+  __dirname,
+  '../../../prisma/migrations/0004_add_answer_attempt_error_count_snapshot/migration.sql',
+);
 
 describe('数据库 Schema 不变量', () => {
   beforeEach(async () => {
@@ -156,6 +163,7 @@ describe('数据库 Schema 不变量', () => {
         multiplierSnapshot: 1,
         pointsAwarded: 0,
         balanceAfterSnapshot: 0,
+        errorCountSnapshot: 1,
         idempotencyKey: 'schema-audit-attempt',
       },
     });
@@ -163,5 +171,81 @@ describe('数据库 Schema 不变量', () => {
     await expect(
       prisma.user.delete({ where: { id: auditStudentId } }),
     ).rejects.toBeDefined();
+  });
+
+  it('集合回填答题错误次数快照并强制非空、无默认值和非负约束', async () => {
+    const client = new Client({ connectionString: testDatabaseUrl });
+    const schemaName = `task6_migration_${process.pid}`;
+    await client.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(`CREATE SCHEMA "${schemaName}"`);
+      await client.query(`SET LOCAL search_path TO "${schemaName}"`);
+      await client.query(
+        `CREATE TYPE "AnswerMode" AS ENUM ('FIRST_ATTEMPT', 'WRONG_RETRY')`,
+      );
+      await client.query(`
+        CREATE TABLE "AnswerAttempt" (
+          "id" TEXT PRIMARY KEY,
+          "userId" TEXT NOT NULL,
+          "questionId" TEXT NOT NULL,
+          "mode" "AnswerMode" NOT NULL,
+          "isCorrect" BOOLEAN NOT NULL,
+          "createdAt" TIMESTAMP(3) NOT NULL
+        )
+      `);
+      await client.query(`
+        INSERT INTO "AnswerAttempt"
+          ("id", "userId", "questionId", "mode", "isCorrect", "createdAt")
+        VALUES
+          ('first-wrong', 'student-1', 'question-1', 'FIRST_ATTEMPT', false, '2026-01-01T00:00:00.000Z'),
+          ('retry-wrong-1', 'student-1', 'question-1', 'WRONG_RETRY', false, '2026-01-02T00:00:00.000Z'),
+          ('retry-correct', 'student-1', 'question-1', 'WRONG_RETRY', true, '2026-01-03T00:00:00.000Z'),
+          ('retry-wrong-2', 'student-1', 'question-1', 'WRONG_RETRY', false, '2026-01-04T00:00:00.000Z'),
+          ('first-correct', 'student-1', 'question-2', 'FIRST_ATTEMPT', true, '2026-01-01T00:00:00.000Z')
+      `);
+
+      await client.query(readFileSync(errorCountMigrationPath, 'utf8'));
+
+      const snapshots = await client.query<{
+        id: string;
+        errorCountSnapshot: number;
+      }>(`
+        SELECT id, "errorCountSnapshot"
+        FROM "AnswerAttempt"
+        ORDER BY "createdAt", id
+      `);
+      expect(snapshots.rows).toEqual([
+        { id: 'first-correct', errorCountSnapshot: 0 },
+        { id: 'first-wrong', errorCountSnapshot: 1 },
+        { id: 'retry-wrong-1', errorCountSnapshot: 2 },
+        { id: 'retry-correct', errorCountSnapshot: 2 },
+        { id: 'retry-wrong-2', errorCountSnapshot: 3 },
+      ]);
+
+      const column = await client.query<{
+        isNullable: 'YES' | 'NO';
+        columnDefault: string | null;
+      }>(`
+        SELECT
+          "is_nullable" AS "isNullable",
+          "column_default" AS "columnDefault"
+        FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = 'AnswerAttempt'
+          AND column_name = 'errorCountSnapshot'
+      `);
+      expect(column.rows).toEqual([{ isNullable: 'NO', columnDefault: null }]);
+      await expect(
+        client.query(`
+          UPDATE "AnswerAttempt"
+          SET "errorCountSnapshot" = -1
+          WHERE id = 'first-wrong'
+        `),
+      ).rejects.toMatchObject({ code: '23514' });
+    } finally {
+      await client.query('ROLLBACK');
+      await client.end();
+    }
   });
 });

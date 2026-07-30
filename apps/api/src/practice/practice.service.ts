@@ -7,6 +7,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { PointsService } from '../points/points.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { type ListWrongQuestionsDto } from './dto/list-wrong-questions.dto';
 import {
   type AnswerResultDto,
   mapAnswerResult,
@@ -25,6 +26,7 @@ const attemptResultSelection = {
   isCorrect: true,
   pointsAwarded: true,
   balanceAfterSnapshot: true,
+  errorCountSnapshot: true,
   question: {
     select: {
       explanation: true,
@@ -78,6 +80,20 @@ function questionAlreadyAnswered(): ConflictException {
   return new ConflictException({
     code: 'QUESTION_ALREADY_ANSWERED',
     message: '该题已经完成首次作答',
+  });
+}
+
+function wrongQuestionNotFound(): NotFoundException {
+  return new NotFoundException({
+    code: 'WRONG_QUESTION_NOT_FOUND',
+    message: '该题不在当前待练错题中',
+  });
+}
+
+function questionAlreadyMastered(): ConflictException {
+  return new ConflictException({
+    code: 'QUESTION_ALREADY_MASTERED',
+    message: '该错题已经掌握',
   });
 }
 
@@ -147,6 +163,22 @@ function hasPrismaCode(error: unknown, code: string): boolean {
   return isRecord(error) && error.code === code;
 }
 
+function isSerializationConflict(error: unknown): boolean {
+  if (hasPrismaCode(error, 'P2034')) {
+    return true;
+  }
+  if (!isRecord(error) || error.code !== 'P2010' || !isRecord(error.meta)) {
+    return false;
+  }
+  const driverError = error.meta.driverAdapterError;
+  const cause = isRecord(driverError) ? driverError.cause : undefined;
+  return (
+    isRecord(cause) &&
+    cause.kind === 'TransactionWriteConflict' &&
+    cause.originalCode === '40001'
+  );
+}
+
 function isUniqueConflictFor(
   error: unknown,
   modelName: string,
@@ -193,7 +225,7 @@ function toAnswerResult(attempt: AttemptResultRecord): AnswerResultDto {
     selectedOptionId: attempt.selectedOptionId,
     correctOptionId: correctOption.id,
     explanation: attempt.question.explanation,
-    errorCount: attempt.isCorrect ? 0 : 1,
+    errorCount: attempt.errorCountSnapshot,
     pointsAwarded: attempt.pointsAwarded,
     balanceAfterSnapshot: attempt.balanceAfterSnapshot,
   });
@@ -334,7 +366,7 @@ export class PracticeService {
             throw questionNotFound();
           }
 
-          const replay = await this.findReplay(
+          const replay = await this.findFirstReplay(
             tx,
             normalizedUserId,
             normalizedQuestionId,
@@ -414,6 +446,7 @@ export class PracticeService {
               multiplierSnapshot: multiplier,
               pointsAwarded,
               balanceAfterSnapshot,
+              errorCountSnapshot: selectedOption.isCorrect ? 0 : 1,
               idempotencyKey: normalizedKey,
             },
             select: { id: true },
@@ -471,9 +504,9 @@ export class PracticeService {
       if (
         attemptConflict ||
         progressConflict ||
-        hasPrismaCode(error, 'P2034')
+        isSerializationConflict(error)
       ) {
-        const replay = await this.findReplay(
+        const replay = await this.findFirstReplay(
           this.prisma,
           normalizedUserId,
           normalizedQuestionId,
@@ -485,6 +518,273 @@ export class PracticeService {
         }
         if (progressConflict) {
           throw questionAlreadyAnswered();
+        }
+        throw concurrentModification();
+      }
+      throw error;
+    }
+  }
+
+  async listWrongQuestions(userId: string, query: ListWrongQuestionsDto) {
+    const normalizedUserId = normalizeBoundedString(
+      userId,
+      '用户 ID',
+      MAX_ID_LENGTH,
+    );
+    if (
+      !Number.isInteger(query.page) ||
+      query.page < 1 ||
+      query.page > 100_000 ||
+      !Number.isInteger(query.pageSize) ||
+      query.pageSize < 1 ||
+      query.pageSize > 100
+    ) {
+      throw validationFailed('错题列表分页参数无效');
+    }
+    const where = {
+      userId: normalizedUserId,
+      firstCorrect: false,
+      masteredAt: null,
+    } satisfies Prisma.QuestionProgressWhereInput;
+    const [progresses, total] = await this.prisma.$transaction([
+      this.prisma.questionProgress.findMany({
+        where,
+        select: {
+          errorCount: true,
+          firstAnsweredAt: true,
+          masteredAt: true,
+          question: {
+            select: {
+              id: true,
+              stem: true,
+              basePoints: true,
+              options: {
+                select: {
+                  id: true,
+                  label: true,
+                  content: true,
+                  position: true,
+                },
+                orderBy: [{ position: 'asc' }, { id: 'asc' }],
+              },
+            },
+          },
+        },
+        orderBy: [{ firstAnsweredAt: 'desc' }, { id: 'desc' }],
+        skip: (query.page - 1) * query.pageSize,
+        take: query.pageSize,
+      }),
+      this.prisma.questionProgress.count({ where }),
+    ]);
+    return {
+      data: progresses.map((progress) => ({
+        question: mapLearnerQuestion(progress.question),
+        errorCount: progress.errorCount,
+        firstAnsweredAt: progress.firstAnsweredAt,
+        masteredAt: progress.masteredAt,
+      })),
+      meta: {
+        page: query.page,
+        pageSize: query.pageSize,
+        total,
+        totalPages: total === 0 ? 0 : Math.ceil(total / query.pageSize),
+      },
+    };
+  }
+
+  async answerWrongRetry(
+    userId: string,
+    questionId: string,
+    selectedOptionId: string,
+    idempotencyKey: unknown,
+  ): Promise<AnswerResultDto> {
+    const normalizedUserId = normalizeBoundedString(
+      userId,
+      '用户 ID',
+      MAX_ID_LENGTH,
+    );
+    const normalizedQuestionId = normalizeBoundedString(
+      questionId,
+      '题目 ID',
+      MAX_ID_LENGTH,
+    );
+    const normalizedOptionId = normalizeBoundedString(
+      selectedOptionId,
+      '选项 ID',
+      MAX_ID_LENGTH,
+    );
+    const normalizedKey = normalizeBoundedString(
+      idempotencyKey,
+      'Idempotency-Key',
+      MAX_IDEMPOTENCY_KEY_LENGTH,
+    );
+
+    try {
+      return await this.prisma.$transaction(
+        async (tx) => {
+          const lockedQuestions = await tx.$queryRaw<Array<{ id: string }>>(
+            Prisma.sql`
+              SELECT "id"
+              FROM "Question"
+              WHERE "id" = ${normalizedQuestionId}
+              FOR KEY SHARE
+            `,
+          );
+          if (lockedQuestions.length === 0) {
+            throw questionNotFound();
+          }
+
+          const replay = await this.findWrongRetryReplay(
+            tx,
+            normalizedUserId,
+            normalizedQuestionId,
+            normalizedOptionId,
+            normalizedKey,
+          );
+          if (replay) {
+            return replay;
+          }
+
+          const question = await tx.question.findUnique({
+            where: { id: normalizedQuestionId },
+            select: {
+              id: true,
+              explanation: true,
+              basePoints: true,
+              options: {
+                select: { id: true, isCorrect: true },
+                orderBy: [{ position: 'asc' }, { id: 'asc' }],
+              },
+            },
+          });
+          if (!question) {
+            throw questionNotFound();
+          }
+          const selectedOption = question.options.find(
+            ({ id }) => id === normalizedOptionId,
+          );
+          if (!selectedOption) {
+            throw validationFailed('所选选项不属于当前题目');
+          }
+          const correctOptions = question.options.filter(
+            ({ isCorrect }) => isCorrect,
+          );
+          if (correctOptions.length !== 1) {
+            throw invalidQuestionState();
+          }
+          const correctOption = correctOptions[0];
+
+          const lockedProgresses = await tx.$queryRaw<
+            Array<{
+              id: string;
+              firstCorrect: boolean;
+              errorCount: number;
+              masteredAt: Date | null;
+            }>
+          >(Prisma.sql`
+            SELECT
+              "id",
+              "firstCorrect",
+              "errorCount",
+              "masteredAt"
+            FROM "QuestionProgress"
+            WHERE "userId" = ${normalizedUserId}
+              AND "questionId" = ${normalizedQuestionId}
+            FOR UPDATE
+          `);
+          const progress = lockedProgresses[0];
+          if (!progress || progress.firstCorrect) {
+            throw wrongQuestionNotFound();
+          }
+          if (progress.masteredAt) {
+            throw questionAlreadyMastered();
+          }
+
+          const multiplier = await this.pointsService.getCurrentMultiplier(tx);
+          const user = await tx.user.findUnique({
+            where: { id: normalizedUserId },
+            select: { pointsBalance: true },
+          });
+          if (!user) {
+            throw new NotFoundException({
+              code: 'USER_NOT_FOUND',
+              message: '用户不存在',
+            });
+          }
+          assertPointCalculation(
+            question.basePoints,
+            multiplier,
+            user.pointsBalance,
+            false,
+          );
+
+          const changedProgresses =
+            await tx.questionProgress.updateManyAndReturn({
+              where: {
+                id: progress.id,
+                firstCorrect: false,
+                masteredAt: null,
+              },
+              data: selectedOption.isCorrect
+                ? { masteredAt: new Date() }
+                : { errorCount: { increment: 1 } },
+              select: { errorCount: true },
+              limit: 1,
+            });
+          const changedProgress = changedProgresses[0];
+          if (changedProgresses.length !== 1 || !changedProgress) {
+            throw concurrentModification();
+          }
+
+          await tx.answerAttempt.create({
+            data: {
+              userId: normalizedUserId,
+              questionId: normalizedQuestionId,
+              selectedOptionId: normalizedOptionId,
+              mode: 'WRONG_RETRY',
+              isCorrect: selectedOption.isCorrect,
+              basePointsSnapshot: question.basePoints,
+              multiplierSnapshot: multiplier,
+              pointsAwarded: 0,
+              balanceAfterSnapshot: user.pointsBalance,
+              errorCountSnapshot: changedProgress.errorCount,
+              idempotencyKey: normalizedKey,
+            },
+          });
+
+          return mapAnswerResult({
+            isCorrect: selectedOption.isCorrect,
+            selectedOptionId: normalizedOptionId,
+            correctOptionId: correctOption.id,
+            explanation: question.explanation,
+            errorCount: changedProgress.errorCount,
+            pointsAwarded: 0,
+            balanceAfterSnapshot: user.pointsBalance,
+          });
+        },
+        {
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+          maxWait: 5_000,
+          timeout: 10_000,
+        },
+      );
+    } catch (error) {
+      const attemptConflict = isUniqueConflictFor(
+        error,
+        'AnswerAttempt',
+        ['userId', 'idempotencyKey'],
+        'AnswerAttempt_userId_idempotencyKey_key',
+      );
+      if (attemptConflict || isSerializationConflict(error)) {
+        const replay = await this.findWrongRetryReplay(
+          this.prisma,
+          normalizedUserId,
+          normalizedQuestionId,
+          normalizedOptionId,
+          normalizedKey,
+        );
+        if (replay) {
+          return replay;
         }
         throw concurrentModification();
       }
@@ -540,7 +840,7 @@ export class PracticeService {
     return summary;
   }
 
-  private async findReplay(
+  private async findFirstReplay(
     client: PracticeClient,
     userId: string,
     questionId: string,
@@ -561,6 +861,35 @@ export class PracticeService {
     }
     if (
       attempt.mode !== 'FIRST_ATTEMPT' ||
+      attempt.questionId !== questionId ||
+      attempt.selectedOptionId !== selectedOptionId
+    ) {
+      throw idempotencyConflict();
+    }
+    return toAnswerResult(attempt);
+  }
+
+  private async findWrongRetryReplay(
+    client: PracticeClient,
+    userId: string,
+    questionId: string,
+    selectedOptionId: string,
+    idempotencyKey: string,
+  ): Promise<AnswerResultDto | null> {
+    const attempt = await client.answerAttempt.findUnique({
+      where: {
+        userId_idempotencyKey: {
+          userId,
+          idempotencyKey,
+        },
+      },
+      select: attemptResultSelection,
+    });
+    if (!attempt) {
+      return null;
+    }
+    if (
+      attempt.mode !== 'WRONG_RETRY' ||
       attempt.questionId !== questionId ||
       attempt.selectedOptionId !== selectedOptionId
     ) {

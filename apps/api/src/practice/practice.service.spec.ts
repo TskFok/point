@@ -9,6 +9,7 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { PointsService } from '../points/points.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ListWrongQuestionsDto } from './dto/list-wrong-questions.dto';
 import { RandomQuestionQueryDto } from './dto/random-question-query.dto';
 import {
   mapAnswerResult,
@@ -35,6 +36,169 @@ async function caughtHttpException(
 }
 
 describe('PracticeService', () => {
+  it('重练序列化冲突只执行一次事务并返回稳定并发错误', async () => {
+    const prisma = {
+      $transaction: jest.fn().mockRejectedValue({ code: 'P2034' }),
+      answerAttempt: {
+        findUnique: jest.fn().mockResolvedValue(null),
+      },
+    };
+    const service = new PracticeService(
+      prisma as unknown as PrismaService,
+      {} as PointsService,
+    );
+
+    const error = await caughtHttpException(
+      service.answerWrongRetry(
+        'student-1',
+        'question-1',
+        'option-1',
+        'retry-key-1',
+      ),
+    );
+
+    expect(error).toBeInstanceOf(ConflictException);
+    expect(error.getResponse()).toMatchObject({
+      code: 'CONCURRENT_MODIFICATION',
+    });
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.$transaction).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      }),
+    );
+  });
+
+  it('重练只把精确的原始 SQL 40001 写冲突映射为并发错误', async () => {
+    const writeConflict = {
+      code: 'P2010',
+      meta: {
+        driverAdapterError: {
+          cause: {
+            kind: 'TransactionWriteConflict',
+            originalCode: '40001',
+          },
+        },
+      },
+    };
+    const conflictPrisma = {
+      $transaction: jest.fn().mockRejectedValue(writeConflict),
+      answerAttempt: {
+        findUnique: jest.fn().mockResolvedValue(null),
+      },
+    };
+    const conflictService = new PracticeService(
+      conflictPrisma as unknown as PrismaService,
+      {} as PointsService,
+    );
+
+    const error = await caughtHttpException(
+      conflictService.answerWrongRetry(
+        'student-1',
+        'question-1',
+        'option-1',
+        'retry-key-1',
+      ),
+    );
+    expect(error).toBeInstanceOf(ConflictException);
+    expect(error.getResponse()).toMatchObject({
+      code: 'CONCURRENT_MODIFICATION',
+    });
+    expect(conflictPrisma.$transaction).toHaveBeenCalledTimes(1);
+
+    const unrelatedRawError = {
+      code: 'P2010',
+      meta: {
+        driverAdapterError: {
+          cause: {
+            kind: 'TransactionWriteConflict',
+            originalCode: '23505',
+          },
+        },
+      },
+    };
+    const unrelatedPrisma = {
+      $transaction: jest.fn().mockRejectedValue(unrelatedRawError),
+      answerAttempt: {
+        findUnique: jest.fn(),
+      },
+    };
+    const unrelatedService = new PracticeService(
+      unrelatedPrisma as unknown as PrismaService,
+      {} as PointsService,
+    );
+    await expect(
+      unrelatedService.answerWrongRetry(
+        'student-1',
+        'question-1',
+        'option-1',
+        'retry-key-1',
+      ),
+    ).rejects.toBe(unrelatedRawError);
+    expect(unrelatedPrisma.answerAttempt.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('重练只把答题幂等唯一约束作为并发收敛候选', async () => {
+    const attemptConflict = {
+      code: 'P2002',
+      meta: {
+        modelName: 'AnswerAttempt',
+        target: ['userId', 'idempotencyKey'],
+      },
+    };
+    const conflictPrisma = {
+      $transaction: jest.fn().mockRejectedValue(attemptConflict),
+      answerAttempt: {
+        findUnique: jest.fn().mockResolvedValue(null),
+      },
+    };
+    const conflictService = new PracticeService(
+      conflictPrisma as unknown as PrismaService,
+      {} as PointsService,
+    );
+    const mapped = await caughtHttpException(
+      conflictService.answerWrongRetry(
+        'student-1',
+        'question-1',
+        'option-1',
+        'retry-key-1',
+      ),
+    );
+    expect(mapped).toBeInstanceOf(ConflictException);
+    expect(mapped.getResponse()).toMatchObject({
+      code: 'CONCURRENT_MODIFICATION',
+    });
+    expect(conflictPrisma.answerAttempt.findUnique).toHaveBeenCalledTimes(1);
+
+    const unrelatedConflict = {
+      code: 'P2002',
+      meta: {
+        modelName: 'QuestionProgress',
+        target: ['userId', 'questionId'],
+      },
+    };
+    const unrelatedPrisma = {
+      $transaction: jest.fn().mockRejectedValue(unrelatedConflict),
+      answerAttempt: {
+        findUnique: jest.fn(),
+      },
+    };
+    const unrelatedService = new PracticeService(
+      unrelatedPrisma as unknown as PrismaService,
+      {} as PointsService,
+    );
+    await expect(
+      unrelatedService.answerWrongRetry(
+        'student-1',
+        'question-1',
+        'option-1',
+        'retry-key-1',
+      ),
+    ).rejects.toBe(unrelatedConflict);
+    expect(unrelatedPrisma.answerAttempt.findUnique).not.toHaveBeenCalled();
+  });
+
   it('序列化冲突只执行一次事务并返回稳定并发错误', async () => {
     const prisma = {
       $transaction: jest.fn().mockRejectedValue({ code: 'P2034' }),
@@ -444,6 +608,21 @@ describe('PracticeService', () => {
       ).join(','),
     });
     expect(await validate(overLimit)).not.toHaveLength(0);
+  });
+
+  it('错题分页 DTO 只接受有界正整数', async () => {
+    const valid = plainToInstance(ListWrongQuestionsDto, {
+      page: '2',
+      pageSize: '100',
+    });
+    expect(await validate(valid)).toHaveLength(0);
+    expect(valid).toMatchObject({ page: 2, pageSize: 100 });
+
+    const invalid = plainToInstance(ListWrongQuestionsDto, {
+      page: 0,
+      pageSize: 101,
+    });
+    expect(await validate(invalid)).not.toHaveLength(0);
   });
 
   it('响应映射只公开学员题目和显式答题结果字段', () => {

@@ -504,6 +504,7 @@ describe('随机首次答题与积分 API', () => {
           multiplierSnapshot: 1,
           pointsAwarded: 0,
           balanceAfterSnapshot: -1,
+          errorCountSnapshot: 1,
           idempotencyKey: 'negative-balance-snapshot',
         },
       }),
