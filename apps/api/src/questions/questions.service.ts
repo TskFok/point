@@ -113,7 +113,10 @@ function normalizeOptions(value: unknown): NormalizedQuestionOption[] {
   if (!Array.isArray(value) || value.length < 2 || value.length > 6) {
     throw validationFailed('题目需要 2–6 个选项');
   }
-  const options = value.map((rawOption) => {
+  const options = Array.from(value, (rawOption, index) => {
+    if (!Object.hasOwn(value, index)) {
+      throw validationFailed('题目选项不能包含缺失项');
+    }
     if (!isRecord(rawOption)) {
       throw validationFailed('每个题目选项必须是对象');
     }

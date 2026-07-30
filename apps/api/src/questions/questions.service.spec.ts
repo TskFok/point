@@ -289,6 +289,74 @@ describe('QuestionsService', () => {
     await expectValidationFailed(service.update('question-1', patch));
   });
 
+  it('create 在任何 Prisma 写入前拒绝 new Array 构造的稀疏选项', async () => {
+    const sparseOptions = new Array<ReturnType<typeof validOptions>[number]>(2);
+    sparseOptions[0] = validOptions()[0];
+    const create = jest.fn().mockResolvedValue({ id: 'question-1' });
+    const prisma = {
+      question: { create },
+    };
+    const service = new QuestionsService(prisma as unknown as PrismaService);
+
+    const outcome = await service
+      .create(
+        {
+          ...validQuestionInput(),
+          options: sparseOptions,
+        },
+        'admin-1',
+      )
+      .catch((caught: HttpException) => caught);
+
+    expect(create).not.toHaveBeenCalled();
+    expect(outcome).toBeInstanceOf(BadRequestException);
+    expect((outcome as HttpException).getResponse()).toMatchObject({
+      code: 'VALIDATION_FAILED',
+    });
+  });
+
+  it('update 在任何 Prisma 写入前拒绝 delete 索引形成的稀疏选项', async () => {
+    const sparseOptions = validOptions();
+    // eslint-disable-next-line @typescript-eslint/no-array-delete -- 此处刻意构造稀疏数组以覆盖服务边界
+    delete sparseOptions[1];
+    const questionUpdate = jest.fn().mockResolvedValue({ id: 'question-1' });
+    const optionDeleteMany = jest.fn().mockResolvedValue({ count: 1 });
+    const optionCreateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const transactionClient = {
+      $queryRaw: () => Promise.resolve([{ id: 'question-1' }]),
+      question: {
+        findUnique: () =>
+          Promise.resolve({
+            id: 'question-1',
+            _count: { attempts: 0 },
+          }),
+        update: questionUpdate,
+      },
+      questionOption: {
+        deleteMany: optionDeleteMany,
+        createMany: optionCreateMany,
+      },
+    };
+    const prisma = {
+      $transaction: (
+        operation: (tx: typeof transactionClient) => Promise<unknown>,
+      ) => operation(transactionClient),
+    };
+    const service = new QuestionsService(prisma as unknown as PrismaService);
+
+    const outcome = await service
+      .update('question-1', { options: sparseOptions })
+      .catch((caught: HttpException) => caught);
+
+    expect(questionUpdate).not.toHaveBeenCalled();
+    expect(optionDeleteMany).not.toHaveBeenCalled();
+    expect(optionCreateMany).not.toHaveBeenCalled();
+    expect(outcome).toBeInstanceOf(BadRequestException);
+    expect((outcome as HttpException).getResponse()).toMatchObject({
+      code: 'VALIDATION_FAILED',
+    });
+  });
+
   it('服务层对 create 的文本与选项文本执行 trim 后再写入', async () => {
     const prisma = {
       question: {
