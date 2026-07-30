@@ -48,28 +48,79 @@ function expectErrorContract(response: request.Response, code: string): void {
   expect(response.headers['x-request-id']).toBe(body.requestId);
 }
 
+function validQuestionOptions() {
+  return [
+    {
+      label: 'A',
+      content: 'is',
+      position: 0,
+      isCorrect: true,
+    },
+    {
+      label: 'B',
+      content: 'are',
+      position: 1,
+      isCorrect: false,
+    },
+  ];
+}
+
 function validQuestion(overrides: Record<string, unknown> = {}) {
   return {
     stem: 'Choose the correct form.',
     explanation: 'Only one form agrees with the subject.',
     basePoints: 10,
-    options: [
-      {
-        label: 'A',
-        content: 'is',
-        position: 0,
-        isCorrect: true,
-      },
-      {
-        label: 'B',
-        content: 'are',
-        position: 1,
-        isCorrect: false,
-      },
-    ],
+    options: validQuestionOptions(),
     ...overrides,
   };
 }
+
+const explicitNullWriteCases: Array<{
+  field: string;
+  payload: () => Record<string, unknown>;
+}> = [
+  { field: 'stem', payload: () => ({ stem: null }) },
+  { field: 'explanation', payload: () => ({ explanation: null }) },
+  { field: 'basePoints', payload: () => ({ basePoints: null }) },
+  { field: 'isActive', payload: () => ({ isActive: null }) },
+  { field: 'options', payload: () => ({ options: null }) },
+  {
+    field: 'options[0].label',
+    payload: () => ({
+      options: [
+        { ...validQuestionOptions()[0], label: null },
+        validQuestionOptions()[1],
+      ],
+    }),
+  },
+  {
+    field: 'options[0].content',
+    payload: () => ({
+      options: [
+        { ...validQuestionOptions()[0], content: null },
+        validQuestionOptions()[1],
+      ],
+    }),
+  },
+  {
+    field: 'options[0].position',
+    payload: () => ({
+      options: [
+        { ...validQuestionOptions()[0], position: null },
+        validQuestionOptions()[1],
+      ],
+    }),
+  },
+  {
+    field: 'options[0].isCorrect',
+    payload: () => ({
+      options: [
+        { ...validQuestionOptions()[0], isCorrect: null },
+        validQuestionOptions()[1],
+      ],
+    }),
+  },
+];
 
 function assertAuthorizedTestDatabase(databaseUrl: string): void {
   let parsed: URL;
@@ -96,13 +147,27 @@ function assertAuthorizedTestDatabase(databaseUrl: string): void {
   }
 }
 
+const invalidTestDatabaseUrls = [
+  ['错误协议', 'mysql://point:point@localhost:5433/point_test'],
+  ['hash', `${defaultTestDatabaseUrl}#unsafe`],
+  ['query', `${defaultTestDatabaseUrl}?host=remote.example&port=5432`],
+  ['IPv6', 'postgresql://point:point@[::1]:5433/point_test'],
+  ['编码 host', 'postgresql://point:point@%6cocalhost:5433/point_test'],
+  ['编码 path', 'postgresql://point:point@localhost:5433/%70oint_test'],
+  ['非 5433 端口', 'postgresql://point:point@localhost:5432/point_test'],
+  ['非 point_test 数据库', 'postgresql://point:point@localhost:5433/point'],
+] as const;
+
 describe('Task 4 E2E 数据库安全边界', () => {
-  it('拒绝查询参数覆盖连接目标', () => {
-    expect(() =>
-      assertAuthorizedTestDatabase(
-        `${defaultTestDatabaseUrl}?host=remote.example&port=5432`,
-      ),
-    ).toThrow('Task 4 E2E 只允许使用 localhost:5433/point_test 测试数据库');
+  it.each(invalidTestDatabaseUrls)('拒绝%s', (_name, databaseUrl) => {
+    expect(() => assertAuthorizedTestDatabase(databaseUrl)).toThrow();
+  });
+
+  it.each([
+    defaultTestDatabaseUrl,
+    'postgresql://point:point@127.0.0.1:5433/point_test',
+  ])('允许已授权数据库 %s', (databaseUrl) => {
+    expect(() => assertAuthorizedTestDatabase(databaseUrl)).not.toThrow();
   });
 });
 
@@ -264,6 +329,65 @@ describe('管理员题库与积分倍率 API', () => {
       .expect(400)
       .expect((response) => {
         expectErrorContract(response, 'VALIDATION_FAILED');
+      });
+  });
+
+  it.each(explicitNullWriteCases)(
+    '创建题目时显式 null 字段 $field 返回稳定 400',
+    async ({ payload }) => {
+      await request(server)
+        .post('/api/v1/admin/questions')
+        .set('Authorization', adminBearer)
+        .send(validQuestion(payload()))
+        .expect(400)
+        .expect((response) => {
+          expectErrorContract(response, 'VALIDATION_FAILED');
+        });
+    },
+  );
+
+  it.each(explicitNullWriteCases)(
+    '更新题目时显式 null 字段 $field 返回稳定 400',
+    async ({ payload }) => {
+      const createResponse = await request(server)
+        .post('/api/v1/admin/questions')
+        .set('Authorization', adminBearer)
+        .send(validQuestion())
+        .expect(201);
+      const question = createResponse.body as unknown as QuestionBody;
+
+      await request(server)
+        .patch(`/api/v1/admin/questions/${question.id}`)
+        .set('Authorization', adminBearer)
+        .send(payload())
+        .expect(400)
+        .expect((response) => {
+          expectErrorContract(response, 'VALIDATION_FAILED');
+        });
+    },
+  );
+
+  it('创建和更新题目时仍允许合法省略可选字段', async () => {
+    const createResponse = await request(server)
+      .post('/api/v1/admin/questions')
+      .set('Authorization', adminBearer)
+      .send(validQuestion())
+      .expect(201);
+    const question = createResponse.body as unknown as QuestionBody;
+    expect(question.isActive).toBe(true);
+
+    await request(server)
+      .patch(`/api/v1/admin/questions/${question.id}`)
+      .set('Authorization', adminBearer)
+      .send({ explanation: 'Updated explanation only.' })
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body as unknown as QuestionBody).toMatchObject({
+          id: question.id,
+          stem: question.stem,
+          explanation: 'Updated explanation only.',
+          basePoints: question.basePoints,
+        });
       });
   });
 

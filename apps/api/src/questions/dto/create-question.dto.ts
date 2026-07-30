@@ -7,12 +7,12 @@ import {
   IsBoolean,
   IsInt,
   IsNotEmpty,
-  IsOptional,
   IsString,
   Max,
   MaxLength,
   Min,
   Validate,
+  ValidateIf,
   ValidateNested,
   ValidatorConstraint,
   type ValidatorConstraintInterface,
@@ -92,7 +92,7 @@ export class QuestionWriteDto {
   @Type(() => QuestionOptionWriteDto)
   options!: QuestionOptionWriteDto[];
 
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsBoolean()
   isActive?: boolean;
 }

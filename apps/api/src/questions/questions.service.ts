@@ -6,10 +6,7 @@ import {
 } from '@nestjs/common';
 import { type Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import {
-  type CreateQuestionDto,
-  type QuestionOptionWriteDto,
-} from './dto/create-question.dto';
+import { type CreateQuestionDto } from './dto/create-question.dto';
 import { type ListQuestionsDto } from './dto/list-questions.dto';
 import { type UpdateQuestionDto } from './dto/update-question.dto';
 
@@ -56,13 +53,90 @@ function hasPrismaCode(error: unknown, code: string): boolean {
   );
 }
 
-function assertOptionsIntegrity(options: QuestionOptionWriteDto[]): void {
+type NormalizedQuestionOption = {
+  label: string;
+  content: string;
+  position: number;
+  isCorrect: boolean;
+};
+
+type NormalizedQuestionWrite = {
+  stem: string;
+  explanation: string;
+  basePoints: number;
+  options: NormalizedQuestionOption[];
+  isActive: boolean;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function normalizeText(
+  value: unknown,
+  fieldName: string,
+  maxLength: number,
+): string {
+  if (typeof value !== 'string') {
+    throw validationFailed(`${fieldName}必须是字符串`);
+  }
+  const normalized = value.trim();
+  if (!normalized) {
+    throw validationFailed(`${fieldName}不能为空`);
+  }
+  if (Array.from(normalized).length > maxLength) {
+    throw validationFailed(`${fieldName}不能超过 ${maxLength} 个字符`);
+  }
+  return normalized;
+}
+
+function normalizeBasePoints(value: unknown): number {
+  if (
+    typeof value !== 'number' ||
+    !Number.isInteger(value) ||
+    value < 1 ||
+    value > 1000
+  ) {
+    throw validationFailed('基础积分必须是 1–1000 的整数');
+  }
+  return value;
+}
+
+function normalizeBoolean(value: unknown, fieldName: string): boolean {
+  if (typeof value !== 'boolean') {
+    throw validationFailed(`${fieldName}必须是布尔值`);
+  }
+  return value;
+}
+
+function normalizeOptions(value: unknown): NormalizedQuestionOption[] {
+  if (!Array.isArray(value) || value.length < 2 || value.length > 6) {
+    throw validationFailed('题目需要 2–6 个选项');
+  }
+  const options = value.map((rawOption) => {
+    if (!isRecord(rawOption)) {
+      throw validationFailed('每个题目选项必须是对象');
+    }
+    const position = rawOption.position;
+    if (
+      typeof position !== 'number' ||
+      !Number.isInteger(position) ||
+      position < 0 ||
+      position > 5
+    ) {
+      throw validationFailed('选项位置必须是 0–5 的整数');
+    }
+    return {
+      label: normalizeText(rawOption.label, '选项标签', 16),
+      content: normalizeText(rawOption.content, '选项内容', 1000),
+      position,
+      isCorrect: normalizeBoolean(rawOption.isCorrect, '正确选项标记'),
+    };
+  });
   const labels = new Set(options.map(({ label }) => label));
   const positions = new Set(options.map(({ position }) => position));
   const correctCount = options.filter(({ isCorrect }) => isCorrect).length;
   if (
-    options.length < 2 ||
-    options.length > 6 ||
     labels.size !== options.length ||
     positions.size !== options.length ||
     correctCount !== 1
@@ -71,6 +145,56 @@ function assertOptionsIntegrity(options: QuestionOptionWriteDto[]): void {
       '题目需要 2–6 个标签和位置唯一的选项，且只能有一个正确选项',
     );
   }
+  return options;
+}
+
+function asWriteInput(value: unknown): Record<string, unknown> {
+  if (!isRecord(value)) {
+    throw validationFailed('题目写入参数必须是对象');
+  }
+  return value;
+}
+
+function normalizeCreateQuestion(
+  value: CreateQuestionDto,
+): NormalizedQuestionWrite {
+  const input = asWriteInput(value);
+  return {
+    stem: normalizeText(input.stem, '题干', 2000),
+    explanation: normalizeText(input.explanation, '题目解析', 5000),
+    basePoints: normalizeBasePoints(input.basePoints),
+    options: normalizeOptions(input.options),
+    isActive:
+      input.isActive === undefined
+        ? true
+        : normalizeBoolean(input.isActive, '启用状态'),
+  };
+}
+
+function normalizeUpdateQuestion(
+  value: UpdateQuestionDto,
+): Partial<NormalizedQuestionWrite> {
+  const input = asWriteInput(value);
+  const normalized: Partial<NormalizedQuestionWrite> = {};
+  if (input.stem !== undefined) {
+    normalized.stem = normalizeText(input.stem, '题干', 2000);
+  }
+  if (input.explanation !== undefined) {
+    normalized.explanation = normalizeText(input.explanation, '题目解析', 5000);
+  }
+  if (input.basePoints !== undefined) {
+    normalized.basePoints = normalizeBasePoints(input.basePoints);
+  }
+  if (input.options !== undefined) {
+    normalized.options = normalizeOptions(input.options);
+  }
+  if (input.isActive !== undefined) {
+    normalized.isActive = normalizeBoolean(input.isActive, '启用状态');
+  }
+  if (Object.keys(normalized).length === 0) {
+    throw validationFailed('至少需要提供一个待更新字段');
+  }
+  return normalized;
 }
 
 @Injectable()
@@ -78,17 +202,17 @@ export class QuestionsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(data: CreateQuestionDto, createdBy: string) {
-    assertOptionsIntegrity(data.options);
+    const normalized = normalizeCreateQuestion(data);
     return this.prisma.question.create({
       data: {
-        stem: data.stem,
-        explanation: data.explanation,
-        basePoints: data.basePoints,
-        isActive: data.isActive ?? true,
+        stem: normalized.stem,
+        explanation: normalized.explanation,
+        basePoints: normalized.basePoints,
+        isActive: normalized.isActive,
         createdBy,
         options: {
           createMany: {
-            data: data.options,
+            data: normalized.options,
           },
         },
       },
@@ -153,15 +277,8 @@ export class QuestionsService {
   }
 
   async update(questionId: string, data: UpdateQuestionDto) {
-    const changes = Object.entries(data).filter(
-      ([, value]) => value !== undefined,
-    );
-    if (changes.length === 0) {
-      throw validationFailed('至少需要提供一个待更新字段');
-    }
-    if (data.options) {
-      assertOptionsIntegrity(data.options);
-    }
+    const normalized = normalizeUpdateQuestion(data);
+    const changes = Object.entries(normalized);
 
     try {
       return await this.prisma.$transaction(
@@ -191,7 +308,7 @@ export class QuestionsService {
             if (
               changes.length !== 1 ||
               changes[0][0] !== 'isActive' ||
-              data.isActive !== false
+              normalized.isActive !== false
             ) {
               throw questionHasAttempts();
             }
@@ -203,25 +320,27 @@ export class QuestionsService {
           }
 
           const scalarData = {
-            ...(data.stem === undefined ? {} : { stem: data.stem }),
-            ...(data.explanation === undefined
+            ...(normalized.stem === undefined ? {} : { stem: normalized.stem }),
+            ...(normalized.explanation === undefined
               ? {}
-              : { explanation: data.explanation }),
-            ...(data.basePoints === undefined
+              : { explanation: normalized.explanation }),
+            ...(normalized.basePoints === undefined
               ? {}
-              : { basePoints: data.basePoints }),
-            ...(data.isActive === undefined ? {} : { isActive: data.isActive }),
+              : { basePoints: normalized.basePoints }),
+            ...(normalized.isActive === undefined
+              ? {}
+              : { isActive: normalized.isActive }),
           };
           await tx.question.update({
             where: { id: questionId },
             data: scalarData,
           });
-          if (data.options) {
+          if (normalized.options) {
             await tx.questionOption.deleteMany({
               where: { questionId },
             });
             await tx.questionOption.createMany({
-              data: data.options.map((option) => ({
+              data: normalized.options.map((option) => ({
                 ...option,
                 questionId,
               })),
