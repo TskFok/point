@@ -35,6 +35,13 @@ type RequestBarrier = {
   release: () => void;
 };
 
+type CriticalSectionBarrier = {
+  reached: Promise<void>;
+  claim: () => boolean;
+  releasePromise: Promise<void>;
+  release: () => void;
+};
+
 function assertAuthorizedTestDatabase(databaseUrl: string): void {
   let parsed: URL;
   try {
@@ -57,6 +64,7 @@ function assertAuthorizedTestDatabase(databaseUrl: string): void {
 }
 
 let activeBarrier: RequestBarrier | null = null;
+let activeQuestionLockBarrier: CriticalSectionBarrier | null = null;
 
 function createBarrier(): RequestBarrier {
   let arrivals = 0;
@@ -75,6 +83,31 @@ function createBarrier(): RequestBarrier {
       if (arrivals === 2) {
         markBothArrived();
       }
+    },
+    releasePromise,
+    release,
+  };
+}
+
+function createCriticalSectionBarrier(): CriticalSectionBarrier {
+  let claimed = false;
+  let markReached!: () => void;
+  let release!: () => void;
+  const reached = new Promise<void>((resolve) => {
+    markReached = resolve;
+  });
+  const releasePromise = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return {
+    reached,
+    claim: () => {
+      if (claimed) {
+        return false;
+      }
+      claimed = true;
+      markReached();
+      return true;
     },
     releasePromise,
     release,
@@ -107,10 +140,24 @@ function synchronizedTransactionClient(
       return typeof value === 'function' ? value.bind(target) : value;
     },
   });
+  const originalQueryRaw = transaction.$queryRaw.bind(transaction) as (
+    ...args: unknown[]
+  ) => Promise<unknown>;
+  const synchronizedQueryRaw = async (...args: unknown[]) => {
+    const result = await originalQueryRaw(...args);
+    const barrier = activeQuestionLockBarrier;
+    if (barrier?.claim()) {
+      await barrier.releasePromise;
+    }
+    return result;
+  };
   return new Proxy(transaction, {
     get(target, property, receiver): unknown {
       if (property === 'answerAttempt') {
         return answerAttempt;
+      }
+      if (property === '$queryRaw') {
+        return synchronizedQueryRaw;
       }
       const value: unknown = Reflect.get(target, property, receiver);
       return typeof value === 'function' ? value.bind(target) : value;
@@ -139,7 +186,10 @@ function createSynchronizedPrismaService(): PrismaService {
     service,
   ) as unknown as TransactionRunner;
   const synchronizedTransaction: TransactionRunner = (input, options) => {
-    if (Array.isArray(input) || !activeBarrier) {
+    if (
+      Array.isArray(input) ||
+      (!activeBarrier && !activeQuestionLockBarrier)
+    ) {
       return originalTransaction(input, options);
     }
     return originalTransaction(
@@ -178,6 +228,7 @@ describe('首次答题真实数据库并发', () => {
   let app: INestApplication;
   let server: Parameters<typeof request>[0];
   let prisma: PrismaService;
+  let adminBearer: string;
   let studentBearer: string;
 
   async function cleanup(): Promise<void> {
@@ -228,6 +279,7 @@ describe('首次答题真实数据库并发', () => {
 
   beforeEach(async () => {
     activeBarrier = null;
+    activeQuestionLockBarrier = null;
     await cleanup();
     const passwordHash = await hash('StrongPass123!', 4);
     await prisma.user.createMany({
@@ -285,11 +337,23 @@ describe('首次答题真实数据库并发', () => {
     studentBearer = `Bearer ${
       (login.body as unknown as { accessToken: string }).accessToken
     }`;
+    const adminLogin = await request(server)
+      .post('/api/v1/auth/token')
+      .send({
+        username: 'task5_concurrency_admin',
+        password: 'StrongPass123!',
+      })
+      .expect(201);
+    adminBearer = `Bearer ${
+      (adminLogin.body as unknown as { accessToken: string }).accessToken
+    }`;
   });
 
   afterEach(() => {
     activeBarrier?.release();
     activeBarrier = null;
+    activeQuestionLockBarrier?.release();
+    activeQuestionLockBarrier = null;
   });
 
   afterAll(async () => {
@@ -409,5 +473,115 @@ describe('首次答题真实数据库并发', () => {
         where: { userId: studentId, questionId },
       }),
     ).toBe(1);
+  });
+
+  it('答题取得 KEY SHARE 后管理员内容更新等待提交并按已有记录拒绝', async () => {
+    activeQuestionLockBarrier = createCriticalSectionBarrier();
+    const answerRequest = answer('answer-holds-question-lock').then(
+      (response) => response,
+    );
+    await withTimeout(
+      activeQuestionLockBarrier.reached,
+      2_000,
+      '答题请求未在期限内取得题目 KEY SHARE 锁',
+    );
+
+    const patchRequest = request(server)
+      .patch(`/api/v1/admin/questions/${questionId}`)
+      .set('Authorization', adminBearer)
+      .send({
+        stem: 'Changed by concurrent admin',
+        explanation: 'Changed explanation',
+        basePoints: 99,
+        options: [
+          {
+            label: 'A',
+            content: 'Changed wrong',
+            position: 0,
+            isCorrect: false,
+          },
+          {
+            label: 'B',
+            content: 'Changed correct',
+            position: 1,
+            isCorrect: true,
+          },
+        ],
+      })
+      .timeout({ response: 4_000, deadline: 5_000 });
+    const patchResponse = patchRequest.then((response) => response);
+
+    let earlyPatchResponse: request.Response | null = null;
+    try {
+      earlyPatchResponse = await Promise.race([
+        patchResponse,
+        new Promise<null>((resolve) => {
+          setTimeout(() => resolve(null), 800);
+        }),
+      ]);
+    } finally {
+      activeQuestionLockBarrier.release();
+    }
+
+    const [answerResponse, completedPatchResponse] = await withTimeout(
+      Promise.all([answerRequest, patchResponse]),
+      6_000,
+      '答题与管理员更新未在期限内完成',
+    );
+    expect(earlyPatchResponse).toBeNull();
+    expect(answerResponse.status).toBe(201);
+    expect(answerResponse.body).toEqual({
+      correct: true,
+      selectedOptionId: correctOptionId,
+      correctOptionId,
+      explanation: 'Only one concurrent first answer may win.',
+      errorCount: 0,
+      pointsAwarded: 10,
+      balance: 10,
+    });
+    expect(completedPatchResponse.status).toBe(409);
+    expect(completedPatchResponse.body).toMatchObject({
+      code: 'QUESTION_HAS_ATTEMPTS',
+    });
+    expect(
+      await prisma.question.findUniqueOrThrow({
+        where: { id: questionId },
+        select: {
+          stem: true,
+          explanation: true,
+          basePoints: true,
+          options: {
+            select: {
+              id: true,
+              label: true,
+              content: true,
+              position: true,
+              isCorrect: true,
+            },
+            orderBy: [{ position: 'asc' }, { id: 'asc' }],
+          },
+        },
+      }),
+    ).toEqual({
+      stem: 'Task 5 concurrency question',
+      explanation: 'Only one concurrent first answer may win.',
+      basePoints: 10,
+      options: [
+        {
+          id: correctOptionId,
+          label: 'A',
+          content: 'Correct',
+          position: 0,
+          isCorrect: true,
+        },
+        {
+          id: wrongOptionId,
+          label: 'B',
+          content: 'Wrong',
+          position: 1,
+          isCorrect: false,
+        },
+      ],
+    });
   });
 });

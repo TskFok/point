@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   type HttpException,
+  NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { plainToInstance } from 'class-transformer';
@@ -24,7 +25,8 @@ async function caughtHttpException(
   } catch (error) {
     if (
       error instanceof BadRequestException ||
-      error instanceof ConflictException
+      error instanceof ConflictException ||
+      error instanceof NotFoundException
     ) {
       return error;
     }
@@ -132,8 +134,85 @@ describe('PracticeService', () => {
     expect(unrelatedPrisma.answerAttempt.findUnique).not.toHaveBeenCalled();
   });
 
+  it('P2002 缺失 modelName 时即使字段相同也不做业务冲突映射', async () => {
+    const incompleteConflict = {
+      code: 'P2002',
+      meta: {
+        driverAdapterError: {
+          cause: {
+            constraint: {
+              fields: ['"userId"', '"questionId"'],
+            },
+          },
+        },
+      },
+    };
+    const prisma = {
+      $transaction: jest.fn().mockRejectedValue(incompleteConflict),
+      answerAttempt: {
+        findUnique: jest.fn(),
+      },
+    };
+    const service = new PracticeService(
+      prisma as unknown as PrismaService,
+      {} as PointsService,
+    );
+
+    await expect(
+      service.answerFirst(
+        'student-1',
+        'question-1',
+        'option-1',
+        'idempotency-1',
+      ),
+    ).rejects.toBe(incompleteConflict);
+    expect(prisma.answerAttempt.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('题目锁查询无结果时稳定返回 QUESTION_NOT_FOUND 且不读取详情', async () => {
+    const transactionClient = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      answerAttempt: {
+        findUnique: jest.fn(),
+      },
+      question: {
+        findUnique: jest.fn(),
+      },
+    };
+    const prisma = {
+      $transaction: jest
+        .fn()
+        .mockImplementation(
+          (callback: (client: typeof transactionClient) => Promise<unknown>) =>
+            callback(transactionClient),
+        ),
+      answerAttempt: {
+        findUnique: jest.fn(),
+      },
+    };
+    const service = new PracticeService(
+      prisma as unknown as PrismaService,
+      {} as PointsService,
+    );
+
+    const error = await caughtHttpException(
+      service.answerFirst(
+        'student-1',
+        'missing-question',
+        'option-1',
+        'idempotency-1',
+      ),
+    );
+
+    expect(error).toBeInstanceOf(NotFoundException);
+    expect(error.getResponse()).toMatchObject({ code: 'QUESTION_NOT_FOUND' });
+    expect(transactionClient.answerAttempt.findUnique).not.toHaveBeenCalled();
+    expect(transactionClient.question.findUnique).not.toHaveBeenCalled();
+  });
+
   it('在任何写入前拒绝超出 PostgreSQL Int 范围的积分结果', async () => {
     const transactionClient = {
+      $queryRaw: jest.fn().mockResolvedValue([{ id: 'question-1' }]),
       answerAttempt: {
         findUnique: jest.fn().mockResolvedValue(null),
         create: jest.fn(),
@@ -195,6 +274,7 @@ describe('PracticeService', () => {
 
   it('余额达到 Int 上限时答错仍保存零奖励和原余额快照', async () => {
     const transactionClient = {
+      $queryRaw: jest.fn().mockResolvedValue([{ id: 'question-1' }]),
       answerAttempt: {
         findUnique: jest.fn().mockResolvedValue(null),
         create: jest.fn().mockResolvedValue({ id: 'attempt-1' }),

@@ -157,7 +157,7 @@ function isUniqueConflictFor(
     return false;
   }
   const metaModel = error.meta.modelName;
-  if (typeof metaModel === 'string' && metaModel !== modelName) {
+  if (metaModel !== modelName) {
     return false;
   }
   const driverError = error.meta.driverAdapterError;
@@ -326,6 +326,18 @@ export class PracticeService {
     try {
       return await this.prisma.$transaction(
         async (tx) => {
+          const lockedQuestions = await tx.$queryRaw<Array<{ id: string }>>(
+            Prisma.sql`
+              SELECT "id"
+              FROM "Question"
+              WHERE "id" = ${normalizedQuestionId}
+              FOR KEY SHARE
+            `,
+          );
+          if (lockedQuestions.length === 0) {
+            throw questionNotFound();
+          }
+
           const replay = await this.findReplay(
             tx,
             normalizedUserId,
