@@ -64,7 +64,8 @@ function hasValidPngAncillaryChunk(
     return false;
   }
   if (type !== 'tRNS') {
-    // 非视觉 ancillary 数据不会进入解码器；内容和基数畸形由净化步骤直接丢弃。
+    // 非视觉 ancillary 不由手写核心边界解析其内容；原 PNG 进入受限 Sharp 解码，
+    // clean re-encode 不复制用户元数据，并对规范化输出再次验收。
     return true;
   }
   if (state.sawTrns || state.sawIdat || [4, 6].includes(state.colorType)) {
