@@ -3,6 +3,11 @@ import sharp from 'sharp';
 import * as imageValidatorModule from './image-validator';
 import { validateProductImage } from './image-validator';
 
+const nodeModule = process.getBuiltinModule('node:module');
+const requireFromHere = nodeModule.createRequire(__filename);
+const { fileTypeFromBuffer } = requireFromHere(
+  'file-type',
+) as typeof import('file-type');
 const maxSize = 5 * 1024 * 1024;
 const validImages = {
   jpg: Buffer.from(
@@ -39,6 +44,29 @@ type PngChunk = {
 };
 
 type ContainerExtension = 'jpg' | 'png' | 'webp';
+
+type NormalizedProductImage = {
+  buffer: Buffer;
+  keyExtension: ContainerExtension;
+  mime: 'image/jpeg' | 'image/png' | 'image/webp';
+};
+
+async function normalizeProductImage(
+  buffer: Buffer,
+  normalizedMaxBytes?: number,
+): Promise<NormalizedProductImage> {
+  const normalizer = (
+    imageValidatorModule as typeof imageValidatorModule & {
+      validateAndNormalizeProductImage?: (
+        candidate: Buffer,
+        maxBytes: number,
+        normalizedMaxBytes?: number,
+      ) => Promise<NormalizedProductImage>;
+    }
+  ).validateAndNormalizeProductImage;
+  expect(normalizer).toEqual(expect.any(Function));
+  return normalizer(buffer, maxSize, normalizedMaxBytes);
+}
 
 function hasValidContainer(
   buffer: Buffer,
@@ -492,12 +520,7 @@ describe('validateProductImage', () => {
     expect(hasValidContainer(invalid, 'png')).toBe(false);
   });
 
-  it.each([
-    ['gAMA', Buffer.from([0x00, 0x00, 0xb1, 0x8f])],
-    ['cHRM', Buffer.alloc(32)],
-    ['sRGB', Buffer.from([0])],
-    ['iCCP', Buffer.from('profile\\0\\0data')],
-  ])('拒绝在 PLTE 之后出现的 PNG %s', async (type, data) => {
+  it('不手写拒绝可安全净化的 PNG ancillary 顺序、基数或内容畸形', async () => {
     const palette = await sharp(Buffer.from([0, 0, 0, 255, 255, 255]), {
       raw: { width: 2, height: 1, channels: 3 },
     })
@@ -505,52 +528,30 @@ describe('validateProductImage', () => {
       .toBuffer();
     const chunks = parsePngChunks(palette);
     const plteIndex = chunks.findIndex((chunk) => chunk.type === 'PLTE');
-    chunks.splice(plteIndex + 1, 0, { type, data });
-
-    expect(hasValidContainer(buildPng(chunks), 'png')).toBe(false);
-  });
-
-  it.each([
-    ['gAMA', Buffer.from([0x00, 0x00, 0xb1, 0x8f])],
-    ['cHRM', Buffer.alloc(32)],
-    ['sRGB', Buffer.from([0])],
-    ['iCCP', Buffer.from('profile\\0\\0data')],
-    ['pHYs', Buffer.alloc(9)],
-  ])('拒绝在 IDAT 之后出现的 PNG %s', (type, data) => {
-    const invalid = insertPngChunkBefore(validImages.png, 'IEND', {
-      type,
-      data,
-    });
-
-    expect(hasValidContainer(invalid, 'png')).toBe(false);
-  });
-
-  it('拒绝调色板之后出现的 sBIT 和重复的单例 ancillary chunk', async () => {
-    const palette = await sharp(Buffer.from([0, 0, 0, 255, 255, 255]), {
-      raw: { width: 2, height: 1, channels: 3 },
-    })
-      .png({ palette: true, colours: 2 })
-      .toBuffer();
-    const chunks = parsePngChunks(palette);
-    const plteIndex = chunks.findIndex((chunk) => chunk.type === 'PLTE');
-    const sbitAfterPlte = [...chunks];
-    sbitAfterPlte.splice(plteIndex + 1, 0, {
+    chunks.splice(plteIndex + 1, 0, {
       type: 'sBIT',
-      data: Buffer.from([8, 8, 8]),
+      data: Buffer.alloc(0),
     });
-    const duplicateGamma = [...chunks];
-    duplicateGamma.splice(
-      plteIndex,
+    chunks.splice(
+      plteIndex + 2,
       0,
       { type: 'gAMA', data: Buffer.from([0, 0, 0xb1, 0x8f]) },
       { type: 'gAMA', data: Buffer.from([0, 0, 0xb1, 0x8f]) },
+      { type: 'iCCP', data: Buffer.from('malformed') },
     );
+    chunks.splice(-1, 0, { type: 'pHYs', data: Buffer.alloc(0) });
+    const uploaded = buildPng(chunks);
 
-    expect(hasValidContainer(buildPng(sbitAfterPlte), 'png')).toBe(false);
-    expect(hasValidContainer(buildPng(duplicateGamma), 'png')).toBe(false);
+    expect(hasValidContainer(uploaded, 'png')).toBe(true);
+    const normalized = await normalizeProductImage(uploaded);
+    expect(
+      parsePngChunks(normalized.buffer).some(({ type }) =>
+        ['sBIT', 'gAMA', 'iCCP'].includes(type),
+      ),
+    ).toBe(false);
   });
 
-  it('拒绝 tRNS/bKGD/hIST 的顺序及色型约束违规', async () => {
+  it('仍拒绝会改变像素 alpha 语义的 tRNS 色型与顺序违规', async () => {
     const trnsOnAlphaImage = insertPngChunkBefore(validImages.png, 'IDAT', {
       type: 'tRNS',
       data: Buffer.from([0, 0]),
@@ -567,27 +568,9 @@ describe('validateProductImage', () => {
       type: 'tRNS',
       data: Buffer.from([0]),
     });
-    const backgroundBeforePlte = [...paletteChunks];
-    backgroundBeforePlte.splice(plteIndex, 0, {
-      type: 'bKGD',
-      data: Buffer.from([0]),
-    });
-    const truecolor = await sharp(Buffer.from([1, 2, 3]), {
-      raw: { width: 1, height: 1, channels: 3 },
-    })
-      .png()
-      .toBuffer();
-    const histogramWithoutPlte = insertPngChunkBefore(truecolor, 'IDAT', {
-      type: 'hIST',
-      data: Buffer.from([0, 1]),
-    });
 
     expect(hasValidContainer(trnsOnAlphaImage, 'png')).toBe(false);
     expect(hasValidContainer(buildPng(trnsBeforePlte), 'png')).toBe(false);
-    expect(hasValidContainer(buildPng(backgroundBeforePlte), 'png')).toBe(
-      false,
-    );
-    expect(hasValidContainer(histogramWithoutPlte, 'png')).toBe(false);
   });
 
   it('拒绝不连续 IDAT 和未知 critical chunk', () => {
@@ -698,6 +681,144 @@ describe('validateProductImage', () => {
         extension,
         mime,
       });
+    },
+  );
+
+  it('接受可安全解码但 ancillary 内容畸形的 PNG，并从规范化输出删除全部注入块与 payload', async () => {
+    const injection = Buffer.from('round3-visible-injection-payload');
+    const chunks = parsePngChunks(validImages.png);
+    const idatIndex = chunks.findIndex(({ type }) => type === 'IDAT');
+    chunks.splice(
+      idatIndex,
+      0,
+      { type: 'sPLT', data: Buffer.alloc(0) },
+      { type: 'sPLT', data: Buffer.alloc(0) },
+      { type: 'tIME', data: Buffer.alloc(0) },
+      {
+        type: 'iCCP',
+        data: Buffer.concat([Buffer.from('profile\0\0'), injection]),
+      },
+      { type: 'tEXt', data: injection },
+      { type: 'zTXt', data: Buffer.alloc(0) },
+      { type: 'iTXt', data: Buffer.alloc(0) },
+    );
+    const uploaded = buildPng(chunks);
+
+    const normalized = await normalizeProductImage(uploaded);
+    const outputChunks = parsePngChunks(normalized.buffer);
+    const detected = await fileTypeFromBuffer(normalized.buffer);
+    const metadata = await sharp(normalized.buffer).metadata();
+
+    expect(normalized).toMatchObject({
+      keyExtension: 'png',
+      mime: 'image/png',
+    });
+    expect(detected).toMatchObject({ ext: 'png', mime: 'image/png' });
+    expect(outputChunks.map(({ type }) => type)).toEqual(
+      expect.arrayContaining(['IHDR', 'IDAT', 'IEND']),
+    );
+    expect(
+      outputChunks.some(({ type }) =>
+        ['sPLT', 'tIME', 'iCCP', 'tEXt', 'zTXt', 'iTXt'].includes(type),
+      ),
+    ).toBe(false);
+    expect(normalized.buffer.includes(injection)).toBe(false);
+    expect(metadata).toMatchObject({
+      format: 'png',
+      width: 1,
+      height: 1,
+    });
+    expect(metadata.pages ?? 1).toBe(1);
+    expect(metadata.exif).toBeUndefined();
+    expect(metadata.icc).toBeUndefined();
+    expect(metadata.xmp).toBeUndefined();
+  });
+
+  it('同格式净化时保留 PNG 尺寸与 alpha 视觉语义', async () => {
+    const original = await sharp(Buffer.from([255, 0, 0, 255, 0, 255, 0, 0]), {
+      raw: { width: 2, height: 1, channels: 4 },
+    })
+      .png()
+      .toBuffer();
+    const withPayload = insertPngChunkBefore(original, 'IDAT', {
+      type: 'tEXt',
+      data: Buffer.from('comment\0round3-alpha-payload'),
+    });
+
+    const normalized = await normalizeProductImage(withPayload);
+    const decoded = await sharp(normalized.buffer)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    expect(decoded.info).toMatchObject({
+      width: 2,
+      height: 1,
+      channels: 4,
+    });
+    expect([...decoded.data]).toEqual([255, 0, 0, 255, 0, 255, 0, 0]);
+  });
+
+  it('JPEG 自动应用 EXIF 方向并剥离 EXIF、ICC、XMP 等用户元数据', async () => {
+    const uploaded = await sharp(Buffer.from([255, 0, 0, 0, 255, 0]), {
+      raw: { width: 2, height: 1, channels: 3 },
+    })
+      .withMetadata({
+        orientation: 6,
+        exif: { IFD0: { Copyright: 'round3-secret-metadata' } },
+      })
+      .withXmp(
+        '<x:xmpmeta xmlns:x="adobe:ns:meta/">round3-xmp-payload</x:xmpmeta>',
+      )
+      .jpeg()
+      .toBuffer();
+
+    const normalized = await normalizeProductImage(uploaded);
+    const detected = await fileTypeFromBuffer(normalized.buffer);
+    const metadata = await sharp(normalized.buffer).metadata();
+
+    expect(normalized).toMatchObject({
+      keyExtension: 'jpg',
+      mime: 'image/jpeg',
+    });
+    expect(detected).toMatchObject({ ext: 'jpg', mime: 'image/jpeg' });
+    expect(metadata).toMatchObject({
+      format: 'jpeg',
+      width: 1,
+      height: 2,
+    });
+    expect(metadata.pages ?? 1).toBe(1);
+    expect(metadata.orientation).toBeUndefined();
+    expect(metadata.exif).toBeUndefined();
+    expect(metadata.icc).toBeUndefined();
+    expect(metadata.xmp).toBeUndefined();
+    expect(normalized.buffer.includes(Buffer.from('round3'))).toBe(false);
+  });
+
+  it('规范化输出超过独立磁盘上限时返回稳定 VALIDATION_FAILED', async () => {
+    await expect(
+      normalizeProductImage(validImages.png, 1),
+    ).rejects.toMatchObject({
+      code: 'VALIDATION_FAILED',
+    });
+  });
+
+  it.each([
+    ['jpg', 'image/jpeg', 'jpeg'],
+    ['png', 'image/png', 'png'],
+    ['webp', 'image/webp', 'webp'],
+  ] as const)(
+    '将 %s 完整解码后重新编码为相同可信格式',
+    async (keyExtension, mime, decoderFormat) => {
+      const normalized = await normalizeProductImage(validImages[keyExtension]);
+      const detected = await fileTypeFromBuffer(normalized.buffer);
+      const metadata = await sharp(normalized.buffer).metadata();
+
+      expect(normalized).toMatchObject({ keyExtension, mime });
+      expect(detected).toMatchObject({ ext: keyExtension, mime });
+      expect(metadata.format).toBe(decoderFormat);
+      expect(metadata.pages ?? 1).toBe(1);
+      expect(normalized.buffer).not.toEqual(validImages[keyExtension]);
     },
   );
 });

@@ -17,15 +17,8 @@ import {
   unlink,
 } from 'node:fs/promises';
 import { isAbsolute, join, parse, relative, resolve, sep } from 'node:path';
-import {
-  MAX_PRODUCT_IMAGE_SIZE,
-  validateProductImage,
-} from './image-validator';
-import {
-  type ProductImageFile,
-  type StoredProductImage,
-  StorageProvider,
-} from './storage.provider';
+import { type NormalizedProductImage } from './image-validator';
+import { type StoredProductImage, StorageProvider } from './storage.provider';
 
 export const PRODUCT_UPLOAD_ROOT = Symbol('PRODUCT_UPLOAD_ROOT');
 
@@ -268,14 +261,12 @@ export class LocalStorageProvider
     return this.preparation;
   }
 
-  async putProductImage(file: ProductImageFile): Promise<StoredProductImage> {
-    const validated = await validateProductImage(
-      file.buffer,
-      MAX_PRODUCT_IMAGE_SIZE,
-    );
+  async putProductImage(
+    image: NormalizedProductImage,
+  ): Promise<StoredProductImage> {
     const prepared = await this.ensurePrepared();
 
-    const fileName = `${randomUUID()}.${validated.extension}`;
+    const fileName = `${randomUUID()}.${image.keyExtension}`;
     const key = `products/${fileName}`;
     const destination = join(prepared.productDirectory, fileName);
     const temporary = join(
@@ -292,7 +283,7 @@ export class LocalStorageProvider
       }
       handle = await open(temporary, 'wx', 0o600);
       temporaryExists = true;
-      await handle.writeFile(file.buffer);
+      await handle.writeFile(image.buffer);
       await handle.sync();
       await handle.close();
       handle = undefined;

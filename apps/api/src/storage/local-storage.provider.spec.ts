@@ -18,6 +18,11 @@ const validPng = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
   'base64',
 );
+const normalizedPng = {
+  buffer: validPng,
+  keyExtension: 'png',
+  mime: 'image/png',
+} as const;
 
 describe('LocalStorageProvider', () => {
   let uploadRoot: string;
@@ -30,14 +35,10 @@ describe('LocalStorageProvider', () => {
     await rm(uploadRoot, { recursive: true, force: true });
   });
 
-  it('忽略原始文件名并以检测出的扩展名非覆盖写入商品目录', async () => {
+  it('按规范化图片的可信扩展名非覆盖写入商品目录', async () => {
     const provider = new LocalStorageProvider(uploadRoot);
 
-    const stored = await provider.putProductImage({
-      buffer: validPng,
-      originalname: '../../秘密.svg',
-      mimetype: 'text/plain',
-    });
+    const stored = await provider.putProductImage(normalizedPng);
 
     expect(stored.key).toMatch(
       /^products\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.png$/,
@@ -46,22 +47,6 @@ describe('LocalStorageProvider', () => {
     await expect(readFile(join(uploadRoot, stored.key))).resolves.toEqual(
       validPng,
     );
-    expect(stored.key).not.toContain('秘密');
-    expect(stored.key).not.toContain('svg');
-  });
-
-  it('无效图片不创建商品目录也不写入文件', async () => {
-    const provider = new LocalStorageProvider(uploadRoot);
-
-    await expect(
-      provider.putProductImage({
-        buffer: Buffer.from('<svg></svg>'),
-        originalname: 'image.png',
-        mimetype: 'image/png',
-      }),
-    ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
-
-    await expect(readdir(uploadRoot)).resolves.toEqual([]);
   });
 
   it('写入中途失败时不留下可公开的部分文件或临时文件', async () => {
@@ -83,13 +68,9 @@ describe('LocalStorageProvider', () => {
       return handle;
     });
 
-    await expect(
-      provider.putProductImage({
-        buffer: validPng,
-        originalname: 'image.png',
-        mimetype: 'image/png',
-      }),
-    ).rejects.toMatchObject({ code: 'STORAGE_ERROR' });
+    await expect(provider.putProductImage(normalizedPng)).rejects.toMatchObject(
+      { code: 'STORAGE_ERROR' },
+    );
     openSpy.mockRestore();
 
     await expect(readdir(join(uploadRoot, 'products'))).resolves.toEqual([]);
@@ -103,11 +84,7 @@ describe('LocalStorageProvider', () => {
 
     try {
       await expect(
-        provider.putProductImage({
-          buffer: validPng,
-          originalname: 'image.png',
-          mimetype: 'image/png',
-        }),
+        provider.putProductImage(normalizedPng),
       ).rejects.toMatchObject({ code: 'STORAGE_ERROR' });
       await expect(readdir(external)).resolves.toEqual([]);
     } finally {
@@ -122,11 +99,7 @@ describe('LocalStorageProvider', () => {
 
     try {
       await expect(
-        provider.putProductImage({
-          buffer: validPng,
-          originalname: 'image.png',
-          mimetype: 'image/png',
-        }),
+        provider.putProductImage(normalizedPng),
       ).rejects.toMatchObject({ code: 'STORAGE_ERROR' });
       await expect(readdir(external)).resolves.toEqual([]);
     } finally {
@@ -146,11 +119,7 @@ describe('LocalStorageProvider', () => {
     await writeFile(unrelated, 'keep');
     const provider = new LocalStorageProvider(uploadRoot);
 
-    await provider.putProductImage({
-      buffer: validPng,
-      originalname: 'image.png',
-      mimetype: 'image/png',
-    });
+    await provider.putProductImage(normalizedPng);
 
     await expect(lstat(stale)).rejects.toMatchObject({ code: 'ENOENT' });
     await expect(readFile(unrelated, 'utf8')).resolves.toBe('keep');
@@ -173,11 +142,7 @@ describe('LocalStorageProvider', () => {
 
     try {
       const thrown: unknown = await provider
-        .putProductImage({
-          buffer: validPng,
-          originalname: 'image.png',
-          mimetype: 'image/png',
-        })
+        .putProductImage(normalizedPng)
         .catch((error: unknown) => error);
       expect(thrown).toMatchObject({ code: 'STORAGE_ERROR' });
       expect(thrown).toBeInstanceOf(Error);
@@ -191,11 +156,7 @@ describe('LocalStorageProvider', () => {
 
   it('将上传根、products 与发布文件权限分别限制为 0700、0700、0600', async () => {
     const provider = new LocalStorageProvider(uploadRoot);
-    const stored = await provider.putProductImage({
-      buffer: validPng,
-      originalname: 'image.png',
-      mimetype: 'image/png',
-    });
+    const stored = await provider.putProductImage(normalizedPng);
 
     expect((await stat(uploadRoot)).mode & 0o777).toBe(0o700);
     expect((await stat(join(uploadRoot, 'products'))).mode & 0o777).toBe(0o700);
@@ -217,11 +178,7 @@ describe('LocalStorageProvider', () => {
 
     try {
       const thrown: unknown = await provider
-        .putProductImage({
-          buffer: validPng,
-          originalname: 'image.png',
-          mimetype: 'image/png',
-        })
+        .putProductImage(normalizedPng)
         .catch((error: unknown) => error);
       expect(thrown).toMatchObject({ code: 'STORAGE_ERROR' });
       expect(thrown).toBeInstanceOf(Error);
@@ -239,11 +196,7 @@ describe('LocalStorageProvider', () => {
     const openSpy = jest.spyOn(fsPromises, 'open');
 
     try {
-      await provider.putProductImage({
-        buffer: validPng,
-        originalname: 'image.png',
-        mimetype: 'image/png',
-      });
+      await provider.putProductImage(normalizedPng);
       const directorySyncOpens = openSpy.mock.calls.filter(
         ([path, flags]) => String(path).endsWith('/products') && flags === 'r',
       );

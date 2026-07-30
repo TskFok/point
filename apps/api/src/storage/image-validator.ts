@@ -10,10 +10,17 @@ const { fileTypeFromBuffer } = requireFromHere(
 
 export const MAX_PRODUCT_IMAGE_SIZE = 5 * 1024 * 1024;
 export const MAX_PRODUCT_IMAGE_PIXELS = 25_000_000;
+export const MAX_NORMALIZED_PRODUCT_IMAGE_SIZE = 20 * 1024 * 1024;
 
 export type ValidatedProductImage = {
   extension: 'jpg' | 'png' | 'webp';
   mime: 'image/jpeg' | 'image/png' | 'image/webp';
+};
+
+export type NormalizedProductImage = {
+  buffer: Buffer;
+  keyExtension: ValidatedProductImage['extension'];
+  mime: ValidatedProductImage['mime'];
 };
 
 class ProductImageValidationException extends BadRequestException {
@@ -36,45 +43,10 @@ type PngValidationState = {
   colorType: number;
   paletteEntries: number;
   sawIdat: boolean;
-  sawPaletteDependentChunk: boolean;
   sawPlte: boolean;
-  seenSingletonChunks: Set<string>;
+  sawTrns: boolean;
 };
 
-const pngSingletonAncillaryChunks = new Set([
-  'bKGD',
-  'cHRM',
-  'cICP',
-  'cLLI',
-  'eXIf',
-  'gAMA',
-  'hIST',
-  'iCCP',
-  'mDCV',
-  'pHYs',
-  'sBIT',
-  'sRGB',
-  'tIME',
-  'tRNS',
-]);
-const pngBeforePaletteAndDataChunks = new Set([
-  'cHRM',
-  'cICP',
-  'cLLI',
-  'gAMA',
-  'iCCP',
-  'mDCV',
-  'sBIT',
-  'sRGB',
-]);
-const pngBeforeDataChunks = new Set([
-  'bKGD',
-  'eXIf',
-  'hIST',
-  'pHYs',
-  'sPLT',
-  'tRNS',
-]);
 const unsupportedAnimatedPngChunks = new Set(['acTL', 'fcTL', 'fdAT']);
 
 function hasOnlyPngChunkTypeLetters(typeBytes: Buffer): boolean {
@@ -91,106 +63,28 @@ function hasValidPngAncillaryChunk(
   if (unsupportedAnimatedPngChunks.has(type)) {
     return false;
   }
-  if (pngSingletonAncillaryChunks.has(type)) {
-    if (state.seenSingletonChunks.has(type)) {
+  if (type !== 'tRNS') {
+    // 非视觉 ancillary 数据不会进入解码器；内容和基数畸形由净化步骤直接丢弃。
+    return true;
+  }
+  if (state.sawTrns || state.sawIdat || [4, 6].includes(state.colorType)) {
+    return false;
+  }
+  if (state.colorType === 3) {
+    if (
+      !state.sawPlte ||
+      data.length === 0 ||
+      data.length > state.paletteEntries
+    ) {
       return false;
     }
-    state.seenSingletonChunks.add(type);
-  }
-  if (
-    pngBeforePaletteAndDataChunks.has(type) &&
-    (state.sawPlte || state.sawIdat)
+  } else if (
+    (state.colorType === 0 && data.length !== 2) ||
+    (state.colorType === 2 && data.length !== 6)
   ) {
     return false;
   }
-  if (pngBeforeDataChunks.has(type) && state.sawIdat) {
-    return false;
-  }
-
-  if (type === 'cHRM' && data.length !== 32) {
-    return false;
-  }
-  if (type === 'gAMA' && (data.length !== 4 || data.readUInt32BE(0) === 0)) {
-    return false;
-  }
-  if (type === 'cICP' && data.length !== 4) {
-    return false;
-  }
-  if (type === 'cLLI' && data.length !== 8) {
-    return false;
-  }
-  if (type === 'mDCV' && data.length !== 24) {
-    return false;
-  }
-  if (type === 'sRGB' && (data.length !== 1 || data[0] > 3)) {
-    return false;
-  }
-  if (type === 'pHYs' && (data.length !== 9 || data[8] > 1)) {
-    return false;
-  }
-  if (type === 'sBIT') {
-    const sampleCounts = new Map([
-      [0, 1],
-      [2, 3],
-      [3, 3],
-      [4, 2],
-      [6, 4],
-    ]);
-    const maximum = state.colorType === 3 ? 8 : state.bitDepth;
-    if (
-      data.length !== sampleCounts.get(state.colorType) ||
-      Array.from(data).some(
-        (sampleBits) => sampleBits < 1 || sampleBits > maximum,
-      )
-    ) {
-      return false;
-    }
-  }
-  if (type === 'tRNS') {
-    if ([4, 6].includes(state.colorType)) {
-      return false;
-    }
-    if (state.colorType === 3) {
-      if (
-        !state.sawPlte ||
-        data.length === 0 ||
-        data.length > state.paletteEntries
-      ) {
-        return false;
-      }
-    } else if (
-      (state.colorType === 0 && data.length !== 2) ||
-      (state.colorType === 2 && data.length !== 6)
-    ) {
-      return false;
-    }
-    state.sawPaletteDependentChunk = true;
-  }
-  if (type === 'bKGD') {
-    const expectedLengths = new Map([
-      [0, 2],
-      [2, 6],
-      [3, 1],
-      [4, 2],
-      [6, 6],
-    ]);
-    if (
-      data.length !== expectedLengths.get(state.colorType) ||
-      (state.colorType === 3 &&
-        (!state.sawPlte || data[0] >= state.paletteEntries))
-    ) {
-      return false;
-    }
-    state.sawPaletteDependentChunk = true;
-  }
-  if (
-    type === 'hIST' &&
-    (!state.sawPlte ||
-      state.paletteEntries === 0 ||
-      data.length !== state.paletteEntries * 2)
-  ) {
-    return false;
-  }
+  state.sawTrns = true;
   return true;
 }
 
@@ -212,9 +106,8 @@ function hasValidPngStructure(buffer: Buffer): boolean {
     colorType: -1,
     paletteEntries: 0,
     sawIdat: false,
-    sawPaletteDependentChunk: false,
     sawPlte: false,
-    seenSingletonChunks: new Set(),
+    sawTrns: false,
   };
   while (offset + 12 <= buffer.length) {
     const chunkLength = buffer.readUInt32BE(offset);
@@ -279,7 +172,7 @@ function hasValidPngStructure(buffer: Buffer): boolean {
       if (
         state.sawPlte ||
         sawIdat ||
-        state.sawPaletteDependentChunk ||
+        state.sawTrns ||
         [0, 4].includes(state.colorType) ||
         chunkLength === 0 ||
         chunkLength > 768 ||
@@ -666,7 +559,11 @@ export async function validateProductImage(
   }
 
   try {
-    const decoder = sharp(buffer, {
+    const decodeBuffer =
+      validated.extension === 'png'
+        ? pngDecodeBufferWithoutUserMetadata(buffer)
+        : buffer;
+    const decoder = sharp(decodeBuffer, {
       failOn: 'warning',
       limitInputPixels: MAX_PRODUCT_IMAGE_PIXELS,
     });
@@ -685,4 +582,93 @@ export async function validateProductImage(
     throw invalidImage('商品图片内容损坏或不完整');
   }
   return validated;
+}
+
+function pngDecodeBufferWithoutUserMetadata(buffer: Buffer): Buffer {
+  const keptChunks: Buffer[] = [buffer.subarray(0, 8)];
+  const visualChunkTypes = new Set(['IHDR', 'PLTE', 'tRNS', 'IDAT', 'IEND']);
+  let offset = 8;
+  while (offset < buffer.length) {
+    const chunkLength = buffer.readUInt32BE(offset);
+    const chunkEnd = offset + 12 + chunkLength;
+    const chunkType = buffer.toString('ascii', offset + 4, offset + 8);
+    if (visualChunkTypes.has(chunkType)) {
+      keptChunks.push(buffer.subarray(offset, chunkEnd));
+    }
+    offset = chunkEnd;
+  }
+  return Buffer.concat(keptChunks);
+}
+
+/**
+ * 验证原上传容器后执行完整解码，并以相同格式重新编码为可持久化的规范化图片。
+ *
+ * JPEG/WebP 使用质量 85；PNG 使用无损压缩。`.rotate()` 应用 EXIF 方向，
+ * Sharp 默认不复制 EXIF、ICC、XMP 或文本元数据。PNG 在解码前仅保留影响
+ * 像素重建的核心块和 tRNS，避免畸形的非视觉 ancillary 元数据进入解码器。
+ */
+export async function validateAndNormalizeProductImage(
+  buffer: Buffer,
+  maxBytes: number = MAX_PRODUCT_IMAGE_SIZE,
+  normalizedMaxBytes: number = MAX_NORMALIZED_PRODUCT_IMAGE_SIZE,
+): Promise<NormalizedProductImage> {
+  if (!Number.isSafeInteger(normalizedMaxBytes) || normalizedMaxBytes < 1) {
+    throw invalidImage('图片验证参数无效');
+  }
+  const normalizedOutputLimit = Math.min(
+    normalizedMaxBytes,
+    MAX_NORMALIZED_PRODUCT_IMAGE_SIZE,
+  );
+  const validated = await validateProductImage(buffer, maxBytes);
+  const decodeBuffer =
+    validated.extension === 'png'
+      ? pngDecodeBufferWithoutUserMetadata(buffer)
+      : buffer;
+
+  let normalized: Buffer;
+  try {
+    const pipeline = sharp(decodeBuffer, {
+      failOn: 'warning',
+      limitInputPixels: MAX_PRODUCT_IMAGE_PIXELS,
+    }).rotate();
+    if (validated.extension === 'jpg') {
+      normalized = await pipeline
+        .jpeg({
+          quality: 85,
+          chromaSubsampling: '4:2:0',
+          progressive: true,
+        })
+        .toBuffer();
+    } else if (validated.extension === 'png') {
+      normalized = await pipeline
+        .png({ compressionLevel: 9, adaptiveFiltering: true })
+        .toBuffer();
+    } else {
+      normalized = await pipeline
+        .webp({ quality: 85, alphaQuality: 100 })
+        .toBuffer();
+    }
+  } catch {
+    throw invalidImage('商品图片内容损坏或不完整');
+  }
+
+  if (normalized.length > normalizedOutputLimit) {
+    throw invalidImage('规范化商品图片超过存储上限');
+  }
+
+  const normalizedType = await validateProductImage(
+    normalized,
+    normalizedOutputLimit,
+  );
+  if (
+    normalizedType.extension !== validated.extension ||
+    normalizedType.mime !== validated.mime
+  ) {
+    throw invalidImage('规范化商品图片格式不一致');
+  }
+  return {
+    buffer: normalized,
+    keyExtension: normalizedType.extension,
+    mime: normalizedType.mime,
+  };
 }

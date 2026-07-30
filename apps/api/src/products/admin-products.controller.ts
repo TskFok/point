@@ -18,15 +18,21 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { type Observable } from 'rxjs';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { MAX_PRODUCT_IMAGE_SIZE } from '../storage/image-validator';
 import {
-  type ProductImageFile,
-  StorageProvider,
-} from '../storage/storage.provider';
+  MAX_PRODUCT_IMAGE_SIZE,
+  validateAndNormalizeProductImage,
+} from '../storage/image-validator';
+import { StorageProvider } from '../storage/storage.provider';
 import { CreateProductDto } from './dto/create-product.dto';
 import { ListProductsDto } from './dto/list-products.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductsService } from './products.service';
+
+type UploadedProductImage = {
+  buffer: Buffer;
+  mimetype?: string;
+  originalname?: string;
+};
 
 function uploadValidationFailed(message: string): BadRequestException {
   return new BadRequestException({
@@ -97,10 +103,14 @@ export class AdminProductUploadsController {
 
   @Post('product-images')
   @UseInterceptors(ProductImageUploadInterceptor)
-  upload(@UploadedFile() file?: ProductImageFile) {
+  async upload(@UploadedFile() file?: UploadedProductImage) {
     if (!file?.buffer) {
       throw uploadValidationFailed('必须上传商品图片');
     }
-    return this.storage.putProductImage(file);
+    const normalized = await validateAndNormalizeProductImage(
+      file.buffer,
+      MAX_PRODUCT_IMAGE_SIZE,
+    );
+    return this.storage.putProductImage(normalized);
   }
 }

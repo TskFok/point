@@ -4,6 +4,8 @@ import { hash } from 'bcryptjs';
 import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { crc32 } from 'node:zlib';
+import sharp from 'sharp';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApiApp } from '../src/common/http/configure-api-app';
@@ -26,6 +28,28 @@ const validPng = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
   'base64',
 );
+const nodeModule = process.getBuiltinModule('node:module');
+const requireFromHere = nodeModule.createRequire(__filename);
+const { fileTypeFromBuffer } = requireFromHere(
+  'file-type',
+) as typeof import('file-type');
+
+function addPngChunk(buffer: Buffer, type: string, payload: Buffer): Buffer {
+  const idatOffset = buffer.indexOf(Buffer.from('IDAT')) - 4;
+  const typeBytes = Buffer.from(type);
+  const header = Buffer.alloc(8);
+  header.writeUInt32BE(payload.length);
+  typeBytes.copy(header, 4);
+  const checksum = Buffer.alloc(4);
+  checksum.writeUInt32BE(crc32(Buffer.concat([typeBytes, payload])) >>> 0);
+  return Buffer.concat([
+    buffer.subarray(0, idatOffset),
+    header,
+    payload,
+    checksum,
+    buffer.subarray(idatOffset),
+  ]);
+}
 const managedEnvironmentKeys = [
   'DATABASE_URL',
   'AUTH_JWT_SECRET',
@@ -546,16 +570,19 @@ describe('商品、库存与图片上传 API', () => {
     const stored = response.body as unknown as { key: string; url: string };
     expect(stored.key).toMatch(/^products\/[0-9a-f-]{36}\.png$/);
     expect(stored.url).toBe(`/uploads/${stored.key}`);
-    await expect(
-      readFile(join(requireUploadRoot(), stored.key)),
-    ).resolves.toEqual(validPng);
+    const persisted = await readFile(join(requireUploadRoot(), stored.key));
+    expect(persisted).not.toEqual(validPng);
+    await expect(fileTypeFromBuffer(persisted)).resolves.toMatchObject({
+      ext: 'png',
+      mime: 'image/png',
+    });
     await request(requireServer())
       .get(stored.url)
       .expect('Content-Type', /image\/png/)
       .expect('X-Content-Type-Options', 'nosniff')
       .expect(200)
       .expect(({ body }) => {
-        expect(body as Buffer).toEqual(validPng);
+        expect(body as Buffer).toEqual(persisted);
       });
 
     await writeFile(join(requireUploadRoot(), 'products', '.secret'), 'secret');
@@ -566,6 +593,52 @@ describe('商品、库存与图片上传 API', () => {
     await request(requireServer())
       .get('/uploads/%2e%2e/outside.txt')
       .expect(404);
+  });
+
+  it('真实上传链路只落盘净化后的单帧图片且不保留 PNG 注入块和用户元数据', async () => {
+    const injection = Buffer.from('round3-e2e-visible-payload');
+    const uploaded = [
+      ['sPLT', Buffer.alloc(0)],
+      ['sPLT', Buffer.alloc(0)],
+      ['tIME', Buffer.alloc(0)],
+      ['iCCP', Buffer.concat([Buffer.from('profile\0\0'), injection])],
+      ['tEXt', injection],
+      ['zTXt', Buffer.alloc(0)],
+      ['iTXt', Buffer.alloc(0)],
+    ].reduce(
+      (buffer, [type, data]) =>
+        addPngChunk(buffer, type as string, data as Buffer),
+      validPng,
+    );
+
+    const response = await request(requireServer())
+      .post('/api/v1/admin/uploads/product-images')
+      .set('Authorization', adminBearer)
+      .attach('file', uploaded, {
+        filename: 'metadata.png',
+        contentType: 'image/png',
+      })
+      .expect(201);
+    const stored = response.body as unknown as { key: string; url: string };
+    const persisted = await readFile(join(requireUploadRoot(), stored.key));
+    const metadata = await sharp(persisted).metadata();
+
+    expect(stored.key).toMatch(/^products\/[0-9a-f-]{36}\.png$/);
+    expect(persisted).not.toEqual(uploaded);
+    expect(persisted.includes(injection)).toBe(false);
+    await expect(fileTypeFromBuffer(persisted)).resolves.toMatchObject({
+      ext: 'png',
+      mime: 'image/png',
+    });
+    expect(metadata).toMatchObject({
+      format: 'png',
+      width: 1,
+      height: 1,
+    });
+    expect(metadata.pages ?? 1).toBe(1);
+    expect(metadata.exif).toBeUndefined();
+    expect(metadata.icc).toBeUndefined();
+    expect(metadata.xmp).toBeUndefined();
   });
 
   it.each([

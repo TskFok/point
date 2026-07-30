@@ -1,8 +1,4 @@
-export type ProductImageFile = {
-  buffer: Buffer;
-  originalname?: string;
-  mimetype?: string;
-};
+import { type NormalizedProductImage } from './image-validator';
 
 export type StoredProductImage = {
   key: string;
@@ -10,5 +6,7 @@ export type StoredProductImage = {
 };
 
 export abstract class StorageProvider {
-  abstract putProductImage(file: ProductImageFile): Promise<StoredProductImage>;
+  abstract putProductImage(
+    image: NormalizedProductImage,
+  ): Promise<StoredProductImage>;
 }
