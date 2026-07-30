@@ -13,6 +13,7 @@ type SchemaObject = {
   format?: string;
   pattern?: string;
   minProperties?: number;
+  additionalProperties?: boolean;
   oneOf?: ReferenceObject[];
   properties?: Record<string, unknown>;
   required?: string[];
@@ -70,6 +71,33 @@ function responseSchema(response: ResponseObject | ReferenceObject) {
     return response;
   }
   return response.content?.['application/json']?.schema;
+}
+
+function matchingNamedObjectSchemas(
+  document: OpenAPIObject,
+  branches: ReferenceObject[],
+  value: Record<string, unknown>,
+): string[] {
+  return branches.flatMap((branch) => {
+    const name = branch.$ref.split('/').at(-1)!;
+    const schema = document.components?.schemas?.[name];
+    if (!schema || isReference(schema) || schema.type !== 'object') {
+      return [];
+    }
+    const required = schema.required ?? [];
+    if (required.some((property) => !(property in value))) {
+      return [];
+    }
+    if (
+      schema.additionalProperties === false &&
+      Object.keys(value).some(
+        (property) => !Object.hasOwn(schema.properties ?? {}, property),
+      )
+    ) {
+      return [];
+    }
+    return [name];
+  });
 }
 
 describe('OpenAPI 契约', () => {
@@ -223,6 +251,45 @@ describe('OpenAPI 契约', () => {
         'refreshTokenExpiresAt',
       ]),
     );
+
+    const branches = (
+      responseSchema(
+        response as unknown as ReferenceObject | ResponseObject,
+      ) as SchemaObject
+    ).oneOf!;
+    const user = {
+      id: 'user-1',
+      username: 'student_01',
+      role: 'STUDENT',
+      pointsBalance: 10,
+    };
+    expect(matchingNamedObjectSchemas(document, branches, { user })).toEqual([
+      'WebSessionResponseDto',
+    ]);
+    expect(
+      matchingNamedObjectSchemas(document, branches, {
+        user,
+        accessToken: 'access-token',
+        accessTokenExpiresIn: 900,
+        refreshToken: 'refresh-token',
+        refreshTokenExpiresAt: '2026-08-30T00:00:00.000Z',
+      }),
+    ).toEqual(['TokenResponseDto']);
+  });
+
+  it('refresh/logout 机器可读声明可选 pq_refresh Cookie 模式', () => {
+    for (const path of ['/api/v1/auth/refresh', '/api/v1/auth/logout']) {
+      expect(document.paths[path]?.post?.security).toEqual([
+        { refreshCookieAuth: [] },
+        {},
+      ]);
+    }
+    expect(
+      document.paths['/api/v1/auth/login']?.post?.security,
+    ).toBeUndefined();
+    expect(
+      document.paths['/api/v1/auth/token']?.post?.security,
+    ).toBeUndefined();
   });
 
   it('完整记录登录、刷新和登出的 Cookie 副作用与 refresh CSRF 模式', () => {

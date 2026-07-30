@@ -44,6 +44,10 @@ export function createOpenApiDocument(app: INestApplication): OpenAPIObject {
   });
   const schemas = document.components?.schemas;
   if (schemas) {
+    const webSession = schemas.WebSessionResponseDto;
+    if (webSession && !('$ref' in webSession)) {
+      webSession.additionalProperties = false;
+    }
     for (const name of [
       'UpdateQuestionRequestDto',
       'UpdateProductRequestDto',

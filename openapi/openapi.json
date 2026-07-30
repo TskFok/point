@@ -1102,6 +1102,7 @@
         "type": "object"
       },
       "WebSessionResponseDto": {
+        "additionalProperties": false,
         "properties": {
           "user": {
             "$ref": "#/components/schemas/PublicUserDto"
@@ -3193,6 +3194,12 @@
             "description": "服务器内部错误"
           }
         },
+        "security": [
+          {
+            "refreshCookieAuth": []
+          },
+          {}
+        ],
         "summary": "注销当前 Refresh Token",
         "tags": [
           "认证"
@@ -3425,6 +3432,12 @@
             "description": "服务器内部错误"
           }
         },
+        "security": [
+          {
+            "refreshCookieAuth": []
+          },
+          {}
+        ],
         "summary": "轮换 Web Cookie 或 Android 令牌",
         "tags": [
           "认证"

@@ -169,6 +169,7 @@ export class AuthController {
     bodyType: RefreshRequestDto,
     csrf: true,
     csrfDescription: REFRESH_CSRF_DESCRIPTION,
+    optionalRefreshCookie: true,
     extraModels: [WebSessionResponseDto, TokenResponseDto],
     response: {
       description: 'Web 会话或 Android TokenPair',
@@ -212,6 +213,7 @@ export class AuthController {
     bodyType: RefreshRequestDto,
     csrf: true,
     csrfDescription: REFRESH_CSRF_DESCRIPTION,
+    optionalRefreshCookie: true,
     response: {
       type: SuccessResponseDto,
       headers: { 'Set-Cookie': CLEAR_SESSION_COOKIE_HEADER },

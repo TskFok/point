@@ -10,6 +10,7 @@ import {
   ApiParam,
   ApiQuery,
   ApiResponse,
+  ApiSecurity,
   type ApiBodyOptions,
   type ApiParamOptions,
   type ApiQueryOptions,
@@ -28,6 +29,7 @@ export type ApiContractOptions = {
   mutation?: boolean;
   csrf?: boolean;
   csrfDescription?: string;
+  optionalRefreshCookie?: boolean;
   bodyType?: Type<unknown>;
   body?: ApiBodyOptions;
   idempotent?: boolean;
@@ -69,6 +71,9 @@ export function ApiContract(options: ApiContractOptions): MethodDecorator {
   }
   if (options.authenticated) {
     decorators.push(ApiBearerAuth('bearerAuth'), ApiCookieAuth('cookieAuth'));
+  }
+  if (options.optionalRefreshCookie) {
+    decorators.push(ApiSecurity('refreshCookieAuth'), ApiSecurity({}));
   }
   if ((options.authenticated && options.mutation) || options.csrf) {
     decorators.push(
