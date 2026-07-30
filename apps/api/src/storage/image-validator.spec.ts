@@ -759,6 +759,41 @@ describe('validateProductImage', () => {
     expect([...decoded.data]).toEqual([255, 0, 0, 255, 0, 255, 0, 0]);
   });
 
+  it('读取 PNG eXIf orientation 后旋转，并保留颜色与 alpha 视觉语义但不复制元数据', async () => {
+    const uploaded = await sharp(Buffer.from([255, 0, 0, 255, 0, 255, 0, 64]), {
+      raw: { width: 2, height: 1, channels: 4 },
+    })
+      .withMetadata({ orientation: 6 })
+      .png()
+      .toBuffer();
+    expect(parsePngChunks(uploaded).map(({ type }) => type)).toEqual(
+      expect.arrayContaining(['eXIf', 'iCCP']),
+    );
+
+    const normalized = await normalizeProductImage(uploaded);
+    const metadata = await sharp(normalized.buffer).metadata();
+    const decoded = await sharp(normalized.buffer)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    expect(decoded.info).toMatchObject({
+      width: 1,
+      height: 2,
+      channels: 4,
+    });
+    expect([...decoded.data]).toEqual([255, 0, 0, 255, 0, 255, 0, 64]);
+    expect(metadata.orientation).toBeUndefined();
+    expect(metadata.exif).toBeUndefined();
+    expect(metadata.icc).toBeUndefined();
+    expect(metadata.xmp).toBeUndefined();
+    expect(
+      parsePngChunks(normalized.buffer).some(({ type }) =>
+        ['eXIf', 'iCCP', 'sPLT', 'tIME', 'tEXt', 'zTXt', 'iTXt'].includes(type),
+      ),
+    ).toBe(false);
+  });
+
   it('JPEG 自动应用 EXIF 方向并剥离 EXIF、ICC、XMP 等用户元数据', async () => {
     const uploaded = await sharp(Buffer.from([255, 0, 0, 0, 255, 0]), {
       raw: { width: 2, height: 1, channels: 3 },

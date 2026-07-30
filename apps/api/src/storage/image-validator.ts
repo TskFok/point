@@ -559,11 +559,7 @@ export async function validateProductImage(
   }
 
   try {
-    const decodeBuffer =
-      validated.extension === 'png'
-        ? pngDecodeBufferWithoutUserMetadata(buffer)
-        : buffer;
-    const decoder = sharp(decodeBuffer, {
+    const decoder = sharp(buffer, {
       failOn: 'warning',
       limitInputPixels: MAX_PRODUCT_IMAGE_PIXELS,
     });
@@ -584,28 +580,11 @@ export async function validateProductImage(
   return validated;
 }
 
-function pngDecodeBufferWithoutUserMetadata(buffer: Buffer): Buffer {
-  const keptChunks: Buffer[] = [buffer.subarray(0, 8)];
-  const visualChunkTypes = new Set(['IHDR', 'PLTE', 'tRNS', 'IDAT', 'IEND']);
-  let offset = 8;
-  while (offset < buffer.length) {
-    const chunkLength = buffer.readUInt32BE(offset);
-    const chunkEnd = offset + 12 + chunkLength;
-    const chunkType = buffer.toString('ascii', offset + 4, offset + 8);
-    if (visualChunkTypes.has(chunkType)) {
-      keptChunks.push(buffer.subarray(offset, chunkEnd));
-    }
-    offset = chunkEnd;
-  }
-  return Buffer.concat(keptChunks);
-}
-
 /**
  * 验证原上传容器后执行完整解码，并以相同格式重新编码为可持久化的规范化图片。
  *
  * JPEG/WebP 使用质量 85；PNG 使用无损压缩。`.rotate()` 应用 EXIF 方向，
- * Sharp 默认不复制 EXIF、ICC、XMP 或文本元数据。PNG 在解码前仅保留影响
- * 像素重建的核心块和 tRNS，避免畸形的非视觉 ancillary 元数据进入解码器。
+ * Sharp 默认不复制 EXIF、ICC、XMP 或文本元数据。
  */
 export async function validateAndNormalizeProductImage(
   buffer: Buffer,
@@ -620,14 +599,10 @@ export async function validateAndNormalizeProductImage(
     MAX_NORMALIZED_PRODUCT_IMAGE_SIZE,
   );
   const validated = await validateProductImage(buffer, maxBytes);
-  const decodeBuffer =
-    validated.extension === 'png'
-      ? pngDecodeBufferWithoutUserMetadata(buffer)
-      : buffer;
 
   let normalized: Buffer;
   try {
-    const pipeline = sharp(decodeBuffer, {
+    const pipeline = sharp(buffer, {
       failOn: 'warning',
       limitInputPixels: MAX_PRODUCT_IMAGE_PIXELS,
     }).rotate();
