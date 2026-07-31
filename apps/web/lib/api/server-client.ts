@@ -3,17 +3,14 @@ import "server-only";
 import { createApiClient } from "@point-quest/api-client";
 import { cookies } from "next/headers";
 
-function apiServerBaseUrl() {
-  const configured = process.env.API_SERVER_BASE_URL?.trim();
-  return (configured || "http://localhost:3000/api/v1").replace(/\/+$/, "");
-}
+import { getApiServerBaseUrl } from "./server-base-url";
 
 export async function createServerApiClient() {
   const cookieStore = await cookies();
   const cookieHeader = cookieStore.toString();
 
   return createApiClient({
-    baseUrl: apiServerBaseUrl(),
+    baseUrl: getApiServerBaseUrl(),
     fetch: (input, init) => {
       const headers = new Headers(init?.headers);
       if (cookieHeader) {
