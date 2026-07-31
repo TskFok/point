@@ -6,15 +6,19 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApiApp } from '../src/common/http/configure-api-app';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { createE2eRunId } from './e2e-run-id';
 
 const configuredWebOrigin = 'https://point-quest.example.test';
 const testJwtSecret =
   'point-quest-practice-concurrency-secret-at-least-32-bytes';
-const adminId = 'task5-concurrency-admin';
-const studentId = 'task5-concurrency-student';
-const questionId = 'task5-concurrency-question';
-const correctOptionId = 'task5-concurrency-correct';
-const wrongOptionId = 'task5-concurrency-wrong';
+const testRunId = createE2eRunId();
+const adminId = `task5-concurrency-admin-${testRunId}`;
+const studentId = `task5-concurrency-student-${testRunId}`;
+const questionId = `task5-concurrency-question-${testRunId}`;
+const correctOptionId = `task5-concurrency-correct-${testRunId}`;
+const wrongOptionId = `task5-concurrency-wrong-${testRunId}`;
+const adminUsername = `t5c_admin_${testRunId}`;
+const studentUsername = `t5c_student_${testRunId}`;
 const defaultTestDatabaseUrl =
   'postgresql://point:point@localhost:5433/point_test';
 
@@ -286,13 +290,13 @@ describe('首次答题真实数据库并发', () => {
       data: [
         {
           id: adminId,
-          username: 'task5_concurrency_admin',
+          username: adminUsername,
           passwordHash,
           role: 'ADMIN',
         },
         {
           id: studentId,
-          username: 'task5_concurrency_student',
+          username: studentUsername,
           passwordHash,
           role: 'STUDENT',
         },
@@ -330,7 +334,7 @@ describe('首次答题真实数据库并发', () => {
     const login = await request(server)
       .post('/api/v1/auth/token')
       .send({
-        username: 'task5_concurrency_student',
+        username: studentUsername,
         password: 'StrongPass123!',
       })
       .expect(201);
@@ -340,7 +344,7 @@ describe('首次答题真实数据库并发', () => {
     const adminLogin = await request(server)
       .post('/api/v1/auth/token')
       .send({
-        username: 'task5_concurrency_admin',
+        username: adminUsername,
         password: 'StrongPass123!',
       })
       .expect(201);

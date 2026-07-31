@@ -5,11 +5,15 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApiApp } from '../src/common/http/configure-api-app';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { createE2eRunId } from './e2e-run-id';
 
 const configuredWebOrigin = 'https://point-quest.example.test';
 const testJwtSecret = 'point-quest-question-e2e-secret-at-least-32-bytes';
-const adminId = 'task4-admin';
-const studentId = 'task4-student';
+const testRunId = createE2eRunId();
+const adminId = `task4-admin-${testRunId}`;
+const studentId = `task4-student-${testRunId}`;
+const adminUsername = `task4_admin_${testRunId}`;
+const studentUsername = `task4_student_${testRunId}`;
 const defaultTestDatabaseUrl =
   'postgresql://point:point@localhost:5433/point_test';
 
@@ -235,13 +239,13 @@ describe('管理员题库与积分倍率 API', () => {
       data: [
         {
           id: adminId,
-          username: 'task4_admin',
+          username: adminUsername,
           passwordHash,
           role: 'ADMIN',
         },
         {
           id: studentId,
-          username: 'task4_student',
+          username: studentUsername,
           passwordHash,
           role: 'STUDENT',
         },
@@ -250,11 +254,11 @@ describe('管理员题库与积分倍率 API', () => {
 
     const adminLogin = await request(server)
       .post('/api/v1/auth/token')
-      .send({ username: 'task4_admin', password: 'StrongPass123!' })
+      .send({ username: adminUsername, password: 'StrongPass123!' })
       .expect(201);
     const studentLogin = await request(server)
       .post('/api/v1/auth/token')
-      .send({ username: 'task4_student', password: 'StrongPass123!' })
+      .send({ username: studentUsername, password: 'StrongPass123!' })
       .expect(201);
     adminBearer = `Bearer ${
       (adminLogin.body as unknown as { accessToken: string }).accessToken
@@ -520,7 +524,7 @@ describe('管理员题库与积分倍率 API', () => {
     const question = createResponse.body as unknown as QuestionBody;
     await prisma.answerAttempt.create({
       data: {
-        id: 'task4-attempt',
+        id: `task4-attempt-${testRunId}`,
         userId: studentId,
         questionId: question.id,
         selectedOptionId: question.options[0].id,
@@ -592,7 +596,7 @@ describe('管理员题库与积分倍率 API', () => {
       async (tx) => {
         await tx.answerAttempt.create({
           data: {
-            id: 'task4-race-attempt',
+            id: `task4-race-attempt-${testRunId}`,
             userId: studentId,
             questionId: question.id,
             selectedOptionId: question.options[0].id,
@@ -708,7 +712,7 @@ describe('管理员题库与积分倍率 API', () => {
         expect(body).toMatchObject({
           multiplier: 3,
           updatedBy: adminId,
-          updater: { id: adminId, username: 'task4_admin' },
+          updater: { id: adminId, username: adminUsername },
         });
       });
     await request(server)
@@ -725,7 +729,7 @@ describe('管理员题库与积分倍率 API', () => {
         expect(body).toMatchObject({
           multiplier: 5,
           updatedBy: adminId,
-          updater: { id: adminId, username: 'task4_admin' },
+          updater: { id: adminId, username: adminUsername },
         });
       });
     expect(

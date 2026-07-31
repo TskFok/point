@@ -17,6 +17,7 @@ import { Roles } from '../src/auth/decorators/roles.decorator';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { hashRefreshToken } from '../src/auth/token-hash';
 import { seedAdminCredentials } from '../../../prisma/seed/users';
+import { createE2eRunId } from './e2e-run-id';
 
 @Controller('auth/admin-probe')
 class AdminProbeController {
@@ -41,17 +42,28 @@ class AdminProbeController {
 
 const testJwtSecret = 'point-quest-auth-e2e-secret-at-least-32-bytes';
 const configuredWebOrigin = 'https://point-quest.example.test';
+const testRunId = createE2eRunId();
+const learnerUsername = `learner_${testRunId}`;
+const bearerStudentUsername = `bearer_student_${testRunId}`;
+const bearerAdminUsername = `bearer_admin_${testRunId}`;
+const webStudentUsername = `web_student_${testRunId}`;
+const webRefreshStudentUsername = `web_refresh_${testRunId}`;
+const refreshStudentUsername = `refresh_student_${testRunId}`;
+const registerRaceUsername = `register_race_${testRunId}`;
+const refreshRaceUsername = `refresh_race_${testRunId}`;
+const expiredStudentUsername = `expired_student_${testRunId}`;
+const androidLogoutUsername = `android_logout_${testRunId}`;
 const testUsernames = [
-  'learner_01',
-  'bearer_student',
-  'bearer_admin',
-  'web_student',
-  'web_refresh_student',
-  'refresh_student',
-  'register_race',
-  'refresh_race',
-  'expired_student',
-  'android_logout',
+  learnerUsername,
+  bearerStudentUsername,
+  bearerAdminUsername,
+  webStudentUsername,
+  webRefreshStudentUsername,
+  refreshStudentUsername,
+  registerRaceUsername,
+  refreshRaceUsername,
+  expiredStudentUsername,
+  androidLogoutUsername,
 ];
 
 type ApiErrorBody = {
@@ -85,13 +97,13 @@ async function createWebAgent(
 ): Promise<ReturnType<typeof request.agent>> {
   await request(server)
     .post('/api/v1/auth/register')
-    .send({ username: 'web_student', password: 'StrongPass123!' })
+    .send({ username: webStudentUsername, password: 'StrongPass123!' })
     .expect(201);
 
   const webAgent = request.agent(server);
   await webAgent
     .post('/api/v1/auth/login')
-    .send({ username: 'web_student', password: 'StrongPass123!' })
+    .send({ username: webStudentUsername, password: 'StrongPass123!' })
     .expect(201);
   return webAgent;
 }
@@ -144,7 +156,7 @@ describe('认证 API', () => {
     await request(server)
       .post('/api/v1/auth/register')
       .send({
-        username: '  Learner_01  ',
+        username: `  ${learnerUsername.toUpperCase()}  `,
         password: 'StrongPass123!',
         role: 'ADMIN',
       })
@@ -152,7 +164,10 @@ describe('认证 API', () => {
 
     await request(server)
       .post('/api/v1/auth/register')
-      .send({ username: '  Learner_01  ', password: 'StrongPass123!' })
+      .send({
+        username: `  ${learnerUsername.toUpperCase()}  `,
+        password: 'StrongPass123!',
+      })
       .expect(201)
       .expect(({ body }) => {
         const responseBody = body as unknown as {
@@ -163,7 +178,7 @@ describe('认证 API', () => {
           };
         };
         expect(responseBody.user).toMatchObject({
-          username: 'learner_01',
+          username: learnerUsername,
           role: 'STUDENT',
         });
         expect(responseBody.user.passwordHash).toBeUndefined();
@@ -171,7 +186,7 @@ describe('认证 API', () => {
 
     await request(server)
       .post('/api/v1/auth/register')
-      .send({ username: 'learner_01', password: 'StrongPass123!' })
+      .send({ username: learnerUsername, password: 'StrongPass123!' })
       .expect(409)
       .expect((response) => {
         expectErrorContract(response, 'AUTH_USERNAME_TAKEN');
@@ -181,12 +196,12 @@ describe('认证 API', () => {
   it('学员 Bearer Token 访问管理员探针时返回 403', async () => {
     await request(server)
       .post('/api/v1/auth/register')
-      .send({ username: 'bearer_student', password: 'StrongPass123!' })
+      .send({ username: bearerStudentUsername, password: 'StrongPass123!' })
       .expect(201);
 
     const tokenResponse = await request(server)
       .post('/api/v1/auth/token')
-      .send({ username: 'bearer_student', password: 'StrongPass123!' })
+      .send({ username: bearerStudentUsername, password: 'StrongPass123!' })
       .expect(201);
 
     expect(tokenResponse.headers['set-cookie']).toBeUndefined();
@@ -203,24 +218,24 @@ describe('认证 API', () => {
   it('Bearer Token 优先于 Web Cookie 参与鉴权', async () => {
     await prisma.user.create({
       data: {
-        username: 'bearer_admin',
+        username: bearerAdminUsername,
         passwordHash: await hash('StrongPass123!', 12),
         role: 'ADMIN',
       },
     });
     await request(server)
       .post('/api/v1/auth/register')
-      .send({ username: 'bearer_student', password: 'StrongPass123!' })
+      .send({ username: bearerStudentUsername, password: 'StrongPass123!' })
       .expect(201);
 
     const adminToken = await request(server)
       .post('/api/v1/auth/token')
-      .send({ username: 'bearer_admin', password: 'StrongPass123!' })
+      .send({ username: bearerAdminUsername, password: 'StrongPass123!' })
       .expect(201);
     const studentAgent = request.agent(server);
     await studentAgent
       .post('/api/v1/auth/login')
-      .send({ username: 'bearer_student', password: 'StrongPass123!' })
+      .send({ username: bearerStudentUsername, password: 'StrongPass123!' })
       .expect(201);
 
     const adminTokenBody = adminToken.body as unknown as {
@@ -235,13 +250,13 @@ describe('认证 API', () => {
   it('Web Cookie 写请求缺少匹配 CSRF Header 时返回 403', async () => {
     await request(server)
       .post('/api/v1/auth/register')
-      .send({ username: 'web_student', password: 'StrongPass123!' })
+      .send({ username: webStudentUsername, password: 'StrongPass123!' })
       .expect(201);
 
     const webAgent = request.agent(server);
     const loginResponse = await webAgent
       .post('/api/v1/auth/login')
-      .send({ username: 'web_student', password: 'StrongPass123!' })
+      .send({ username: webStudentUsername, password: 'StrongPass123!' })
       .expect(201);
     const cookies = loginResponse.headers['set-cookie'] as unknown as string[];
     expect(cookies.some((cookie) => cookie.startsWith('pq_access='))).toBe(
@@ -320,36 +335,36 @@ describe('认证 API', () => {
     await request(server)
       .post('/api/v1/auth/register')
       .set('Cookie', staleCookies)
-      .send({ username: 'learner_01', password: 'StrongPass123!' })
+      .send({ username: learnerUsername, password: 'StrongPass123!' })
       .expect(201);
     await request(server)
       .post('/api/v1/auth/login')
       .set('Cookie', staleCookies)
-      .send({ username: 'learner_01', password: 'StrongPass123!' })
+      .send({ username: learnerUsername, password: 'StrongPass123!' })
       .expect(201);
     await request(server)
       .post('/api/v1/auth/token')
       .set('Cookie', staleCookies)
-      .send({ username: 'learner_01', password: 'StrongPass123!' })
+      .send({ username: learnerUsername, password: 'StrongPass123!' })
       .expect(201);
   });
 
   it('受保护 Cookie 写请求要求 CSRF，而 Bearer 鉴权不要求 CSRF', async () => {
     await request(server)
       .post('/api/v1/auth/register')
-      .send({ username: 'web_student', password: 'StrongPass123!' })
+      .send({ username: webStudentUsername, password: 'StrongPass123!' })
       .expect(201);
     const webAgent = request.agent(server);
     await webAgent
       .post('/api/v1/auth/login')
-      .send({ username: 'web_student', password: 'StrongPass123!' })
+      .send({ username: webStudentUsername, password: 'StrongPass123!' })
       .expect(201);
 
     await webAgent.post('/api/v1/auth/admin-probe/write').expect(403);
 
     const androidToken = await request(server)
       .post('/api/v1/auth/token')
-      .send({ username: 'web_student', password: 'StrongPass123!' })
+      .send({ username: webStudentUsername, password: 'StrongPass123!' })
       .expect(201);
     const tokenBody = androidToken.body as unknown as { accessToken: string };
     await webAgent
@@ -362,7 +377,7 @@ describe('认证 API', () => {
     await request(server)
       .post('/api/v1/auth/register')
       .send({
-        username: 'web_refresh_student',
+        username: webRefreshStudentUsername,
         password: 'StrongPass123!',
       })
       .expect(201);
@@ -371,7 +386,7 @@ describe('认证 API', () => {
     const loginResponse = await webAgent
       .post('/api/v1/auth/login')
       .send({
-        username: 'web_refresh_student',
+        username: webRefreshStudentUsername,
         password: 'StrongPass123!',
       })
       .expect(201);
@@ -395,7 +410,7 @@ describe('认证 API', () => {
           user: { id: string; username: string; role: string };
         };
         expect(responseBody.user).toMatchObject({
-          username: 'web_refresh_student',
+          username: webRefreshStudentUsername,
           role: 'STUDENT',
         });
         expect(responseBody.user.id).toEqual(expect.any(String));
@@ -411,7 +426,7 @@ describe('认证 API', () => {
       accessToken?: string;
       refreshToken?: string;
     };
-    expect(refreshBody.user.username).toBe('web_refresh_student');
+    expect(refreshBody.user.username).toBe(webRefreshStudentUsername);
     expect(refreshBody.accessToken).toBeUndefined();
     expect(refreshBody.refreshToken).toBeUndefined();
     expect(refreshResponse.headers['set-cookie']).toBeDefined();
@@ -425,12 +440,12 @@ describe('认证 API', () => {
   it('Android Body Refresh Token 优先于旧 Cookie 且数据库只保存 SHA-256 摘要', async () => {
     await request(server)
       .post('/api/v1/auth/register')
-      .send({ username: 'refresh_student', password: 'StrongPass123!' })
+      .send({ username: refreshStudentUsername, password: 'StrongPass123!' })
       .expect(201);
 
     const tokenResponse = await request(server)
       .post('/api/v1/auth/token')
-      .send({ username: 'refresh_student', password: 'StrongPass123!' })
+      .send({ username: refreshStudentUsername, password: 'StrongPass123!' })
       .expect(201);
     const tokenBody = tokenResponse.body as unknown as {
       refreshToken: string;
@@ -471,12 +486,14 @@ describe('认证 API', () => {
 
   it('并发注册与并发令牌轮换都只允许一个请求成功', async () => {
     const registrationResponses = await Promise.all([
-      request(server)
-        .post('/api/v1/auth/register')
-        .send({ username: 'Register_Race', password: 'StrongPass123!' }),
-      request(server)
-        .post('/api/v1/auth/register')
-        .send({ username: 'register_race', password: 'StrongPass123!' }),
+      request(server).post('/api/v1/auth/register').send({
+        username: registerRaceUsername.toUpperCase(),
+        password: 'StrongPass123!',
+      }),
+      request(server).post('/api/v1/auth/register').send({
+        username: registerRaceUsername,
+        password: 'StrongPass123!',
+      }),
     ]);
     expect(
       registrationResponses.map((response) => response.status).sort(),
@@ -484,11 +501,11 @@ describe('认证 API', () => {
 
     await request(server)
       .post('/api/v1/auth/register')
-      .send({ username: 'refresh_race', password: 'StrongPass123!' })
+      .send({ username: refreshRaceUsername, password: 'StrongPass123!' })
       .expect(201);
     const tokenResponse = await request(server)
       .post('/api/v1/auth/token')
-      .send({ username: 'refresh_race', password: 'StrongPass123!' })
+      .send({ username: refreshRaceUsername, password: 'StrongPass123!' })
       .expect(201);
     const tokenBody = tokenResponse.body as unknown as {
       refreshToken: string;
@@ -508,7 +525,7 @@ describe('认证 API', () => {
     await expect(
       prisma.refreshToken.count({
         where: {
-          user: { username: 'refresh_race' },
+          user: { username: refreshRaceUsername },
           revokedAt: null,
         },
       }),
@@ -516,9 +533,6 @@ describe('认证 API', () => {
   });
 
   it('种子管理员可使用既有九位密码登录', async () => {
-    await prisma.refreshToken.deleteMany({
-      where: { user: { username: seedAdminCredentials.username } },
-    });
     const adminPasswordHash = await hash(seedAdminCredentials.password, 12);
     await prisma.user.upsert({
       where: { username: seedAdminCredentials.username },
@@ -535,12 +549,13 @@ describe('认证 API', () => {
       },
     });
 
-    await request(server)
+    const tokenResponse = await request(server)
       .post('/api/v1/auth/token')
       .send(seedAdminCredentials)
       .expect(201);
-    await prisma.refreshToken.deleteMany({
-      where: { user: { username: seedAdminCredentials.username } },
+    const body = tokenResponse.body as unknown as { refreshToken: string };
+    await prisma.refreshToken.delete({
+      where: { tokenHash: hashRefreshToken(body.refreshToken) },
     });
   });
 
@@ -600,7 +615,7 @@ describe('认证 API', () => {
   it('过期 Access Token 返回稳定 AUTH_TOKEN_EXPIRED', async () => {
     const user = await prisma.user.create({
       data: {
-        username: 'expired_student',
+        username: expiredStudentUsername,
         passwordHash: await hash('StrongPass123!', 12),
         role: 'STUDENT',
       },
@@ -641,11 +656,11 @@ describe('认证 API', () => {
   it('Access Token 为 15 分钟且 Refresh Token 为 30 天', async () => {
     await request(server)
       .post('/api/v1/auth/register')
-      .send({ username: 'refresh_student', password: 'StrongPass123!' })
+      .send({ username: refreshStudentUsername, password: 'StrongPass123!' })
       .expect(201);
     const tokenResponse = await request(server)
       .post('/api/v1/auth/token')
-      .send({ username: 'refresh_student', password: 'StrongPass123!' })
+      .send({ username: refreshStudentUsername, password: 'StrongPass123!' })
       .expect(201);
     const tokenBody = tokenResponse.body as unknown as {
       accessToken: string;
@@ -675,13 +690,13 @@ describe('认证 API', () => {
   it('生产 Web Cookie 使用 Secure、HttpOnly 与 SameSite=Lax', async () => {
     await request(server)
       .post('/api/v1/auth/register')
-      .send({ username: 'web_student', password: 'StrongPass123!' })
+      .send({ username: webStudentUsername, password: 'StrongPass123!' })
       .expect(201);
     process.env.NODE_ENV = 'production';
     try {
       const loginResponse = await request(server)
         .post('/api/v1/auth/login')
-        .send({ username: 'web_student', password: 'StrongPass123!' })
+        .send({ username: webStudentUsername, password: 'StrongPass123!' })
         .expect(201);
       const cookies = loginResponse.headers[
         'set-cookie'
@@ -727,11 +742,11 @@ describe('认证 API', () => {
   it('Android JSON logout 优先使用 Body Token 且不发送 Cookie 清理头', async () => {
     await request(server)
       .post('/api/v1/auth/register')
-      .send({ username: 'android_logout', password: 'StrongPass123!' })
+      .send({ username: androidLogoutUsername, password: 'StrongPass123!' })
       .expect(201);
     const tokenResponse = await request(server)
       .post('/api/v1/auth/token')
-      .send({ username: 'android_logout', password: 'StrongPass123!' })
+      .send({ username: androidLogoutUsername, password: 'StrongPass123!' })
       .expect(201);
     const tokenBody = tokenResponse.body as unknown as {
       refreshToken: string;

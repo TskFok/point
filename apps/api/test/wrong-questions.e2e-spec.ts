@@ -2,15 +2,15 @@ import { type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Prisma } from '@prisma/client';
 import { hash } from 'bcryptjs';
-import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApiApp } from '../src/common/http/configure-api-app';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { createE2eRunId } from './e2e-run-id';
 
 const configuredWebOrigin = 'https://point-quest.example.test';
 const testJwtSecret = 'point-quest-task6-e2e-secret-at-least-32-bytes';
-const testRunId = randomUUID().replaceAll('-', '').slice(0, 10);
+const testRunId = createE2eRunId();
 const adminId = `task6-admin-${testRunId}`;
 const studentId = `task6-student-${testRunId}`;
 const otherStudentId = `task6-other-student-${testRunId}`;

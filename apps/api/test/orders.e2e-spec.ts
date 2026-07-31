@@ -5,14 +5,20 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApiApp } from '../src/common/http/configure-api-app';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { createE2eRunId } from './e2e-run-id';
 
 const webOrigin = 'https://point-quest.example.test';
 const jwtSecret = 'point-quest-orders-e2e-secret-at-least-32-bytes';
 const defaultTestDatabaseUrl =
   'postgresql://point:point@localhost:5433/point_test';
-const adminId = 'task8-admin';
-const studentId = 'task8-student';
-const otherStudentId = 'task8-other-student';
+const testRunId = createE2eRunId();
+const productIdPrefix = `task8-${testRunId}-`;
+const adminId = `task8-admin-${testRunId}`;
+const studentId = `task8-student-${testRunId}`;
+const otherStudentId = `task8-other-student-${testRunId}`;
+const adminUsername = `task8_admin_${testRunId}`;
+const studentUsername = `task8_student_${testRunId}`;
+const otherStudentUsername = `task8_other_${testRunId}`;
 const imageKey = 'products/123e4567-e89b-42d3-a456-426614174000.png';
 
 type ApiErrorBody = {
@@ -108,12 +114,12 @@ describe('兑换订单 API', () => {
       where: {
         OR: [
           { userId: { in: [studentId, otherStudentId] } },
-          { productId: { startsWith: 'task8-' } },
+          { productId: { startsWith: productIdPrefix } },
         ],
       },
     });
     await prisma.product.deleteMany({
-      where: { id: { startsWith: 'task8-' } },
+      where: { id: { startsWith: productIdPrefix } },
     });
     await prisma.refreshToken.deleteMany({
       where: { userId: { in: [adminId, studentId, otherStudentId] } },
@@ -144,7 +150,7 @@ describe('兑换订单 API', () => {
   ) {
     return requirePrisma().product.create({
       data: {
-        id,
+        id: `${productIdPrefix}${id}`,
         name: overrides.name ?? `Task 8 Product ${id}`,
         description: 'Order test reward',
         imageKey,
@@ -191,29 +197,29 @@ describe('兑换订单 API', () => {
       data: [
         {
           id: adminId,
-          username: 'task8_admin',
+          username: adminUsername,
           passwordHash,
           role: 'ADMIN',
         },
         {
           id: studentId,
-          username: 'task8_student',
+          username: studentUsername,
           passwordHash,
           role: 'STUDENT',
           pointsBalance: 100,
         },
         {
           id: otherStudentId,
-          username: 'task8_student_similar',
+          username: otherStudentUsername,
           passwordHash,
           role: 'STUDENT',
           pointsBalance: 100,
         },
       ],
     });
-    adminBearer = await login('task8_admin');
-    studentBearer = await login('task8_student');
-    otherStudentBearer = await login('task8_student_similar');
+    adminBearer = await login(adminUsername);
+    studentBearer = await login(studentUsername);
+    otherStudentBearer = await login(otherStudentUsername);
   });
 
   afterAll(async () => {
@@ -458,7 +464,7 @@ describe('兑换订单 API', () => {
     const filtered = await request(requireServer())
       .get('/api/v1/admin/orders')
       .query({
-        username: 'task8_student',
+        username: studentUsername,
         orderNo: first.orderNo,
         status: 'PENDING_PICKUP',
         createdFrom: boundary.toISOString(),
@@ -486,7 +492,7 @@ describe('兑换订单 API', () => {
     expect(body.data).toHaveLength(1);
     expect(body.data[0]).toMatchObject({
       id: first.id,
-      user: { id: studentId, username: 'task8_student' },
+      user: { id: studentId, username: studentUsername },
     });
 
     await request(requireServer())
@@ -496,7 +502,7 @@ describe('兑换订单 API', () => {
       .expect(({ body: detail }) => {
         expect(detail).toMatchObject({
           id: first.id,
-          user: { id: studentId, username: 'task8_student' },
+          user: { id: studentId, username: studentUsername },
         });
       });
   });

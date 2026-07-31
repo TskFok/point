@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Client } from 'pg';
+import { createE2eRunId } from './e2e-run-id';
 
 const testDatabaseUrl =
   process.env.TEST_DATABASE_URL ??
@@ -10,12 +11,16 @@ const testDatabaseUrl =
 const adapter = new PrismaPg({ connectionString: testDatabaseUrl });
 const prisma = new PrismaClient({ adapter });
 
-const schemaUserId = 'schema-test-user';
-const schemaQuestionId = 'schema-test-question';
-const auditCreatorId = 'schema-audit-creator';
-const auditStudentId = 'schema-audit-student';
-const auditQuestionId = 'schema-audit-question';
-const auditOptionId = 'schema-audit-option';
+const testRunId = createE2eRunId();
+const schemaUserId = `schema-test-user-${testRunId}`;
+const schemaQuestionId = `schema-test-question-${testRunId}`;
+const auditCreatorId = `schema-audit-creator-${testRunId}`;
+const auditStudentId = `schema-audit-student-${testRunId}`;
+const auditQuestionId = `schema-audit-question-${testRunId}`;
+const auditOptionId = `schema-audit-option-${testRunId}`;
+const schemaUsername = `schema_user_${testRunId}`;
+const auditCreatorUsername = `schema_creator_${testRunId}`;
+const auditStudentUsername = `schema_student_${testRunId}`;
 const errorCountMigrationPath = resolve(
   __dirname,
   '../../../prisma/migrations/0004_add_answer_attempt_error_count_snapshot/migration.sql',
@@ -74,7 +79,7 @@ describe('数据库 Schema 不变量', () => {
     const user = await prisma.user.create({
       data: {
         id: schemaUserId,
-        username: 'schema_user',
+        username: schemaUsername,
         passwordHash: 'hash',
         role: 'STUDENT',
       },
@@ -121,13 +126,13 @@ describe('数据库 Schema 不变量', () => {
       data: [
         {
           id: auditCreatorId,
-          username: 'schema_audit_creator',
+          username: auditCreatorUsername,
           passwordHash: 'hash',
           role: 'ADMIN',
         },
         {
           id: auditStudentId,
-          username: 'schema_audit_student',
+          username: auditStudentUsername,
           passwordHash: 'hash',
           role: 'STUDENT',
         },
@@ -164,7 +169,7 @@ describe('数据库 Schema 不变量', () => {
         pointsAwarded: 0,
         balanceAfterSnapshot: 0,
         errorCountSnapshot: 1,
-        idempotencyKey: 'schema-audit-attempt',
+        idempotencyKey: `schema-audit-attempt-${testRunId}`,
       },
     });
 

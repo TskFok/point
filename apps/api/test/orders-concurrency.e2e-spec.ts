@@ -7,11 +7,16 @@ import { AppModule } from '../src/app.module';
 import { configureApiApp } from '../src/common/http/configure-api-app';
 import { classifyOrderDatabaseConflict } from '../src/orders/orders.service';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { createE2eRunId } from './e2e-run-id';
 
 const defaultTestDatabaseUrl =
   'postgresql://point:point@localhost:5433/point_test';
-const userId = 'task8-concurrency-student';
-const adminId = 'task8-concurrency-admin';
+const testRunId = createE2eRunId();
+const productIdPrefix = `task8-concurrency-${testRunId}-`;
+const userId = `task8-concurrency-student-${testRunId}`;
+const adminId = `task8-concurrency-admin-${testRunId}`;
+const studentUsername = `t8c_student_${testRunId}`;
+const adminUsername = `t8c_admin_${testRunId}`;
 const imageKey = 'products/123e4567-e89b-42d3-a456-426614174000.png';
 
 function assertAuthorizedTestDatabase(databaseUrl: string): void {
@@ -43,11 +48,11 @@ describe('订单资产并发', () => {
     });
     await prisma.order.deleteMany({
       where: {
-        OR: [{ userId }, { productId: { startsWith: 'task8-concurrency-' } }],
+        OR: [{ userId }, { productId: { startsWith: productIdPrefix } }],
       },
     });
     await prisma.product.deleteMany({
-      where: { id: { startsWith: 'task8-concurrency-' } },
+      where: { id: { startsWith: productIdPrefix } },
     });
     await prisma.refreshToken.deleteMany({
       where: { userId: { in: [userId, adminId] } },
@@ -70,7 +75,7 @@ describe('订单资产并发', () => {
   async function createProduct(id: string, stock: number, pointsCost: number) {
     return prisma.product.create({
       data: {
-        id,
+        id: `${productIdPrefix}${id}`,
         name: `Task 8 Concurrent ${id}`,
         description: 'Concurrent order reward',
         imageKey,
@@ -142,21 +147,21 @@ describe('订单资产并发', () => {
       data: [
         {
           id: userId,
-          username: 'task8_concurrency_student',
+          username: studentUsername,
           passwordHash,
           role: 'STUDENT',
           pointsBalance: 200,
         },
         {
           id: adminId,
-          username: 'task8_concurrency_admin',
+          username: adminUsername,
           passwordHash,
           role: 'ADMIN',
         },
       ],
     });
-    studentBearer = await login('task8_concurrency_student');
-    adminBearer = await login('task8_concurrency_admin');
+    studentBearer = await login(studentUsername);
+    adminBearer = await login(adminUsername);
   });
 
   afterAll(async () => {

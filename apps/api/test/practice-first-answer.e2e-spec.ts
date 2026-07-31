@@ -5,12 +5,17 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApiApp } from '../src/common/http/configure-api-app';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { createE2eRunId } from './e2e-run-id';
 
 const configuredWebOrigin = 'https://point-quest.example.test';
 const testJwtSecret = 'point-quest-practice-e2e-secret-at-least-32-bytes';
-const adminId = 'task5-admin';
-const studentId = 'task5-student';
-const otherStudentId = 'task5-other-student';
+const testRunId = createE2eRunId();
+const adminId = `task5-admin-${testRunId}`;
+const studentId = `task5-student-${testRunId}`;
+const otherStudentId = `task5-other-student-${testRunId}`;
+const adminUsername = `task5_admin_${testRunId}`;
+const studentUsername = `task5_student_${testRunId}`;
+const otherStudentUsername = `task5_other_${testRunId}`;
 const defaultTestDatabaseUrl =
   'postgresql://point:point@localhost:5433/point_test';
 
@@ -157,7 +162,7 @@ describe('随机首次答题与积分 API', () => {
     } = {},
   ): Promise<QuestionFixture> {
     questionSequence += 1;
-    const id = `task5-question-${questionSequence}`;
+    const id = `task5-question-${testRunId}-${questionSequence}`;
     const correctOptionId = `${id}-correct`;
     const wrongOptionId = `${id}-wrong`;
     await prisma.question.create({
@@ -242,19 +247,19 @@ describe('随机首次答题与积分 API', () => {
       data: [
         {
           id: adminId,
-          username: 'task5_admin',
+          username: adminUsername,
           passwordHash,
           role: 'ADMIN',
         },
         {
           id: studentId,
-          username: 'task5_student',
+          username: studentUsername,
           passwordHash,
           role: 'STUDENT',
         },
         {
           id: otherStudentId,
-          username: 'task5_other_student',
+          username: otherStudentUsername,
           passwordHash,
           role: 'STUDENT',
         },
@@ -263,11 +268,11 @@ describe('随机首次答题与积分 API', () => {
 
     const adminLogin = await request(server)
       .post('/api/v1/auth/token')
-      .send({ username: 'task5_admin', password: 'StrongPass123!' })
+      .send({ username: adminUsername, password: 'StrongPass123!' })
       .expect(201);
     const studentLogin = await request(server)
       .post('/api/v1/auth/token')
-      .send({ username: 'task5_student', password: 'StrongPass123!' })
+      .send({ username: studentUsername, password: 'StrongPass123!' })
       .expect(201);
     adminBearer = `Bearer ${
       (adminLogin.body as unknown as { accessToken: string }).accessToken

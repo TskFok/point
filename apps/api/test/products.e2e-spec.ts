@@ -12,16 +12,22 @@ import { configureApiApp } from '../src/common/http/configure-api-app';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { configureLocalStaticFiles } from '../src/storage/local-static-files';
 import { disposeE2eResources } from './e2e-resource-lifecycle';
+import { createE2eRunId } from './e2e-run-id';
 
 const webOrigin = 'https://point-quest.example.test';
 const jwtSecret = 'point-quest-product-e2e-secret-at-least-32-bytes';
 const defaultTestDatabaseUrl =
   'postgresql://point:point@localhost:5433/point_test';
-const adminId = 'task7-admin';
-const studentId = 'task7-student';
-const activeProductId = 'task7-product-active';
-const inactiveProductId = 'task7-product-inactive';
-const secondActiveProductId = 'task7-product-active-second';
+const testRunId = createE2eRunId();
+const productIdPrefix = `task7-${testRunId}-`;
+const adminId = `task7-admin-${testRunId}`;
+const studentId = `task7-student-${testRunId}`;
+const adminUsername = `task7_admin_${testRunId}`;
+const studentUsername = `task7_student_${testRunId}`;
+const activeProductId = `${productIdPrefix}product-active`;
+const inactiveProductId = `${productIdPrefix}product-inactive`;
+const secondActiveProductId = `${productIdPrefix}product-active-second`;
+const vocabularyBadgeName = `Vocabulary Badge ${testRunId}`;
 const trustedImageKey = 'products/123e4567-e89b-42d3-a456-426614174000.png';
 const maxImageSize = 5 * 1024 * 1024;
 const validPng = Buffer.from(
@@ -115,7 +121,7 @@ function assertAuthorizedTestDatabase(databaseUrl: string): void {
 
 function validProduct(overrides: Record<string, unknown> = {}) {
   return {
-    name: '  Vocabulary Badge  ',
+    name: `  ${vocabularyBadgeName}  `,
     description: '  A learner reward.  ',
     imageKey: trustedImageKey,
     stock: 3,
@@ -143,9 +149,8 @@ describe('商品、库存与图片上传 API', () => {
       await database.product.findMany({
         where: {
           OR: [
-            { id: { startsWith: 'task7-' } },
-            { name: { startsWith: 'Task 7 ' } },
-            { name: 'Vocabulary Badge' },
+            { id: { startsWith: productIdPrefix } },
+            { name: { contains: testRunId } },
           ],
         },
         select: { id: true },
@@ -283,20 +288,20 @@ describe('商品、库存与图片上传 API', () => {
       data: [
         {
           id: adminId,
-          username: 'task7_admin',
+          username: adminUsername,
           passwordHash,
           role: 'ADMIN',
         },
         {
           id: studentId,
-          username: 'task7_student',
+          username: studentUsername,
           passwordHash,
           role: 'STUDENT',
         },
       ],
     });
-    adminBearer = await login('task7_admin');
-    studentBearer = await login('task7_student');
+    adminBearer = await login(adminUsername);
+    studentBearer = await login(studentUsername);
   });
 
   afterAll(async () => {
@@ -308,7 +313,7 @@ describe('商品、库存与图片上传 API', () => {
       data: [
         {
           id: activeProductId,
-          name: 'Task 7 Active',
+          name: `Task 7 Active ${testRunId}`,
           description: 'Visible',
           imageKey: trustedImageKey,
           stock: 2,
@@ -317,7 +322,7 @@ describe('商品、库存与图片上传 API', () => {
         },
         {
           id: inactiveProductId,
-          name: 'Task 7 Inactive',
+          name: `Task 7 Inactive ${testRunId}`,
           description: 'Hidden',
           imageKey: trustedImageKey,
           stock: 2,
@@ -326,7 +331,7 @@ describe('商品、库存与图片上传 API', () => {
         },
         {
           id: secondActiveProductId,
-          name: 'Task 7 Active Second',
+          name: `Task 7 Active Second ${testRunId}`,
           description: 'Visible',
           imageKey: trustedImageKey,
           stock: 0,
@@ -404,7 +409,7 @@ describe('商品、库存与图片上传 API', () => {
       .expect(201);
     const first = firstResponse.body as unknown as ProductBody;
     expect(first).toMatchObject({
-      name: 'Vocabulary Badge',
+      name: vocabularyBadgeName,
       description: 'A learner reward.',
       imageKey: trustedImageKey,
       stock: 3,
@@ -417,7 +422,7 @@ describe('商品、库存与图片上传 API', () => {
       .set('Authorization', adminBearer)
       .send(
         validProduct({
-          name: 'Task 7 Hidden Badge',
+          name: `Task 7 Hidden Badge ${testRunId}`,
           isActive: false,
           pointsCost: 0,
         }),
@@ -426,7 +431,7 @@ describe('商品、库存与图片上传 API', () => {
 
     const list = await request(requireServer())
       .get('/api/v1/admin/products')
-      .query({ search: 'badge', isActive: true, page: 1, pageSize: 1 })
+      .query({ search: testRunId, isActive: true, page: 1, pageSize: 1 })
       .set('Authorization', adminBearer)
       .expect(200);
     expect(list.body).toMatchObject({
@@ -454,7 +459,7 @@ describe('商品、库存与图片上传 API', () => {
       .expect(({ body }) => {
         expect(body as unknown as ProductBody).toMatchObject({
           id: first.id,
-          name: 'Vocabulary Badge',
+          name: vocabularyBadgeName,
           description: 'Updated reward.',
           stock: 8,
           pointsCost: 30,
@@ -496,7 +501,7 @@ describe('商品、库存与图片上传 API', () => {
     const product = await requirePrisma().product.create({
       data: {
         id: activeProductId,
-        name: 'Task 7 Active',
+        name: `Task 7 Active ${testRunId}`,
         description: 'Visible',
         imageKey: trustedImageKey,
         stock: 1,
@@ -529,7 +534,7 @@ describe('商品、库存与图片上传 API', () => {
     await requirePrisma().product.create({
       data: {
         id: activeProductId,
-        name: 'Task 7 Concurrent',
+        name: `Task 7 Concurrent ${testRunId}`,
         description: 'Concurrent validation',
         imageKey: trustedImageKey,
         stock: 1,
