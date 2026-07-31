@@ -86,6 +86,20 @@ export class HealthResponseDto {
   service!: 'point-quest-api';
 }
 
+export class AdminDashboardDto {
+  @ApiProperty({ ...int32, minimum: 0 })
+  activeQuestionCount!: number;
+
+  @ApiProperty({ ...int32, minimum: 0 })
+  todayAnswerCount!: number;
+
+  @ApiProperty({ ...int32, minimum: 0 })
+  pendingOrderCount!: number;
+
+  @ApiProperty({ ...int32, minimum: 0 })
+  activeProductCount!: number;
+}
+
 export class LoginRequestDto {
   @ApiProperty({ minLength: 1, maxLength: 32, example: 'student_01' })
   username!: string;
@@ -363,6 +377,14 @@ export class PointConfigDto {
     nullable: true,
   })
   updater!: PointConfigUpdaterDto | null;
+}
+
+export class PointConfigListResponseDto {
+  @ApiProperty({ type: () => [PointConfigDto] })
+  data!: PointConfigDto[];
+
+  @ApiProperty({ type: () => PageMetaDto })
+  meta!: PageMetaDto;
 }
 
 export class UpdatePointConfigRequestDto {

@@ -22,6 +22,7 @@ type ValidBinding = {
 }[ApiPath];
 
 export const operationRegistry = {
+  adminGetDashboard: { path: "/api/v1/admin/dashboard", method: "GET" },
   adminListOrders: { path: "/api/v1/admin/orders", method: "GET" },
   adminGetOrder: {
     path: "/api/v1/admin/orders/{orderId}",
@@ -37,6 +38,10 @@ export const operationRegistry = {
   },
   adminGetPointConfig: {
     path: "/api/v1/admin/points/config",
+    method: "GET",
+  },
+  adminListPointConfigHistory: {
+    path: "/api/v1/admin/points/config/history",
     method: "GET",
   },
   adminUpdatePointConfig: {
@@ -136,11 +141,9 @@ type SuccessBodyOf<Name extends OperationName> = JsonContentOf<
 >;
 
 type IsOptionalObject<Value> = object extends Value ? true : false;
-type Option<
-  Key extends string,
+type Option<Key extends string, Value, Optional extends boolean = false> = [
   Value,
-  Optional extends boolean = false,
-> = [Value] extends [never]
+] extends [never]
   ? { [Property in Key]?: never }
   : Optional extends true
     ? { [Property in Key]?: Value }
@@ -385,6 +388,9 @@ export function createApiClient(options: ApiClientOptions) {
   return {
     getHealth: () => request("healthGet", {}),
 
+    getAdminDashboard: () =>
+      request("adminGetDashboard", { authMode: "authenticated" }),
+
     register: (input: JsonBodyOf<"authRegister">) =>
       request("authRegister", { body: input }),
     loginWeb: (input: JsonBodyOf<"authLoginWeb">) =>
@@ -424,9 +430,7 @@ export function createApiClient(options: ApiClientOptions) {
     },
     logout: (input: JsonBodyOf<"authLogout"> = {}) =>
       request("authLogout", {
-        authMode: input.refreshToken
-          ? "body-refresh-token"
-          : "refresh-cookie",
+        authMode: input.refreshToken ? "body-refresh-token" : "refresh-cookie",
         body: input,
       }),
     getCurrentUser: () =>
@@ -462,7 +466,9 @@ export function createApiClient(options: ApiClientOptions) {
     getRandomQuestion: (excludeIds: string[] = []) =>
       request("practiceGetRandomQuestion", {
         authMode: "authenticated",
-        query: { excludeIds: excludeIds.length ? excludeIds.join(",") : undefined },
+        query: {
+          excludeIds: excludeIds.length ? excludeIds.join(",") : undefined,
+        },
       }),
     answerQuestion: (
       questionId: string,
@@ -500,12 +506,17 @@ export function createApiClient(options: ApiClientOptions) {
 
     getPointBalance: () =>
       request("pointsGetBalance", { authMode: "authenticated" }),
-    listPointLedger: (
-      query: ParameterOf<"pointsListLedger", "query"> = {},
-    ) =>
+    listPointLedger: (query: ParameterOf<"pointsListLedger", "query"> = {}) =>
       request("pointsListLedger", { authMode: "authenticated", query }),
     getAdminPointConfig: () =>
       request("adminGetPointConfig", { authMode: "authenticated" }),
+    listAdminPointConfigHistory: (
+      query: ParameterOf<"adminListPointConfigHistory", "query"> = {},
+    ) =>
+      request("adminListPointConfigHistory", {
+        authMode: "authenticated",
+        query,
+      }),
     updateAdminPointConfig: (input: JsonBodyOf<"adminUpdatePointConfig">) =>
       request("adminUpdatePointConfig", {
         authMode: "authenticated",
@@ -564,9 +575,7 @@ export function createApiClient(options: ApiClientOptions) {
         authMode: "authenticated",
         pathParams: { orderId },
       }),
-    listAdminOrders: (
-      query: ParameterOf<"adminListOrders", "query"> = {},
-    ) =>
+    listAdminOrders: (query: ParameterOf<"adminListOrders", "query"> = {}) =>
       request("adminListOrders", { authMode: "authenticated", query }),
     getAdminOrder: (orderId: string) =>
       request("adminGetOrder", {

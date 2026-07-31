@@ -1,13 +1,15 @@
-import { Body, Controller, Get, Put } from '@nestjs/common';
+import { Body, Controller, Get, Put, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { type RequestUser } from '../auth/strategies/access-token.strategy';
-import { ApiContract } from '../openapi/api-contract.decorator';
+import { ApiContract, pageQueries } from '../openapi/api-contract.decorator';
 import {
   PointConfigDto,
+  PointConfigListResponseDto,
   UpdatePointConfigRequestDto,
 } from '../openapi/api-contract.models';
+import { ListPointConfigHistoryDto } from './dto/list-point-config-history.dto';
 import { UpdatePointConfigDto } from './dto/update-point-config.dto';
 import { PointsService } from './points.service';
 
@@ -26,6 +28,18 @@ export class AdminPointsController {
   })
   getConfig() {
     return this.pointsService.getCurrentConfig();
+  }
+
+  @Get('config/history')
+  @ApiContract({
+    operationId: 'adminListPointConfigHistory',
+    summary: '分页查询积分倍率配置历史',
+    responseType: PointConfigListResponseDto,
+    authenticated: true,
+    queries: pageQueries,
+  })
+  listConfigHistory(@Query() query: ListPointConfigHistoryDto) {
+    return this.pointsService.listConfigHistory(query.page, query.pageSize);
   }
 
   @Put('config')

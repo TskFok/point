@@ -1,35 +1,156 @@
+"use client";
+
+import type { ApiClient, ApiComponents } from "@point-quest/api-client";
 import { Card } from "@point-quest/ui";
-import { Boxes, ClipboardCheck, LibraryBig } from "lucide-react";
+import {
+  Boxes,
+  CircleGauge,
+  ClipboardCheck,
+  LibraryBig,
+  LoaderCircle,
+} from "lucide-react";
+import Link from "next/link";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-const modules = [
-  { icon: LibraryBig, title: "题库管理", text: "维护英语选择题与答案" },
-  { icon: Boxes, title: "商品管理", text: "配置库存、图片与积分价格" },
-  { icon: ClipboardCheck, title: "订单管理", text: "处理兑换与领取状态" },
-];
+import { AsyncError } from "@/components/feedback/async-error";
+import { browserApiClient } from "@/lib/api/browser-client";
+import { getApiErrorMessage } from "@/lib/api/error-message";
 
-export default function AdminPage() {
+type Dashboard = ApiComponents["schemas"]["AdminDashboardDto"];
+type DashboardApi = Pick<ApiClient, "getAdminDashboard">;
+
+const dashboardCards = [
+  {
+    key: "activeQuestionCount",
+    label: "启用题目",
+    helper: "当前可进入首次练习的题目",
+    href: "/admin/questions?isActive=true",
+    Icon: LibraryBig,
+    tone: "primary",
+  },
+  {
+    key: "todayAnswerCount",
+    label: "今日答题",
+    helper: "Asia/Shanghai 今日提交次数",
+    href: "/admin/questions",
+    Icon: CircleGauge,
+    tone: "success",
+  },
+  {
+    key: "pendingOrderCount",
+    label: "待领取订单",
+    helper: "需要确认交付或处理的订单",
+    href: "/admin/orders?status=PENDING_PICKUP",
+    Icon: ClipboardCheck,
+    tone: "warning",
+  },
+  {
+    key: "activeProductCount",
+    label: "上架商品",
+    helper: "商城中当前可兑换的奖励",
+    href: "/admin/products?isActive=true",
+    Icon: Boxes,
+    tone: "reward",
+  },
+] as const;
+
+export default function AdminDashboardPage({
+  api = browserApiClient,
+}: {
+  api?: DashboardApi;
+} = {}) {
+  const [dashboard, setDashboard] = useState<Dashboard | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const loaded = useRef(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      setDashboard(await api.getAdminDashboard());
+    } catch (caught) {
+      setError(getApiErrorMessage(caught));
+    } finally {
+      setLoading(false);
+    }
+  }, [api]);
+
+  useEffect(() => {
+    if (loaded.current) return;
+    loaded.current = true;
+    void load();
+  }, [load]);
+
   return (
-    <section className="placeholder-page">
-      <div className="page-heading">
+    <section className="admin-page">
+      <div className="page-heading page-heading--split">
         <div>
           <p className="page-kicker">运营概览</p>
-          <h1>管理 Point Quest</h1>
-          <p>管理功能将在后续阶段逐步接入，当前先提供安全的角色框架。</p>
+          <h1>今天的学习运营一目了然</h1>
+          <p>数据实时来自题库、答题、订单和商品模块。</p>
+        </div>
+        <div className="dashboard-timezone">
+          <CircleGauge aria-hidden="true" />
+          <span>今日口径</span>
+          <strong>Asia/Shanghai</strong>
         </div>
       </div>
-      <div className="module-grid">
-        {modules.map((module) => {
-          const Icon = module.icon;
-          return (
-            <Card className="module-card" key={module.title}>
-              <Icon aria-hidden="true" />
-              <h2>{module.title}</h2>
-              <p>{module.text}</p>
-              <span>即将接入</span>
-            </Card>
-          );
-        })}
-      </div>
+
+      {loading ? (
+        <Card aria-live="polite" className="page-loading" role="status">
+          <LoaderCircle aria-hidden="true" className="spin" />
+          正在汇总运营数据
+        </Card>
+      ) : error ? (
+        <AsyncError message={error} onRetry={() => void load()} />
+      ) : dashboard ? (
+        <div className="admin-dashboard-grid">
+          {dashboardCards.map((card) => {
+            const Icon = card.Icon;
+            return (
+              <Link
+                className={`admin-dashboard-card admin-dashboard-card--${card.tone}`}
+                href={card.href}
+                key={card.key}
+              >
+                <span className="admin-dashboard-card__icon">
+                  <Icon aria-hidden="true" />
+                </span>
+                <div>
+                  <p>{card.label}</p>
+                  <strong>{dashboard[card.key]}</strong>
+                  <small>{card.helper}</small>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      ) : null}
+
+      <Card className="admin-quick-actions">
+        <div>
+          <p className="page-kicker">快捷操作</p>
+          <h2>继续维护学习体验</h2>
+        </div>
+        <div className="admin-quick-actions__links">
+          <Link
+            className="pq-button pq-button--primary"
+            href="/admin/questions/new"
+          >
+            添加英语题目
+          </Link>
+          <Link
+            className="pq-button pq-button--secondary"
+            href="/admin/products"
+          >
+            管理商城商品
+          </Link>
+          <Link className="pq-button pq-button--secondary" href="/admin/points">
+            调整积分倍率
+          </Link>
+        </div>
+      </Card>
     </section>
   );
 }

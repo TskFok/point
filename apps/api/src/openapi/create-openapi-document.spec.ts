@@ -113,19 +113,71 @@ describe('OpenAPI 契约', () => {
 
   afterAll(async () => close());
 
-  it('完整覆盖 28 个路径下 33 个稳定 operationId 的版本化路由', () => {
+  it('完整覆盖 30 个路径下 35 个稳定 operationId 的版本化路由', () => {
     const allOperations = operations(document);
     const operationIds = allOperations.map(
       (operation) => operation.operationId,
     );
 
-    expect(Object.keys(document.paths)).toHaveLength(28);
-    expect(allOperations).toHaveLength(33);
-    expect(new Set(operationIds).size).toBe(33);
+    expect(Object.keys(document.paths)).toHaveLength(30);
+    expect(allOperations).toHaveLength(35);
+    expect(new Set(operationIds).size).toBe(35);
     expect(operationIds).not.toContain(undefined);
     expect(
       Object.keys(document.paths).every((path) => path.startsWith('/api/v1/')),
     ).toBe(true);
+  });
+
+  it('声明管理员概览与倍率历史的响应和分页契约', () => {
+    expect(document.paths['/api/v1/admin/dashboard']?.get).toMatchObject({
+      operationId: 'adminGetDashboard',
+      security: [{ bearerAuth: [] }, { cookieAuth: [] }],
+      responses: {
+        '200': {
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/AdminDashboardDto' },
+            },
+          },
+        },
+      },
+    });
+    const historyOperation = document.paths[
+      '/api/v1/admin/points/config/history'
+    ]?.get as OperationObject | undefined;
+    expect(historyOperation).toBeDefined();
+    if (!historyOperation) {
+      throw new Error('缺少管理员积分倍率历史接口');
+    }
+
+    expect(historyOperation.operationId).toBe('adminListPointConfigHistory');
+    const historyParameters = historyOperation.parameters?.flatMap(
+      (parameter) => {
+        if (
+          isReference(parameter) ||
+          parameter.in !== 'query' ||
+          !['page', 'pageSize'].includes(parameter.name)
+        ) {
+          return [];
+        }
+
+        return [{ name: parameter.name, required: parameter.required }];
+      },
+    );
+    expect(historyParameters).toEqual([
+      { name: 'page', required: false },
+      { name: 'pageSize', required: false },
+    ]);
+
+    const historyResponse = historyOperation.responses['200'];
+    expect(historyResponse).toBeDefined();
+    if (!historyResponse) {
+      throw new Error('积分倍率历史接口缺少 200 响应');
+    }
+
+    expect(responseSchema(historyResponse)).toEqual({
+      $ref: '#/components/schemas/PointConfigListResponseDto',
+    });
   });
 
   it('每个成功响应和统一错误响应都有非空 schema', () => {

@@ -16,6 +16,7 @@ describe("createApiClient", () => {
         "createAdminProduct",
         "createAdminQuestion",
         "createOrder",
+        "getAdminDashboard",
         "getAdminOrder",
         "getAdminPointConfig",
         "getAdminQuestion",
@@ -28,6 +29,7 @@ describe("createApiClient", () => {
         "getRandomQuestion",
         "issueAndroidToken",
         "listAdminOrders",
+        "listAdminPointConfigHistory",
         "listAdminProducts",
         "listAdminQuestions",
         "listOrders",
@@ -45,6 +47,50 @@ describe("createApiClient", () => {
         "updateAdminQuestion",
         "uploadAdminProductImage",
       ].sort(),
+    );
+  });
+
+  it("管理员概览与倍率历史使用稳定的版本化 GET 路径", async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            activeQuestionCount: 12,
+            todayAnswerCount: 34,
+            pendingOrderCount: 5,
+            activeProductCount: 6,
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: [],
+            meta: {
+              page: 2,
+              pageSize: 10,
+              total: 0,
+              totalPages: 0,
+            },
+          }),
+          { status: 200 },
+        ),
+      );
+    const client = createApiClient({
+      baseUrl: "http://localhost:3001/api/v1",
+      fetch: fetchSpy,
+    });
+
+    await client.getAdminDashboard();
+    await client.listAdminPointConfigHistory({ page: 2, pageSize: 10 });
+
+    expect(fetchSpy.mock.calls[0]?.[0]).toBe(
+      "http://localhost:3001/api/v1/admin/dashboard",
+    );
+    expect(fetchSpy.mock.calls[1]?.[0]).toBe(
+      "http://localhost:3001/api/v1/admin/points/config/history?page=2&pageSize=10",
     );
   });
 

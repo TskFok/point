@@ -52,6 +52,40 @@ export class PointsService {
     );
   }
 
+  async listConfigHistory(page: number, pageSize: number) {
+    if (
+      !Number.isInteger(page) ||
+      page < 1 ||
+      page > 100_000 ||
+      !Number.isInteger(pageSize) ||
+      pageSize < 1 ||
+      pageSize > 100
+    ) {
+      throw new BadRequestException({
+        code: 'VALIDATION_FAILED',
+        message: '倍率历史分页参数无效',
+      });
+    }
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.pointConfig.findMany({
+        select: configSelection,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.pointConfig.count(),
+    ]);
+    return {
+      data,
+      meta: {
+        page,
+        pageSize,
+        total,
+        totalPages: total === 0 ? 0 : Math.ceil(total / pageSize),
+      },
+    };
+  }
+
   async getBalance(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
