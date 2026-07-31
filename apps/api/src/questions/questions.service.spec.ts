@@ -217,6 +217,59 @@ async function expectValidationFailed(
 }
 
 describe('QuestionsService', () => {
+  it('题库响应从同一次查询的答题计数映射 hasAttempts 且不泄漏 _count', async () => {
+    const findMany = jest.fn().mockResolvedValue([
+      {
+        id: 'question-used',
+        stem: 'Used question',
+        options: [],
+        _count: { attempts: 2 },
+      },
+      {
+        id: 'question-new',
+        stem: 'New question',
+        options: [],
+        _count: { attempts: 0 },
+      },
+    ]);
+    const prisma = {
+      question: {
+        findMany,
+        count: jest.fn().mockResolvedValue(2),
+      },
+      $transaction: (operations: Array<Promise<unknown>>) =>
+        Promise.all(operations),
+    };
+    const service = new QuestionsService(prisma as unknown as PrismaService);
+
+    const result = await service.list({
+      page: 1,
+      pageSize: 20,
+    });
+
+    const [query] = findMany.mock.calls[0] as unknown as [
+      {
+        include?: {
+          _count?: { select: { attempts: boolean } };
+        };
+      },
+    ];
+    expect(query.include?._count).toEqual({
+      select: { attempts: true },
+    });
+    expect(result.data).toEqual([
+      expect.objectContaining({
+        id: 'question-used',
+        hasAttempts: true,
+      }),
+      expect.objectContaining({
+        id: 'question-new',
+        hasAttempts: false,
+      }),
+    ]);
+    expect(result.data[0]).not.toHaveProperty('_count');
+  });
+
   it('服务层独立拒绝非唯一正确选项，避免绕过 DTO 破坏题目完整性', async () => {
     const prisma = {
       question: {
@@ -361,7 +414,7 @@ describe('QuestionsService', () => {
     const prisma = {
       question: {
         create: ({ data }: { data: Record<string, unknown> }) =>
-          Promise.resolve(data),
+          Promise.resolve({ ...data, _count: { attempts: 0 } }),
       },
     };
     const service = new QuestionsService(prisma as unknown as PrismaService);

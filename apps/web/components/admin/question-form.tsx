@@ -1,6 +1,10 @@
 "use client";
 
-import type { ApiClient, ApiComponents } from "@point-quest/api-client";
+import {
+  ApiClientError,
+  type ApiClient,
+  type ApiComponents,
+} from "@point-quest/api-client";
 import { Button, Card } from "@point-quest/ui";
 import { CheckCircle2, LoaderCircle, Plus, Save, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -126,7 +130,11 @@ export function QuestionForm({
   const [errors, setErrors] = useState<string[]>([]);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [hasAttempts, setHasAttempts] = useState(
+    initialQuestion?.hasAttempts ?? false,
+  );
+  const readOnly = mode === "edit" && hasAttempts;
 
   function updateOption(
     key: number,
@@ -140,7 +148,7 @@ export function QuestionForm({
   }
 
   async function submit() {
-    if (saving) return;
+    if (saving || readOnly) return;
     const validationErrors = validateQuestion(
       stem,
       explanation,
@@ -148,7 +156,7 @@ export function QuestionForm({
       options,
     );
     setErrors(validationErrors);
-    setSaved(false);
+    setSuccessMessage(null);
     if (validationErrors.length > 0) return;
 
     const value: QuestionFormValue = {
@@ -173,7 +181,35 @@ export function QuestionForm({
               questionId ?? initialQuestion?.id ?? "",
               value,
             );
-      setSaved(true);
+      setSuccessMessage("题目已保存");
+      onSaved?.(question);
+    } catch (error) {
+      if (
+        error instanceof ApiClientError &&
+        error.body.code === "QUESTION_HAS_ATTEMPTS"
+      ) {
+        setHasAttempts(true);
+        setSubmitError("题目已有答题记录，内容已切换为只读；你仍可停用题目");
+      } else {
+        setSubmitError(getApiErrorMessage(error));
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function disableQuestion() {
+    if (saving || !isActive) return;
+    setSaving(true);
+    setSubmitError(null);
+    setSuccessMessage(null);
+    try {
+      const question = await api.updateAdminQuestion(
+        questionId ?? initialQuestion?.id ?? "",
+        { isActive: false },
+      );
+      setIsActive(false);
+      setSuccessMessage("题目已停用");
       onSaved?.(question);
     } catch (error) {
       setSubmitError(getApiErrorMessage(error));
@@ -197,6 +233,7 @@ export function QuestionForm({
             <span>题干</span>
             <textarea
               aria-label="题干"
+              disabled={readOnly}
               maxLength={2_000}
               onChange={(event) => setStem(event.target.value)}
               rows={4}
@@ -208,6 +245,7 @@ export function QuestionForm({
             <span>题目解析</span>
             <textarea
               aria-label="题目解析"
+              disabled={readOnly}
               maxLength={5_000}
               onChange={(event) => setExplanation(event.target.value)}
               rows={4}
@@ -219,6 +257,7 @@ export function QuestionForm({
             <span>基础积分</span>
             <input
               aria-label="基础积分"
+              disabled={readOnly}
               inputMode="numeric"
               max={1_000}
               min={1}
@@ -232,6 +271,7 @@ export function QuestionForm({
           <label className="admin-switch">
             <input
               checked={isActive}
+              disabled={readOnly}
               onChange={(event) => setIsActive(event.target.checked)}
               type="checkbox"
             />
@@ -245,7 +285,7 @@ export function QuestionForm({
             <p>设置 2–6 个选项，并选择唯一正确答案。</p>
           </div>
           <Button
-            disabled={options.length >= 6 || saving}
+            disabled={readOnly || options.length >= 6 || saving}
             onClick={() => {
               const label = String.fromCharCode(65 + options.length);
               setOptions((current) => [
@@ -280,6 +320,7 @@ export function QuestionForm({
                   <span>选项 {displayName} 标签</span>
                   <input
                     aria-label={`选项 ${displayName} 标签`}
+                    disabled={readOnly}
                     maxLength={16}
                     onChange={(event) =>
                       updateOption(option.key, { label: event.target.value })
@@ -291,6 +332,7 @@ export function QuestionForm({
                   <span>选项 {displayName} 内容</span>
                   <input
                     aria-label={`选项 ${displayName} 内容`}
+                    disabled={readOnly}
                     maxLength={1_000}
                     onChange={(event) =>
                       updateOption(option.key, { content: event.target.value })
@@ -302,6 +344,7 @@ export function QuestionForm({
                   <input
                     aria-label={`将选项 ${displayName} 设为正确答案`}
                     checked={option.isCorrect}
+                    disabled={readOnly}
                     name="correct-option"
                     onChange={() =>
                       setOptions((current) =>
@@ -318,7 +361,7 @@ export function QuestionForm({
                 </label>
                 <Button
                   aria-label={`删除选项 ${displayName}`}
-                  disabled={options.length <= 2 || saving}
+                  disabled={readOnly || options.length <= 2 || saving}
                   onClick={() =>
                     setOptions((current) =>
                       current.filter((item) => item.key !== option.key),
@@ -345,22 +388,41 @@ export function QuestionForm({
             {submitError}
           </p>
         ) : null}
-        {saved ? (
+        {successMessage ? (
           <p className="success-banner" role="status">
             <CheckCircle2 aria-hidden="true" />
-            题目已保存
+            {successMessage}
           </p>
         ) : null}
 
         <div className="admin-form__actions">
-          <Button disabled={saving} type="submit">
-            {saving ? (
-              <LoaderCircle aria-hidden="true" className="spin" />
+          {readOnly ? (
+            isActive ? (
+              <Button
+                disabled={saving}
+                onClick={() => void disableQuestion()}
+                type="button"
+              >
+                {saving ? (
+                  <LoaderCircle aria-hidden="true" className="spin" />
+                ) : (
+                  <Save aria-hidden="true" />
+                )}
+                {saving ? "正在停用" : "停用已有记录题目"}
+              </Button>
             ) : (
-              <Save aria-hidden="true" />
-            )}
-            {saving ? "正在保存" : submitError ? "重试保存题目" : "保存题目"}
-          </Button>
+              <p className="admin-readonly-note">已有答题记录，题目已停用。</p>
+            )
+          ) : (
+            <Button disabled={saving} type="submit">
+              {saving ? (
+                <LoaderCircle aria-hidden="true" className="spin" />
+              ) : (
+                <Save aria-hidden="true" />
+              )}
+              {saving ? "正在保存" : submitError ? "重试保存题目" : "保存题目"}
+            </Button>
+          )}
         </div>
       </form>
     </Card>

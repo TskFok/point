@@ -572,6 +572,7 @@ export interface components {
             createdAt: string;
             createdBy: string;
             explanation: string;
+            hasAttempts: boolean;
             id: string;
             isActive: boolean;
             options: components["schemas"]["AdminQuestionOptionDto"][];

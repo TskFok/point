@@ -14,7 +14,24 @@ const questionInclude = {
   options: {
     orderBy: [{ position: 'asc' as const }, { id: 'asc' as const }],
   },
+  _count: {
+    select: {
+      attempts: true,
+    },
+  },
 } satisfies Prisma.QuestionInclude;
+
+type QuestionWithAttempts = Prisma.QuestionGetPayload<{
+  include: typeof questionInclude;
+}>;
+
+function toAdminQuestion(question: QuestionWithAttempts) {
+  const { _count, ...value } = question;
+  return {
+    ...value,
+    hasAttempts: _count.attempts > 0,
+  };
+}
 
 function validationFailed(message: string): BadRequestException {
   return new BadRequestException({
@@ -206,7 +223,7 @@ export class QuestionsService {
 
   async create(data: CreateQuestionDto, createdBy: string) {
     const normalized = normalizeCreateQuestion(data);
-    return this.prisma.question.create({
+    const question = await this.prisma.question.create({
       data: {
         stem: normalized.stem,
         explanation: normalized.explanation,
@@ -221,6 +238,7 @@ export class QuestionsService {
       },
       include: questionInclude,
     });
+    return toAdminQuestion(question);
   }
 
   async list(query: ListQuestionsDto) {
@@ -258,7 +276,7 @@ export class QuestionsService {
     ]);
 
     return {
-      data,
+      data: data.map(toAdminQuestion),
       meta: {
         page: query.page,
         pageSize: query.pageSize,
@@ -276,7 +294,7 @@ export class QuestionsService {
     if (!question) {
       throw questionNotFound();
     }
-    return question;
+    return toAdminQuestion(question);
   }
 
   async update(questionId: string, data: UpdateQuestionDto) {
@@ -284,7 +302,7 @@ export class QuestionsService {
     const changes = Object.entries(normalized);
 
     try {
-      return await this.prisma.$transaction(
+      const question = await this.prisma.$transaction(
         async (tx) => {
           const lockedQuestions = await tx.$queryRaw<Array<{ id: string }>>`
             SELECT "id"
@@ -362,6 +380,7 @@ export class QuestionsService {
           isolationLevel: 'ReadCommitted',
         },
       );
+      return toAdminQuestion(question);
     } catch (error) {
       if (hasPrismaCode(error, 'P2003')) {
         throw questionHasAttempts();

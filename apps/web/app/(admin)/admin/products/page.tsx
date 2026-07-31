@@ -110,6 +110,11 @@ export default function AdminProductsPage({
           : {}),
       });
       if (!mounted.current || latestRequest.current !== requestId) return;
+      const lastPage = Math.max(1, response.meta.totalPages);
+      if (page > lastPage) {
+        setPage(lastPage);
+        return;
+      }
       setProducts(response.data);
       setMeta(response.meta);
     } catch (caught) {
@@ -130,14 +135,9 @@ export default function AdminProductsPage({
     void load();
   }, [appliedFilters, load, page]);
 
-  function handleSaved(product: Product) {
-    setProducts((items) => {
-      const exists = items.some((item) => item.id === product.id);
-      return exists
-        ? items.map((item) => (item.id === product.id ? product : item))
-        : [product, ...items];
-    });
+  function handleSaved() {
     setEditing(null);
+    void load();
   }
 
   return (
@@ -173,6 +173,7 @@ export default function AdminProductsPage({
           <ProductForm
             api={api}
             initialProduct={editing === "create" ? undefined : editing}
+            key={editing === "create" ? "create" : editing.id}
             mode={editing === "create" ? "create" : "edit"}
             onSaved={handleSaved}
             productId={editing === "create" ? undefined : editing.id}

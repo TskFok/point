@@ -1,3 +1,4 @@
+import { ApiClientError } from "@point-quest/api-client";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -23,6 +24,133 @@ async function fillRequiredQuestion(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("管理员题目表单", () => {
+  it("已有答题记录时字段只读且停用只发送 isActive false", async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    const existingQuestion = {
+      basePoints: 10,
+      createdAt: "2026-07-31T08:00:00.000Z",
+      createdBy: "admin-1",
+      explanation: "Singular subject.",
+      hasAttempts: true,
+      id: "question-used",
+      isActive: true,
+      options: [
+        {
+          content: "is",
+          id: "option-1",
+          isCorrect: true,
+          label: "A",
+          position: 0,
+          questionId: "question-used",
+        },
+        {
+          content: "are",
+          id: "option-2",
+          isCorrect: false,
+          label: "B",
+          position: 1,
+          questionId: "question-used",
+        },
+      ],
+      stem: "She ___ a student.",
+      updatedAt: "2026-07-31T08:00:00.000Z",
+    };
+    api.updateAdminQuestion.mockResolvedValue({
+      ...existingQuestion,
+      isActive: false,
+    });
+
+    render(
+      <QuestionForm
+        api={api}
+        initialQuestion={existingQuestion as never}
+        mode="edit"
+      />,
+    );
+
+    expect(screen.getByLabelText("题干")).toBeDisabled();
+    expect(screen.getByLabelText("基础积分")).toBeDisabled();
+    expect(
+      screen.queryByRole("button", { name: "保存题目" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "停用已有记录题目" }));
+
+    expect(api.updateAdminQuestion).toHaveBeenCalledWith("question-used", {
+      isActive: false,
+    });
+    expect(api.updateAdminQuestion).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText("题目已停用")).toBeVisible();
+  });
+
+  it("保存时才发现答题记录后切换只读并仅允许停用", async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    const existingQuestion = {
+      basePoints: 10,
+      createdAt: "2026-07-31T08:00:00.000Z",
+      createdBy: "admin-1",
+      explanation: "Singular subject.",
+      hasAttempts: false,
+      id: "question-race",
+      isActive: true,
+      options: [
+        {
+          content: "is",
+          id: "option-1",
+          isCorrect: true,
+          label: "A",
+          position: 0,
+          questionId: "question-race",
+        },
+        {
+          content: "are",
+          id: "option-2",
+          isCorrect: false,
+          label: "B",
+          position: 1,
+          questionId: "question-race",
+        },
+      ],
+      stem: "She ___ a student.",
+      updatedAt: "2026-07-31T08:00:00.000Z",
+    };
+    api.updateAdminQuestion
+      .mockRejectedValueOnce(
+        new ApiClientError(409, {
+          code: "QUESTION_HAS_ATTEMPTS",
+          details: {},
+          message: "已有答题记录的题目只能停用",
+          requestId: "request-1",
+        }),
+      )
+      .mockResolvedValueOnce({
+        ...existingQuestion,
+        hasAttempts: true,
+        isActive: false,
+      });
+    render(
+      <QuestionForm api={api} initialQuestion={existingQuestion} mode="edit" />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "保存题目" }));
+
+    expect(
+      await screen.findByText(
+        "题目已有答题记录，内容已切换为只读；你仍可停用题目",
+      ),
+    ).toBeVisible();
+    expect(screen.getByLabelText("题干")).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "停用已有记录题目" }));
+    expect(api.updateAdminQuestion).toHaveBeenNthCalledWith(
+      2,
+      "question-race",
+      { isActive: false },
+    );
+  });
+
   it("题目必须有 2 至 6 个选项且只能选择一个正确答案", async () => {
     const user = userEvent.setup();
     const api = createApi();

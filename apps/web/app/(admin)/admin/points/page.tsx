@@ -54,8 +54,19 @@ export default function AdminPointsPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const automaticLoadKey = useRef<string | null>(null);
+  const latestRequest = useRef(0);
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   const load = useCallback(async () => {
+    const requestId = latestRequest.current + 1;
+    latestRequest.current = requestId;
     setLoading(true);
     setError(null);
     try {
@@ -63,13 +74,17 @@ export default function AdminPointsPage({
         api.getAdminPointConfig(),
         api.listAdminPointConfigHistory({ page, pageSize: 20 }),
       ]);
+      if (!mounted.current || latestRequest.current !== requestId) return;
       setCurrent(config);
       setHistory(response.data);
       setMeta(response.meta);
     } catch (caught) {
+      if (!mounted.current || latestRequest.current !== requestId) return;
       setError(getApiErrorMessage(caught));
     } finally {
-      setLoading(false);
+      if (mounted.current && latestRequest.current === requestId) {
+        setLoading(false);
+      }
     }
   }, [api, page]);
 
@@ -121,6 +136,16 @@ export default function AdminPointsPage({
             </div>
             <History aria-hidden="true" />
           </div>
+          {loading ? (
+            <p
+              aria-label="正在加载倍率历史"
+              className="page-loading-inline"
+              role="status"
+            >
+              <LoaderCircle aria-hidden="true" className="spin" />
+              正在加载倍率历史
+            </p>
+          ) : null}
           {history.length === 0 ? (
             <EmptyState
               description="当前使用默认 1× 倍率，保存一次配置后会生成历史。"

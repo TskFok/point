@@ -86,18 +86,35 @@ export default function AdminQuestionsPage({
   const automaticLoadKey = useRef<string | null>(null);
   const mounted = useRef(true);
   const latestRequest = useRef(0);
+  const pendingScrollPosition = useRef<number | null>(null);
 
   useEffect(() => {
     mounted.current = true;
     const scrollPosition = sessionStorage.getItem("admin-questions-scroll");
     if (scrollPosition) {
-      sessionStorage.removeItem("admin-questions-scroll");
-      requestAnimationFrame(() => window.scrollTo(0, Number(scrollPosition)));
+      const parsedPosition = Number(scrollPosition);
+      if (Number.isFinite(parsedPosition) && parsedPosition >= 0) {
+        pendingScrollPosition.current = parsedPosition;
+      } else {
+        sessionStorage.removeItem("admin-questions-scroll");
+      }
     }
     return () => {
       mounted.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    const scrollPosition = pendingScrollPosition.current;
+    if (loading || loadError || scrollPosition === null) return;
+    const frame = requestAnimationFrame(() => {
+      if (!mounted.current) return;
+      window.scrollTo(0, scrollPosition);
+      sessionStorage.removeItem("admin-questions-scroll");
+      pendingScrollPosition.current = null;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [loadError, loading]);
 
   const load = useCallback(async () => {
     const requestId = latestRequest.current + 1;
@@ -116,6 +133,11 @@ export default function AdminQuestionsPage({
           : {}),
       });
       if (!mounted.current || latestRequest.current !== requestId) return;
+      const lastPage = Math.max(1, response.meta.totalPages);
+      if (page > lastPage) {
+        setPage(lastPage);
+        return;
+      }
       setQuestions(response.data);
       setMeta(response.meta);
     } catch (error) {
@@ -141,30 +163,10 @@ export default function AdminQuestionsPage({
     setMutatingId(question.id);
     setMutationError(null);
     try {
-      const updated = await api.updateAdminQuestion(question.id, {
+      await api.updateAdminQuestion(question.id, {
         isActive: !question.isActive,
       });
-      const shouldRemainVisible =
-        !appliedFilters.isActive ||
-        updated.isActive === (appliedFilters.isActive === "true");
-      setQuestions((items) =>
-        shouldRemainVisible
-          ? items.map((item) => (item.id === updated.id ? updated : item))
-          : items.filter((item) => item.id !== updated.id),
-      );
-      if (!shouldRemainVisible) {
-        setMeta((current) =>
-          current
-            ? {
-                ...current,
-                total: Math.max(0, current.total - 1),
-                totalPages: Math.ceil(
-                  Math.max(0, current.total - 1) / current.pageSize,
-                ),
-              }
-            : current,
-        );
-      }
+      await load();
     } catch (error) {
       setMutationError(getApiErrorMessage(error));
     } finally {
@@ -323,7 +325,10 @@ export default function AdminQuestionsPage({
                           编辑题目
                         </Link>
                         <Button
-                          disabled={mutatingId !== null}
+                          disabled={
+                            mutatingId !== null ||
+                            (question.hasAttempts && !question.isActive)
+                          }
                           onClick={() => void toggleStatus(question)}
                           variant="secondary"
                         >
@@ -334,7 +339,11 @@ export default function AdminQuestionsPage({
                           ) : (
                             <CircleCheck aria-hidden="true" />
                           )}
-                          {question.isActive ? "停用题目" : "启用题目"}
+                          {question.hasAttempts && !question.isActive
+                            ? "已有记录不可启用"
+                            : question.isActive
+                              ? "停用题目"
+                              : "启用题目"}
                         </Button>
                       </div>
                     </td>

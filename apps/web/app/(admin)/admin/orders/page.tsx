@@ -158,6 +158,11 @@ export default function AdminOrdersPage({
         toApiQuery(appliedFilters, page),
       );
       if (!mounted.current || latestRequest.current !== requestId) return;
+      const lastPage = Math.max(1, response.meta.totalPages);
+      if (page > lastPage) {
+        setPage(lastPage);
+        return;
+      }
       setOrders(response.data);
       setMeta(response.meta);
     } catch (error) {
@@ -198,35 +203,17 @@ export default function AdminOrdersPage({
     setActionPending(true);
     setActionError(null);
     try {
-      const updated =
-        current.action === "cancel"
-          ? await api.cancelAdminOrder(current.order.id)
-          : await api.completeAdminOrder(current.order.id);
-      const shouldRemainVisible =
-        !appliedFilters.status || updated.status === appliedFilters.status;
-      setOrders((items) =>
-        shouldRemainVisible
-          ? items.map((order) => (order.id === updated.id ? updated : order))
-          : items.filter((order) => order.id !== updated.id),
-      );
-      if (!shouldRemainVisible) {
-        setMeta((currentMeta) =>
-          currentMeta
-            ? {
-                ...currentMeta,
-                total: Math.max(0, currentMeta.total - 1),
-                totalPages: Math.ceil(
-                  Math.max(0, currentMeta.total - 1) / currentMeta.pageSize,
-                ),
-              }
-            : currentMeta,
-        );
+      if (current.action === "cancel") {
+        await api.cancelAdminOrder(current.order.id);
+      } else {
+        await api.completeAdminOrder(current.order.id);
       }
       setSuccessMessage(
         current.action === "cancel"
           ? "订单已取消，积分与库存已退回"
           : "订单已完成，可交付商品",
       );
+      await load();
       setActiveDialog(null);
     } catch (error) {
       setActionError(getApiErrorMessage(error));

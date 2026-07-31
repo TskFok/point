@@ -13,11 +13,20 @@ const meta = {
   totalPages: 1,
 };
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve;
+  });
+  return { promise, resolve };
+}
+
 const question = {
   basePoints: 10,
   createdAt: "2026-07-31T08:00:00.000Z",
   createdBy: "admin-1",
   explanation: "Singular subject.",
+  hasAttempts: false,
   id: "question-1",
   isActive: true,
   options: [
@@ -114,10 +123,16 @@ describe("管理员运营页面", () => {
   it("题库停用成功后同步文字与图标状态", async () => {
     const user = userEvent.setup();
     const api = {
-      listAdminQuestions: jest.fn().mockResolvedValue({
-        data: [question],
-        meta,
-      }),
+      listAdminQuestions: jest
+        .fn()
+        .mockResolvedValueOnce({
+          data: [question],
+          meta,
+        })
+        .mockResolvedValueOnce({
+          data: [{ ...question, isActive: false }],
+          meta,
+        }),
       updateAdminQuestion: jest.fn().mockResolvedValue({
         ...question,
         isActive: false,
@@ -133,6 +148,116 @@ describe("管理员运营页面", () => {
     expect(
       await screen.findByRole("img", { name: "已停用状态图标" }),
     ).toBeVisible();
+    expect(api.listAdminQuestions).toHaveBeenCalledTimes(2);
+  });
+
+  it("题库第二页最后一条停用后按当前筛选重载并回到有效末页", async () => {
+    const user = userEvent.setup();
+    const replacement = {
+      ...question,
+      id: "question-replacement",
+      stem: "Replacement question",
+    };
+    const api = {
+      listAdminQuestions: jest
+        .fn()
+        .mockResolvedValueOnce({
+          data: [question],
+          meta: { ...meta, page: 2, total: 21, totalPages: 2 },
+        })
+        .mockResolvedValueOnce({
+          data: [],
+          meta: { ...meta, page: 2, total: 20, totalPages: 1 },
+        })
+        .mockResolvedValueOnce({
+          data: [replacement],
+          meta: { ...meta, page: 1, total: 20, totalPages: 1 },
+        }),
+      updateAdminQuestion: jest.fn().mockResolvedValue({
+        ...question,
+        isActive: false,
+      }),
+    };
+    window.history.replaceState(
+      null,
+      "",
+      "/admin/questions?isActive=true&page=2",
+    );
+    render(<AdminQuestionsPage api={api} />);
+
+    await user.click(await screen.findByRole("button", { name: "停用题目" }));
+
+    expect(await screen.findByText("Replacement question")).toBeVisible();
+    expect(api.listAdminQuestions).toHaveBeenNthCalledWith(2, {
+      isActive: true,
+      page: 2,
+      pageSize: 20,
+    });
+    expect(api.listAdminQuestions).toHaveBeenNthCalledWith(3, {
+      isActive: true,
+      page: 1,
+      pageSize: 20,
+    });
+    expect(window.location.search).toBe("?isActive=true");
+  });
+
+  it("题库中已有答题记录的停用题目不能重新启用", async () => {
+    const api = {
+      listAdminQuestions: jest.fn().mockResolvedValue({
+        data: [{ ...question, hasAttempts: true, isActive: false }],
+        meta,
+      }),
+      updateAdminQuestion: jest.fn(),
+    };
+    window.history.replaceState(null, "", "/admin/questions");
+    render(<AdminQuestionsPage api={api} />);
+
+    expect(
+      await screen.findByRole("button", { name: "已有记录不可启用" }),
+    ).toBeDisabled();
+    expect(
+      screen.queryByRole("button", { name: "启用题目" }),
+    ).not.toBeInTheDocument();
+    expect(api.updateAdminQuestion).not.toHaveBeenCalled();
+  });
+
+  it("题库返回数据并完成渲染后才恢复并清除滚动位置", async () => {
+    const response = deferred<{
+      data: (typeof question)[];
+      meta: typeof meta;
+    }>();
+    const api = {
+      listAdminQuestions: jest.fn().mockReturnValue(response.promise),
+      updateAdminQuestion: jest.fn(),
+    };
+    const scrollTo = jest
+      .spyOn(window, "scrollTo")
+      .mockImplementation(() => undefined);
+    const requestFrame = jest
+      .spyOn(window, "requestAnimationFrame")
+      .mockImplementation((callback) => {
+        callback(0);
+        return 1;
+      });
+    window.history.replaceState(null, "", "/admin/questions");
+    sessionStorage.setItem("admin-questions-scroll", "480");
+
+    try {
+      render(<AdminQuestionsPage api={api} />);
+      await waitFor(() => expect(api.listAdminQuestions).toHaveBeenCalled());
+
+      expect(scrollTo).not.toHaveBeenCalled();
+      expect(sessionStorage.getItem("admin-questions-scroll")).toBe("480");
+
+      response.resolve({ data: [question], meta });
+      await screen.findByText(question.stem);
+      await waitFor(() => expect(scrollTo).toHaveBeenCalledWith(0, 480));
+      expect(sessionStorage.getItem("admin-questions-scroll")).toBeNull();
+    } finally {
+      requestFrame.mockRestore();
+      scrollTo.mockRestore();
+      sessionStorage.removeItem("admin-questions-scroll");
+    }
   });
 
   it("倍率限制为 1–10 整数并刷新配置历史", async () => {
@@ -216,6 +341,88 @@ describe("管理员运营页面", () => {
     expect(window.location.search).toBe("");
   });
 
+  it("倍率保存切回第一页时忽略后到的第二页响应并显示历史加载态", async () => {
+    const user = userEvent.setup();
+    const initialConfig = {
+      createdAt: "2026-07-31T08:00:00.000Z",
+      id: "config-initial",
+      multiplier: 2,
+      updatedBy: "admin-1",
+      updater: { id: "admin-1", username: "initial_admin" },
+    };
+    const savedConfig = {
+      ...initialConfig,
+      createdAt: "2026-07-31T09:00:00.000Z",
+      id: "config-saved",
+      multiplier: 3,
+      updater: { id: "admin-1", username: "new_admin" },
+    };
+    const staleConfig = {
+      ...initialConfig,
+      id: "config-stale-page-2",
+      updater: { id: "admin-1", username: "stale_admin" },
+    };
+    const page2 = deferred<{
+      data: (typeof initialConfig)[];
+      meta: typeof meta;
+    }>();
+    const refreshedPage1 = deferred<{
+      data: (typeof initialConfig)[];
+      meta: typeof meta;
+    }>();
+    const api = {
+      getAdminPointConfig: jest
+        .fn()
+        .mockResolvedValueOnce(initialConfig)
+        .mockResolvedValueOnce(initialConfig)
+        .mockResolvedValue(savedConfig),
+      listAdminPointConfigHistory: jest
+        .fn()
+        .mockResolvedValueOnce({
+          data: [initialConfig],
+          meta: { ...meta, total: 21, totalPages: 2 },
+        })
+        .mockReturnValueOnce(page2.promise)
+        .mockReturnValueOnce(refreshedPage1.promise),
+      updateAdminPointConfig: jest.fn().mockResolvedValue(savedConfig),
+    };
+    window.history.replaceState(null, "", "/admin/points");
+    render(<AdminPointsPage api={api} />);
+    await screen.findByText("initial_admin");
+
+    await user.click(screen.getByRole("button", { name: "下一页" }));
+    expect(
+      await screen.findByRole("status", { name: "正在加载倍率历史" }),
+    ).toBeVisible();
+
+    const multiplier = screen.getByLabelText("积分倍率");
+    await user.clear(multiplier);
+    await user.type(multiplier, "3");
+    await user.click(screen.getByRole("button", { name: "保存倍率" }));
+    await waitFor(() =>
+      expect(api.listAdminPointConfigHistory).toHaveBeenLastCalledWith({
+        page: 1,
+        pageSize: 20,
+      }),
+    );
+
+    refreshedPage1.resolve({
+      data: [savedConfig],
+      meta,
+    });
+    expect(await screen.findByText("new_admin")).toBeVisible();
+
+    page2.resolve({
+      data: [staleConfig],
+      meta: { ...meta, page: 2, total: 21, totalPages: 2 },
+    });
+    await waitFor(() =>
+      expect(screen.queryByText("stale_admin")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText("new_admin")).toBeVisible();
+    expect(window.location.search).toBe("");
+  });
+
   it("商品列表安全回退不受信任图片并可打开新增表单", async () => {
     const user = userEvent.setup();
     const api = {
@@ -239,5 +446,95 @@ describe("管理员运营页面", () => {
     await user.click(screen.getByRole("button", { name: "添加商品" }));
     expect(screen.getByRole("heading", { name: "添加新商品" })).toBeVisible();
     expect(screen.getByLabelText("商品名称")).toBeVisible();
+  });
+
+  it("商品编辑从 A 切换到 B 时完整重置表单状态", async () => {
+    const user = userEvent.setup();
+    const secondProduct = {
+      ...product,
+      id: "product-2",
+      name: "英语帆布袋",
+      stock: 3,
+    };
+    const api = {
+      createAdminProduct: jest.fn(),
+      listAdminProducts: jest.fn().mockResolvedValue({
+        data: [product, secondProduct],
+        meta: { ...meta, total: 2 },
+      }),
+      updateAdminProduct: jest.fn(),
+      uploadAdminProductImage: jest.fn(),
+    };
+    window.history.replaceState(null, "", "/admin/products");
+    render(<AdminProductsPage api={api} />);
+    await screen.findByText(product.name);
+
+    const editButtons = screen.getAllByRole("button", { name: "编辑商品" });
+    await user.click(editButtons[0]);
+    await user.clear(screen.getByLabelText("商品名称"));
+    await user.type(screen.getByLabelText("商品名称"), "A 的未保存内容");
+
+    await user.click(editButtons[1]);
+
+    expect(screen.getByLabelText("商品名称")).toHaveValue("英语帆布袋");
+    expect(screen.getByLabelText("库存数量")).toHaveValue(3);
+  });
+
+  it("商品第二页最后一条保存后按当前筛选重载并回到有效末页", async () => {
+    const user = userEvent.setup();
+    const replacement = {
+      ...product,
+      id: "product-replacement",
+      name: "英语贴纸",
+    };
+    const api = {
+      createAdminProduct: jest.fn(),
+      listAdminProducts: jest
+        .fn()
+        .mockResolvedValueOnce({
+          data: [product],
+          meta: { ...meta, page: 2, total: 21, totalPages: 2 },
+        })
+        .mockResolvedValueOnce({
+          data: [],
+          meta: { ...meta, page: 2, total: 20, totalPages: 1 },
+        })
+        .mockResolvedValueOnce({
+          data: [replacement],
+          meta: { ...meta, page: 1, total: 20, totalPages: 1 },
+        }),
+      updateAdminProduct: jest.fn().mockResolvedValue({
+        ...product,
+        isActive: false,
+      }),
+      uploadAdminProductImage: jest.fn(),
+    };
+    window.history.replaceState(
+      null,
+      "",
+      "/admin/products?search=%E8%8B%B1%E8%AF%AD&isActive=true&page=2",
+    );
+    render(<AdminProductsPage api={api} />);
+
+    await user.click(await screen.findByRole("button", { name: "编辑商品" }));
+    await user.click(screen.getByRole("checkbox", { name: "上架商品" }));
+    await user.click(screen.getByRole("button", { name: "保存商品" }));
+
+    expect(await screen.findByText("英语贴纸")).toBeVisible();
+    expect(api.listAdminProducts).toHaveBeenNthCalledWith(2, {
+      isActive: true,
+      page: 2,
+      pageSize: 20,
+      search: "英语",
+    });
+    expect(api.listAdminProducts).toHaveBeenNthCalledWith(3, {
+      isActive: true,
+      page: 1,
+      pageSize: 20,
+      search: "英语",
+    });
+    expect(window.location.search).toContain("search=%E8%8B%B1%E8%AF%AD");
+    expect(window.location.search).toContain("isActive=true");
+    expect(window.location.search).not.toContain("page=2");
   });
 });

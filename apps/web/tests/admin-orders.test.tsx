@@ -47,6 +47,10 @@ function deferred<T>() {
 }
 
 describe("管理员订单页面", () => {
+  beforeEach(() => {
+    window.history.replaceState(null, "", "/admin/orders");
+  });
+
   it("日期筛选转换为带 +08:00 时区的完整 ISO 且写入 URL", async () => {
     const user = userEvent.setup();
     const api = createApi();
@@ -77,6 +81,21 @@ describe("管理员订单页面", () => {
       cancelledAt: "2026-07-31T09:00:00.000Z",
       status: "CANCELLED",
     });
+    api.listAdminOrders
+      .mockResolvedValueOnce({
+        data: [pendingOrder],
+        meta,
+      })
+      .mockResolvedValueOnce({
+        data: [
+          {
+            ...pendingOrder,
+            cancelledAt: "2026-07-31T09:00:00.000Z",
+            status: "CANCELLED",
+          },
+        ],
+        meta,
+      });
     render(<AdminOrdersPage api={api} />);
     const opener = await screen.findByRole("button", { name: "取消订单" });
 
@@ -152,5 +171,56 @@ describe("管理员订单页面", () => {
       await screen.findByText("订单已取消，积分与库存已退回"),
     ).toBeVisible();
     expect(api.cancelAdminOrder).toHaveBeenCalledTimes(2);
+  });
+
+  it("第二页最后一条取消后按当前筛选重载并回到有效末页", async () => {
+    const user = userEvent.setup();
+    const replacement = {
+      ...pendingOrder,
+      id: "order-replacement",
+      orderNo: "PQ-ADMIN-REPLACEMENT",
+    };
+    const api = createApi();
+    api.listAdminOrders
+      .mockReset()
+      .mockResolvedValueOnce({
+        data: [pendingOrder],
+        meta: { ...meta, page: 2, total: 21, totalPages: 2 },
+      })
+      .mockResolvedValueOnce({
+        data: [],
+        meta: { ...meta, page: 2, total: 20, totalPages: 1 },
+      })
+      .mockResolvedValueOnce({
+        data: [replacement],
+        meta: { ...meta, page: 1, total: 20, totalPages: 1 },
+      });
+    api.cancelAdminOrder.mockResolvedValue({
+      ...pendingOrder,
+      cancelledAt: "2026-07-31T09:00:00.000Z",
+      status: "CANCELLED",
+    });
+    window.history.replaceState(
+      null,
+      "",
+      "/admin/orders?status=PENDING_PICKUP&page=2",
+    );
+    render(<AdminOrdersPage api={api} />);
+
+    await user.click(await screen.findByRole("button", { name: "取消订单" }));
+    await user.click(screen.getByRole("button", { name: "确认取消并退款" }));
+
+    expect(await screen.findByText("PQ-ADMIN-REPLACEMENT")).toBeVisible();
+    expect(api.listAdminOrders).toHaveBeenNthCalledWith(2, {
+      page: 2,
+      pageSize: 20,
+      status: "PENDING_PICKUP",
+    });
+    expect(api.listAdminOrders).toHaveBeenNthCalledWith(3, {
+      page: 1,
+      pageSize: 20,
+      status: "PENDING_PICKUP",
+    });
+    expect(window.location.search).toBe("?status=PENDING_PICKUP");
   });
 });

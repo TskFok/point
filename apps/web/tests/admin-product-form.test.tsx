@@ -101,4 +101,72 @@ describe("管理员商品表单", () => {
       stock: 8,
     });
   });
+
+  it("图片上传成功但商品保存失败时清空 File 并仅重试保存", async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    const createObjectUrl = jest.fn().mockReturnValue("blob:reward-preview");
+    const revokeObjectUrl = jest.fn();
+    const originalCreateObjectUrl = URL.createObjectURL;
+    const originalRevokeObjectUrl = URL.revokeObjectURL;
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: createObjectUrl,
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: revokeObjectUrl,
+    });
+    api.uploadAdminProductImage.mockResolvedValue({
+      key: "products/550e8400-e29b-41d4-a716-446655440000.png",
+      url: "/uploads/products/550e8400-e29b-41d4-a716-446655440000.png",
+    });
+    api.createAdminProduct
+      .mockRejectedValueOnce(
+        new ApiNetworkError("/api/v1/admin/products", "offline"),
+      )
+      .mockResolvedValueOnce({ id: "product-1" });
+
+    try {
+      render(<ProductForm api={api} mode="create" />);
+      await fillProduct(user);
+      const input = screen.getByLabelText<HTMLInputElement>("商品图片");
+      await user.upload(
+        input,
+        new File(["image"], "reward.png", { type: "image/png" }),
+      );
+
+      await user.click(screen.getByRole("button", { name: "保存商品" }));
+
+      expect(
+        await screen.findByText("网络连接失败，请检查网络后重试"),
+      ).toBeVisible();
+      expect(input.files).toHaveLength(0);
+      expect(api.uploadAdminProductImage).toHaveBeenCalledTimes(1);
+      expect(revokeObjectUrl).toHaveBeenCalledWith("blob:reward-preview");
+
+      await user.click(screen.getByRole("button", { name: "重试保存商品" }));
+
+      expect(await screen.findByText("商品已保存")).toBeVisible();
+      expect(api.uploadAdminProductImage).toHaveBeenCalledTimes(1);
+      expect(api.createAdminProduct).toHaveBeenCalledTimes(2);
+    } finally {
+      if (originalCreateObjectUrl) {
+        Object.defineProperty(URL, "createObjectURL", {
+          configurable: true,
+          value: originalCreateObjectUrl,
+        });
+      } else {
+        Reflect.deleteProperty(URL, "createObjectURL");
+      }
+      if (originalRevokeObjectUrl) {
+        Object.defineProperty(URL, "revokeObjectURL", {
+          configurable: true,
+          value: originalRevokeObjectUrl,
+        });
+      } else {
+        Reflect.deleteProperty(URL, "revokeObjectURL");
+      }
+    }
+  });
 });

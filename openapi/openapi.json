@@ -144,6 +144,9 @@
           "explanation": {
             "type": "string"
           },
+          "hasAttempts": {
+            "type": "boolean"
+          },
           "id": {
             "type": "string"
           },
@@ -170,6 +173,7 @@
           "explanation",
           "basePoints",
           "isActive",
+          "hasAttempts",
           "createdBy",
           "createdAt",
           "updatedAt",

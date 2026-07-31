@@ -4,7 +4,7 @@ import type { ApiClient, ApiComponents } from "@point-quest/api-client";
 import { Button, Card } from "@point-quest/ui";
 import { CheckCircle2, ImageUp, LoaderCircle, Save } from "lucide-react";
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { browserApiClient } from "@/lib/api/browser-client";
 import { getApiErrorMessage } from "@/lib/api/error-message";
@@ -101,11 +101,19 @@ export function ProductForm({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [phase, setPhase] = useState<"idle" | "uploading" | "saving">("idle");
   const [saved, setSaved] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const localPreview = useMemo(
     () => (image ? URL.createObjectURL?.(image) : null),
     [image],
   );
   const pending = phase !== "idle";
+
+  useEffect(
+    () => () => {
+      if (localPreview) URL.revokeObjectURL?.(localPreview);
+    },
+    [localPreview],
+  );
 
   async function submit() {
     if (pending) return;
@@ -129,6 +137,8 @@ export function ProductForm({
         const uploaded = await api.uploadAdminProductImage(image, image.name);
         nextImageKey = uploaded.key;
         setImageKey(uploaded.key);
+        setImage(null);
+        if (fileInputRef.current) fileInputRef.current.value = "";
       }
       if (!nextImageKey) return;
       setPhase("saving");
@@ -227,6 +237,7 @@ export function ProductForm({
               accept="image/jpeg,image/png,image/webp"
               aria-label="商品图片"
               onChange={(event) => setImage(event.target.files?.[0] ?? null)}
+              ref={fileInputRef}
               type="file"
             />
             <small>JPG、PNG 或 WebP，最大 5 MB</small>

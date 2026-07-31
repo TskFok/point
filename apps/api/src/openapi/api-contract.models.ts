@@ -228,6 +228,9 @@ export class AdminQuestionDto {
   isActive!: boolean;
 
   @ApiProperty()
+  hasAttempts!: boolean;
+
+  @ApiProperty()
   createdBy!: string;
 
   @ApiProperty({ format: 'date-time' })

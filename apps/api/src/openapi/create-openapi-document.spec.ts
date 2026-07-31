@@ -180,6 +180,14 @@ describe('OpenAPI 契约', () => {
     });
   });
 
+  it('题目管理响应公开已有答题记录只读标志', () => {
+    const schema = document.components?.schemas
+      ?.AdminQuestionDto as SchemaObject;
+
+    expect(schema.properties?.hasAttempts).toEqual({ type: 'boolean' });
+    expect(schema.required).toContain('hasAttempts');
+  });
+
   it('每个成功响应和统一错误响应都有非空 schema', () => {
     for (const operation of operations(document)) {
       const responses = operation.responses ?? {};
