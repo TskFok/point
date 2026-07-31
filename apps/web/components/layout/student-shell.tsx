@@ -10,7 +10,12 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+
+import {
+  POINT_BALANCE_EVENT,
+  pointBalanceFromEvent,
+} from "@/lib/point-balance-event";
 
 import { MobileNav, type NavigationItem } from "./mobile-nav";
 
@@ -38,6 +43,19 @@ export function StudentShell({
 }: StudentShellProps) {
   const pathname = usePathname();
   const activePath = currentPath ?? pathname;
+  const [pointsBalance, setPointsBalance] = useState(user.pointsBalance);
+
+  useEffect(() => {
+    function updateBalance(event: Event) {
+      const balance = pointBalanceFromEvent(event);
+      if (balance !== null) setPointsBalance(balance);
+    }
+
+    window.addEventListener(POINT_BALANCE_EVENT, updateBalance);
+    return () => {
+      window.removeEventListener(POINT_BALANCE_EVENT, updateBalance);
+    };
+  }, []);
 
   return (
     <div className="app-shell app-shell--student">
@@ -83,9 +101,9 @@ export function StudentShell({
             <p className="app-header__eyebrow">今天也向前一步</p>
             <strong>{user.username}</strong>
           </Link>
-          <div aria-label={`当前积分 ${user.pointsBalance}`} className="point-chip">
+          <div aria-label={`当前积分 ${pointsBalance}`} className="point-chip">
             <CircleDollarSign aria-hidden="true" />
-            <span>{user.pointsBalance}</span>
+            <span>{pointsBalance}</span>
             <small>积分</small>
           </div>
         </header>
