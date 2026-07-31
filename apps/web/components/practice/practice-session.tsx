@@ -35,10 +35,13 @@ type PracticeApi = Pick<
 >;
 
 export type PracticeQueueItem = {
-  idempotencyKey?: string;
   question: LearnerQuestion;
   result?: AnswerResult;
   selectedOptionId?: string;
+  submission?: {
+    idempotencyKey: string;
+    selectedOptionId: string;
+  };
 };
 
 type PracticeSessionProps = {
@@ -46,6 +49,7 @@ type PracticeSessionProps = {
   initialQuestion?: LearnerQuestion;
   mode?: "FIRST" | "WRONG_RETRY";
   onMastered?: (questionId: string) => void;
+  onResult?: (questionId: string, result: AnswerResult) => void;
 };
 
 function createIdempotencyKey() {
@@ -78,6 +82,7 @@ export function PracticeSession({
   initialQuestion,
   mode = "FIRST",
   onMastered,
+  onResult,
 }: PracticeSessionProps) {
   const [queue, setQueue] = useState<PracticeQueueItem[]>(() =>
     initialQuestion ? [{ question: initialQuestion }] : [],
@@ -103,7 +108,11 @@ export function PracticeSession({
   }, []);
 
   const loadQuestion = useCallback(
-    async (excludeIds: string[], initial: boolean) => {
+    async (
+      excludeIds: string[],
+      initial: boolean,
+      requestedTailIndex?: number,
+    ) => {
       const requestId = latestLoadRequest.current + 1;
       latestLoadRequest.current = requestId;
       if (initial) setLoading(true);
@@ -114,7 +123,14 @@ export function PracticeSession({
         const question = await api.getRandomQuestion(excludeIds);
         if (!mounted.current || latestLoadRequest.current !== requestId) return;
         setQueue((items) => [...items, { question }]);
-        if (!initial) setCurrentIndex((index) => index + 1);
+        setCompleted(false);
+        if (!initial && requestedTailIndex !== undefined) {
+          setCurrentIndex((index) =>
+            index === requestedTailIndex
+              ? requestedTailIndex + 1
+              : index,
+          );
+        }
       } catch (error) {
         if (!mounted.current || latestLoadRequest.current !== requestId) return;
         if (isEmptyQuestionPool(error)) {
@@ -144,7 +160,14 @@ export function PracticeSession({
   }, [initialQuestion, loadQuestion, mode]);
 
   function selectOption(optionId: string) {
-    if (!currentItem || currentItem.result || submitting) return;
+    if (
+      !currentItem ||
+      currentItem.result ||
+      currentItem.submission ||
+      submitting
+    ) {
+      return;
+    }
     setSubmitError(null);
     setQueue((items) =>
       items.map((item, index) =>
@@ -164,11 +187,20 @@ export function PracticeSession({
       return;
     }
 
-    const idempotencyKey =
-      currentItem.idempotencyKey ?? createIdempotencyKey();
+    const submission = currentItem.submission ?? {
+      idempotencyKey: createIdempotencyKey(),
+      selectedOptionId: currentItem.selectedOptionId,
+    };
+    const submittedIndex = currentIndex;
     setQueue((items) =>
       items.map((item, index) =>
-        index === currentIndex ? { ...item, idempotencyKey } : item,
+        index === submittedIndex
+          ? {
+              ...item,
+              selectedOptionId: submission.selectedOptionId,
+              submission,
+            }
+          : item,
       ),
     );
     setSubmitting(true);
@@ -176,8 +208,8 @@ export function PracticeSession({
 
     try {
       const input = {
-        idempotencyKey,
-        selectedOptionId: currentItem.selectedOptionId,
+        idempotencyKey: submission.idempotencyKey,
+        selectedOptionId: submission.selectedOptionId,
       };
       const result =
         mode === "WRONG_RETRY"
@@ -185,10 +217,11 @@ export function PracticeSession({
           : await api.answerQuestion(currentItem.question.id, input);
       setQueue((items) =>
         items.map((item, index) =>
-          index === currentIndex ? { ...item, result } : item,
+          index === submittedIndex ? { ...item, result } : item,
         ),
       );
       publishPointBalance(result.balance);
+      onResult?.(currentItem.question.id, result);
       if (mode === "WRONG_RETRY" && result.correct) {
         onMastered?.(currentItem.question.id);
       }
@@ -200,15 +233,24 @@ export function PracticeSession({
   }
 
   async function goNext() {
+    if (loadingNext) return;
+    setSubmitError(null);
     if (currentIndex < queue.length - 1) {
       setCurrentIndex((index) => index + 1);
       return;
     }
+    if (completed) return;
 
     const excludeIds = queue
       .filter((item) => !item.result)
       .map((item) => item.question.id);
-    await loadQuestion(excludeIds, false);
+    await loadQuestion(excludeIds, false, currentIndex);
+  }
+
+  function goPrevious() {
+    setSubmitError(null);
+    setLoadError(null);
+    setCurrentIndex((index) => index - 1);
   }
 
   if (loading) {
@@ -264,7 +306,10 @@ export function PracticeSession({
       ) : null}
 
       <QuestionCard
-        disabled={Boolean(currentItem.result) || submitting}
+        disabled={
+          Boolean(currentItem.result || currentItem.submission) ||
+          submitting
+        }
         onSelect={selectOption}
         question={currentItem.question}
         selectedOptionId={currentItem.selectedOptionId}
@@ -290,7 +335,7 @@ export function PracticeSession({
           question={currentItem.question}
           result={currentItem.result}
         />
-      ) : (
+      ) : submitError ? null : (
         <Button
           className="practice-submit"
           disabled={!currentItem.selectedOptionId || submitting}
@@ -303,6 +348,8 @@ export function PracticeSession({
           )}
           {submitting
             ? "正在提交"
+            : currentItem.submission
+              ? "重试提交"
             : mode === "WRONG_RETRY"
               ? "提交重练答案"
               : "提交答案"}
@@ -313,14 +360,17 @@ export function PracticeSession({
         <nav aria-label="题目切换" className="practice-navigation">
           <Button
             disabled={currentIndex === 0}
-            onClick={() => setCurrentIndex((index) => index - 1)}
+            onClick={goPrevious}
             variant="secondary"
           >
             <ArrowLeft aria-hidden="true" />
             上一题
           </Button>
           <Button
-            disabled={loadingNext}
+            disabled={
+              loadingNext ||
+              (completed && currentIndex === queue.length - 1)
+            }
             onClick={() => void goNext()}
             variant="secondary"
           >

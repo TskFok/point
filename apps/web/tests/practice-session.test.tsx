@@ -8,9 +8,18 @@ import { PracticeSession } from "@/components/practice/practice-session";
 import {
   correctAnswer,
   questionOne,
+  questionThree,
   questionTwo,
   wrongAnswer,
 } from "./student-fixtures";
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve;
+  });
+  return { promise, resolve };
+}
 
 function createApi() {
   return {
@@ -98,7 +107,7 @@ describe("随机练习队列", () => {
     ]);
   });
 
-  it("提交网络失败时保留选择，并使用同一幂等键重试", async () => {
+  it("首次答题提交开始后冻结选项和请求载荷，网络失败重试也不能更换答案", async () => {
     const user = userEvent.setup();
     const api = createApi();
     api.getRandomQuestion.mockResolvedValue(questionOne);
@@ -122,13 +131,184 @@ describe("随机练习队列", () => {
       await screen.findByText("网络连接失败，请检查网络后重试"),
     ).toBeVisible();
     expect(selected).toBeChecked();
+    const otherOption = screen.getByRole("radio", { name: /B.*left/ });
+    expect(selected).toBeDisabled();
+    expect(otherOption).toBeDisabled();
+    expect(
+      screen.queryByRole("button", { name: "提交答案" }),
+    ).not.toBeInTheDocument();
+    await user.click(otherOption);
 
     await user.click(screen.getByRole("button", { name: "重试提交" }));
     expect(await screen.findByText("回答正确")).toBeVisible();
     expect(api.answerQuestion).toHaveBeenCalledTimes(2);
-    expect(api.answerQuestion.mock.calls[0][1].idempotencyKey).toBe(
-      api.answerQuestion.mock.calls[1][1].idempotencyKey,
+    expect(api.answerQuestion.mock.calls[1][1]).toEqual(
+      api.answerQuestion.mock.calls[0][1],
     );
+    expect(api.answerQuestion.mock.calls[1][1].selectedOptionId).toBe(
+      "option-1-a",
+    );
+  });
+
+  it("错题重练提交失败后同样冻结选项和原始请求载荷", async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    api.retryWrongQuestion
+      .mockRejectedValueOnce(
+        new ApiNetworkError(
+          "/api/v1/practice/wrong-questions/question-1/retry",
+          { message: "offline" },
+        ),
+      )
+      .mockResolvedValueOnce({
+        ...correctAnswer,
+        errorCount: 3,
+        pointsAwarded: 0,
+      });
+
+    render(
+      <PracticeSession
+        api={api}
+        initialQuestion={questionOne}
+        mode="WRONG_RETRY"
+      />,
+    );
+
+    const selected = screen.getByRole("radio", { name: /A.*had left/ });
+    const otherOption = screen.getByRole("radio", { name: /B.*left/ });
+    await user.click(selected);
+    await user.click(screen.getByRole("button", { name: "提交重练答案" }));
+
+    expect(
+      await screen.findByText("网络连接失败，请检查网络后重试"),
+    ).toBeVisible();
+    expect(selected).toBeDisabled();
+    expect(otherOption).toBeDisabled();
+    await user.click(otherOption);
+    await user.click(screen.getByRole("button", { name: "重试提交" }));
+
+    expect(await screen.findByText("这道错题已掌握")).toBeVisible();
+    expect(api.retryWrongQuestion.mock.calls[1][1]).toEqual(
+      api.retryWrongQuestion.mock.calls[0][1],
+    );
+    expect(api.retryWrongQuestion.mock.calls[1][1].selectedOptionId).toBe(
+      "option-1-a",
+    );
+  });
+
+  it("队尾新题延迟返回时，用户已返回上一题则不会被响应抢走导航", async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    const thirdQuestion = deferred<typeof questionThree>();
+    api.getRandomQuestion
+      .mockResolvedValueOnce(questionOne)
+      .mockResolvedValueOnce(questionTwo)
+      .mockReturnValueOnce(thirdQuestion.promise);
+
+    render(<PracticeSession api={api} />);
+
+    expect(await screen.findByText(questionOne.stem)).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "下一题" }));
+    expect(await screen.findByText(questionTwo.stem)).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "下一题" }));
+    await user.click(screen.getByRole("button", { name: "上一题" }));
+    expect(screen.getByText(questionOne.stem)).toBeVisible();
+
+    thirdQuestion.resolve(questionThree);
+
+    expect(await screen.findByRole("button", { name: "下一题" })).toBeEnabled();
+    expect(screen.getByText(questionOne.stem)).toBeVisible();
+    expect(screen.queryByText(questionThree.stem)).not.toBeInTheDocument();
+  });
+
+  it("切换到其他题目时清除上一题的提交错误", async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    api.getRandomQuestion.mockResolvedValue(questionTwo);
+    api.answerQuestion.mockRejectedValue(
+      new ApiNetworkError("/api/v1/practice/questions/question-1/answer", {
+        message: "offline",
+      }),
+    );
+
+    render(<PracticeSession api={api} initialQuestion={questionOne} />);
+
+    await user.click(screen.getByRole("radio", { name: /A.*had left/ }));
+    await user.click(screen.getByRole("button", { name: "提交答案" }));
+    expect(
+      await screen.findByText("网络连接失败，请检查网络后重试"),
+    ).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "下一题" }));
+    expect(await screen.findByText(questionTwo.stem)).toBeVisible();
+    expect(
+      screen.queryByText("网络连接失败，请检查网络后重试"),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "上一题" }));
+    expect(screen.getByText(questionOne.stem)).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "重试提交" }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "提交答案" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("到达未答题队尾后禁用下一题，避免重复请求完成状态", async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    api.getRandomQuestion.mockRejectedValue(
+      new ApiClientError(404, {
+        code: "NO_UNANSWERED_QUESTIONS",
+        details: {},
+        message: "没有可继续作答的未答题目",
+        requestId: "request-complete",
+      }),
+    );
+
+    render(<PracticeSession api={api} initialQuestion={questionOne} />);
+
+    await user.click(screen.getByRole("button", { name: "下一题" }));
+    expect(
+      await screen.findByText("已经到达本轮未答题队尾"),
+    ).toBeVisible();
+    const nextButton = screen.getByRole("button", { name: "下一题" });
+    expect(nextButton).toBeDisabled();
+    await user.click(nextButton);
+    expect(api.getRandomQuestion).toHaveBeenCalledTimes(1);
+  });
+
+  it("确认队尾完成后仍可在已经加载的题目之间前后切换", async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    api.getRandomQuestion
+      .mockResolvedValueOnce(questionOne)
+      .mockResolvedValueOnce(questionTwo)
+      .mockRejectedValueOnce(
+        new ApiClientError(404, {
+          code: "NO_UNANSWERED_QUESTIONS",
+          details: {},
+          message: "没有可继续作答的未答题目",
+          requestId: "request-existing-queue",
+        }),
+      );
+
+    render(<PracticeSession api={api} />);
+
+    expect(await screen.findByText(questionOne.stem)).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "下一题" }));
+    expect(await screen.findByText(questionTwo.stem)).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "下一题" }));
+    expect(
+      await screen.findByText("已经到达本轮未答题队尾"),
+    ).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "上一题" }));
+    expect(screen.getByText(questionOne.stem)).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "下一题" }));
+    expect(screen.getByText(questionTwo.stem)).toBeVisible();
+    expect(api.getRandomQuestion).toHaveBeenCalledTimes(3);
   });
 
   it("没有未答题时显示完成状态而不是通用错误", async () => {

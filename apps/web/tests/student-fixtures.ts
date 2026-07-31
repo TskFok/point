@@ -22,6 +22,16 @@ export const questionTwo: Schemas["LearnerQuestionDto"] = {
   stem: "He ___ here since 2020.",
 };
 
+export const questionThree: Schemas["LearnerQuestionDto"] = {
+  basePoints: 6,
+  id: "question-3",
+  options: [
+    { content: "goes", id: "option-3-a", label: "A", position: 1 },
+    { content: "went", id: "option-3-b", label: "B", position: 2 },
+  ],
+  stem: "She usually ___ to school by bus.",
+};
+
 export const correctAnswer: Schemas["AnswerResultDto"] = {
   balance: 120,
   correct: true,

@@ -2,11 +2,13 @@ import {
   ApiClientError,
   ApiNetworkError,
 } from "@point-quest/api-client";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
+import { renderToString } from "react-dom/server";
 
 import StorePage from "@/app/(student)/learn/store/page";
+import { RedeemDialog } from "@/components/store/redeem-dialog";
 
 import {
   pageMeta,
@@ -23,7 +25,28 @@ function createApi() {
   };
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve;
+  });
+  return { promise, resolve };
+}
+
 describe("积分商城页面", () => {
+  it("兑换弹窗参与服务端渲染时不访问 portal 宿主", () => {
+    expect(() =>
+      renderToString(
+        <RedeemDialog
+          balance={200}
+          onCancel={jest.fn()}
+          onConfirm={jest.fn()}
+          product={productOne}
+        />,
+      ),
+    ).not.toThrow();
+  });
+
   it("开发 StrictMode 下不会重复加载同一页商品", async () => {
     const api = createApi();
     api.listProducts.mockResolvedValue({
@@ -109,6 +132,57 @@ describe("积分商城页面", () => {
     expect(api.createOrder.mock.calls[0][0].idempotencyKey).toBe(
       api.createOrder.mock.calls[1][0].idempotencyKey,
     );
+  });
+
+  it("兑换处理中保持焦点和背景隔离，且不能取消或替换兑换请求", async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    const orderRequest = deferred<typeof pendingOrder>();
+    api.listProducts.mockResolvedValue({
+      data: [productOne],
+      meta: pageMeta,
+    });
+    api.createOrder.mockReturnValue(orderRequest.promise);
+
+    const { container } = render(
+      <StorePage api={api} initialBalance={200} />,
+    );
+
+    const opener = await screen.findByRole("button", {
+      name: "兑换 80 积分",
+    });
+    await user.click(opener);
+    const dialog = screen.getByRole("dialog", { name: "确认兑换商品" });
+    expect(dialog.closest(".dialog-layer")?.parentElement).toBe(
+      document.body,
+    );
+    expect(container).toHaveAttribute("aria-hidden", "true");
+    expect(container).toHaveAttribute("inert");
+
+    await user.click(screen.getByRole("button", { name: "确认兑换" }));
+    expect(await screen.findByText("正在兑换")).toBeVisible();
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+
+    opener.focus();
+    fireEvent.focusIn(opener);
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+
+    await user.keyboard("{Escape}");
+    fireEvent.click(screen.getByRole("button", { name: "关闭兑换确认" }));
+    fireEvent.click(screen.getByRole("button", { name: "正在兑换" }));
+    expect(screen.getByRole("dialog", { name: "确认兑换商品" })).toBeVisible();
+    expect(api.createOrder).toHaveBeenCalledTimes(1);
+    expect(api.createOrder.mock.calls[0][0]).toEqual({
+      idempotencyKey: expect.any(String),
+      productId: productOne.id,
+    });
+
+    orderRequest.resolve(pendingOrder);
+
+    expect(await screen.findByText("兑换成功，订单已生成")).toBeVisible();
+    expect(container).not.toHaveAttribute("aria-hidden");
+    expect(container).not.toHaveAttribute("inert");
+    expect(opener).toHaveFocus();
   });
 
   it("服务端发现积分变化时采用最新余额并关闭过期确认", async () => {
@@ -203,5 +277,74 @@ describe("积分商城页面", () => {
     expect(
       await screen.findByRole("heading", { name: "商城正在补充奖励" }),
     ).toBeVisible();
+  });
+
+  it("失效商品使末页越界时回退并重新加载最后一个有效页", async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    const lastPageProduct = {
+      ...productOne,
+      id: "product-last-page",
+      name: "末页限定奖励",
+    };
+    api.listProducts
+      .mockResolvedValueOnce({
+        data: [productOne],
+        meta: { ...pageMeta, page: 1, total: 2, totalPages: 2 },
+      })
+      .mockResolvedValueOnce({
+        data: [lastPageProduct],
+        meta: { ...pageMeta, page: 2, total: 2, totalPages: 2 },
+      })
+      .mockResolvedValueOnce({
+        data: [],
+        meta: { ...pageMeta, page: 2, total: 1, totalPages: 1 },
+      })
+      .mockResolvedValueOnce({
+        data: [productOne],
+        meta: { ...pageMeta, page: 1, total: 1, totalPages: 1 },
+      });
+    api.createOrder.mockRejectedValue(
+      new ApiClientError(409, {
+        code: "PRODUCT_INACTIVE",
+        details: {},
+        message: "商品已下架",
+        requestId: "request-inactive",
+      }),
+    );
+
+    render(<StorePage api={api} initialBalance={200} />);
+
+    await user.click(await screen.findByRole("button", { name: "下一页" }));
+    expect(await screen.findByText(lastPageProduct.name)).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "兑换 80 积分" }));
+    await user.click(screen.getByRole("button", { name: "确认兑换" }));
+
+    expect(await screen.findByText(productOne.name)).toBeVisible();
+    expect(api.listProducts.mock.calls).toEqual([
+      [{ page: 1, pageSize: 12 }],
+      [{ page: 2, pageSize: 12 }],
+      [{ page: 2, pageSize: 12 }],
+      [{ page: 1, pageSize: 12 }],
+    ]);
+  });
+
+  it("旧版 seed 商品图片键回退到本地占位图", async () => {
+    const api = createApi();
+    api.listProducts.mockResolvedValue({
+      data: [
+        {
+          ...productOne,
+          imageKey: "seed/products/vocabulary-notebook.png",
+        },
+      ],
+      meta: pageMeta,
+    });
+
+    render(<StorePage api={api} initialBalance={200} />);
+
+    expect(
+      await screen.findByRole("img", { name: productOne.name }),
+    ).toHaveAttribute("src", "/file.svg");
   });
 });

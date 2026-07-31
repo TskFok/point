@@ -17,6 +17,7 @@ import { browserApiClient } from "@/lib/api/browser-client";
 import { getApiErrorMessage } from "@/lib/api/error-message";
 
 type Schemas = ApiComponents["schemas"];
+type AnswerResult = Schemas["AnswerResultDto"];
 type WrongQuestion = Schemas["WrongQuestionItemDto"];
 type PageMeta = Schemas["PageMetaDto"];
 type WrongQuestionApi = Pick<
@@ -60,6 +61,15 @@ export default function WrongQuestionsPage({
         pageSize: 12,
       });
       if (!mounted.current || latestLoadRequest.current !== requestId) return;
+      const lastValidPage = Math.max(1, response.meta.totalPages);
+      if (
+        response.data.length === 0 &&
+        response.meta.total > 0 &&
+        page > lastValidPage
+      ) {
+        setPage(lastValidPage);
+        return;
+      }
       setItems(response.data);
       setMeta(response.meta);
       setSelected(null);
@@ -86,6 +96,27 @@ export default function WrongQuestionsPage({
     );
   }
 
+  function syncResult(questionId: string, result: AnswerResult) {
+    setSelected((current) =>
+      current?.question.id === questionId
+        ? { ...current, errorCount: result.errorCount }
+        : current,
+    );
+    setItems((current) =>
+      current.map((item) =>
+        item.question.id === questionId
+          ? { ...item, errorCount: result.errorCount }
+          : item,
+      ),
+    );
+  }
+
+  function returnToList() {
+    setSelected(null);
+    automaticLoadKey.current = null;
+    void load();
+  }
+
   return (
     <section className="student-page">
       <div className="page-heading">
@@ -103,7 +134,7 @@ export default function WrongQuestionsPage({
               <p className="page-kicker">正在重练</p>
               <h2>累计答错 {selected.errorCount} 次</h2>
             </div>
-            <Button onClick={() => setSelected(null)} variant="secondary">
+            <Button onClick={returnToList} variant="secondary">
               返回错题列表
             </Button>
           </div>
@@ -113,6 +144,7 @@ export default function WrongQuestionsPage({
             key={selected.question.id}
             mode="WRONG_RETRY"
             onMastered={markMastered}
+            onResult={syncResult}
           />
         </div>
       ) : loading ? (

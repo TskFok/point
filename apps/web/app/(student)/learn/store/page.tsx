@@ -85,6 +85,15 @@ export default function StorePage({
       ]);
       if (!mounted.current || latestLoadRequest.current !== requestId) return;
       setBalance(balanceResponse.balance);
+      const lastValidPage = Math.max(1, productResponse.meta.totalPages);
+      if (
+        productResponse.data.length === 0 &&
+        productResponse.meta.total > 0 &&
+        page > lastValidPage
+      ) {
+        setPage(lastValidPage);
+        return;
+      }
       setProducts(productResponse.data);
       setMeta(productResponse.meta);
     } catch (error) {
@@ -105,7 +114,14 @@ export default function StorePage({
   }, [load, page]);
 
   function beginRedemption(product: Product) {
-    if (balance === null || product.stock <= 0) return;
+    if (
+      balance === null ||
+      product.stock <= 0 ||
+      redemption ||
+      redeeming
+    ) {
+      return;
+    }
     setSuccessMessage(null);
     if (balance < product.pointsCost) {
       setDeficits((current) => ({
@@ -128,18 +144,19 @@ export default function StorePage({
 
   async function confirmRedemption() {
     if (!redemption || redeeming) return;
+    const activeRedemption = redemption;
     setRedeeming(true);
     setRedeemError(null);
     try {
       const order = await api.createOrder({
-        idempotencyKey: redemption.idempotencyKey,
-        productId: redemption.product.id,
+        idempotencyKey: activeRedemption.idempotencyKey,
+        productId: activeRedemption.product.id,
       });
       setBalance(order.balance);
       publishPointBalance(order.balance);
       setProducts((items) =>
         items.map((product) =>
-          product.id === redemption.product.id
+          product.id === activeRedemption.product.id
             ? { ...product, stock: Math.max(0, product.stock - 1) }
             : product,
         ),
@@ -161,8 +178,8 @@ export default function StorePage({
           publishPointBalance(latestBalance);
           setDeficits((current) => ({
             ...current,
-            [redemption.product.id]: Math.max(
-              redemption.product.pointsCost - latestBalance,
+            [activeRedemption.product.id]: Math.max(
+              activeRedemption.product.pointsCost - latestBalance,
               0,
             ),
           }));
@@ -176,7 +193,7 @@ export default function StorePage({
       ) {
         setProducts((items) =>
           items.map((product) =>
-            product.id === redemption.product.id
+            product.id === activeRedemption.product.id
               ? { ...product, stock: 0 }
               : product,
           ),
@@ -189,9 +206,13 @@ export default function StorePage({
         error.body.code === "PRODUCT_INACTIVE"
       ) {
         setProducts((items) =>
-          items.filter((product) => product.id !== redemption.product.id),
+          items.filter(
+            (product) => product.id !== activeRedemption.product.id,
+          ),
         );
         setRedemption(null);
+        automaticLoadKey.current = null;
+        void load();
         return;
       }
       setRedeemError(getApiErrorMessage(error));

@@ -1,18 +1,10 @@
-const SAFE_IMAGE_SEGMENT = /^[A-Za-z0-9._-]+$/;
+const PRODUCT_IMAGE_KEY_PATTERN =
+  /^products\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(?:jpg|png|webp)$/;
 
 export function productImageUrl(imageKey: string) {
-  const segments = imageKey.split("/");
-  if (
-    segments.length < 2 ||
-    segments.some(
-      (segment) =>
-        !SAFE_IMAGE_SEGMENT.test(segment) ||
-        segment === "." ||
-        segment === "..",
-    )
-  ) {
+  if (!PRODUCT_IMAGE_KEY_PATTERN.test(imageKey)) {
     return "/file.svg";
   }
 
-  return `/uploads/${segments.map((segment) => encodeURIComponent(segment)).join("/")}`;
+  return `/uploads/${imageKey}`;
 }

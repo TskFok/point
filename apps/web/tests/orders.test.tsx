@@ -68,6 +68,26 @@ describe("学员订单页面", () => {
     expect(screen.getByText(/2026/)).toBeVisible();
   });
 
+  it("旧版 seed 订单图片快照不请求受限图片代理", async () => {
+    const api = createApi();
+    api.listOrders.mockResolvedValue({
+      data: [
+        {
+          ...pendingOrder,
+          productImageKeySnapshot:
+            "seed/products/vocabulary-notebook.png",
+        },
+      ],
+      meta: pageMeta,
+    });
+
+    render(<OrdersPage api={api} />);
+
+    expect(
+      await screen.findByRole("img", { name: "英语学习笔记本" }),
+    ).toHaveAttribute("src", "/file.svg");
+  });
+
   it("空订单和网络错误提供可恢复的下一步", async () => {
     const user = userEvent.setup();
     const api = createApi();
