@@ -1,5 +1,5 @@
 import { ApiClientError, ApiNetworkError } from "@point-quest/api-client";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
 
@@ -15,10 +15,12 @@ import {
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((promiseResolve) => {
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
     resolve = promiseResolve;
+    reject = promiseReject;
   });
-  return { promise, resolve };
+  return { promise, reject, resolve };
 }
 
 function createApi() {
@@ -221,7 +223,7 @@ describe("随机练习队列", () => {
     expect(screen.queryByText(questionThree.stem)).not.toBeInTheDocument();
   });
 
-  it("切换到其他题目时清除上一题的提交错误", async () => {
+  it("切换题目时隐藏其他题的提交错误，返回后仍可重试", async () => {
     const user = userEvent.setup();
     const api = createApi();
     api.getRandomQuestion.mockResolvedValue(questionTwo);
@@ -253,6 +255,127 @@ describe("随机练习队列", () => {
     expect(
       screen.queryByRole("button", { name: "提交答案" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("较早题目的提交错误晚到时只回写原题并重放冻结载荷", async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    const firstSubmission = deferred<typeof correctAnswer>();
+    api.getRandomQuestion.mockResolvedValue(questionTwo);
+    api.answerQuestion
+      .mockReturnValueOnce(firstSubmission.promise)
+      .mockResolvedValueOnce(correctAnswer);
+
+    render(<PracticeSession api={api} initialQuestion={questionOne} />);
+
+    await user.click(screen.getByRole("radio", { name: /A.*had left/ }));
+    await user.click(screen.getByRole("button", { name: "提交答案" }));
+    await user.click(screen.getByRole("button", { name: "下一题" }));
+    expect(await screen.findByText(questionTwo.stem)).toBeVisible();
+
+    await act(async () => {
+      firstSubmission.reject(
+        new ApiNetworkError(
+          "/api/v1/practice/questions/question-1/answer",
+          { message: "offline" },
+        ),
+      );
+    });
+    await waitFor(() =>
+      expect(
+        screen.getByRole("radio", { name: /A.*has lived/ }),
+      ).toBeEnabled(),
+    );
+    expect(
+      screen.queryByText("网络连接失败，请检查网络后重试"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "重试提交" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "上一题" }));
+    expect(
+      await screen.findByText("网络连接失败，请检查网络后重试"),
+    ).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "重试提交" }));
+
+    expect(await screen.findByText("回答正确")).toBeVisible();
+    expect(api.answerQuestion.mock.calls[1][1]).toEqual(
+      api.answerQuestion.mock.calls[0][1],
+    );
+  });
+
+  it("队尾取题错误晚到时只在原队尾显示并按原排除项重试", async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    const tailRequest = deferred<typeof questionThree>();
+    api.getRandomQuestion
+      .mockResolvedValueOnce(questionTwo)
+      .mockReturnValueOnce(tailRequest.promise)
+      .mockResolvedValueOnce(questionThree);
+
+    render(<PracticeSession api={api} initialQuestion={questionOne} />);
+
+    await user.click(screen.getByRole("button", { name: "下一题" }));
+    expect(await screen.findByText(questionTwo.stem)).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "下一题" }));
+    await user.click(screen.getByRole("button", { name: "上一题" }));
+    expect(screen.getByText(questionOne.stem)).toBeVisible();
+
+    await act(async () => {
+      tailRequest.reject(
+        new ApiNetworkError("/api/v1/practice/questions/random", {
+          message: "offline",
+        }),
+      );
+    });
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "下一题" })).toBeEnabled(),
+    );
+    expect(
+      screen.queryByRole("button", { name: "重试取题" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("网络连接失败，请检查网络后重试"),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "下一题" }));
+    expect(screen.getByText(questionTwo.stem)).toBeVisible();
+    expect(
+      await screen.findByText("网络连接失败，请检查网络后重试"),
+    ).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "重试取题" }));
+
+    expect(await screen.findByText(questionThree.stem)).toBeVisible();
+    expect(api.getRandomQuestion).toHaveBeenNthCalledWith(2, [
+      questionOne.id,
+      questionTwo.id,
+    ]);
+    expect(api.getRandomQuestion).toHaveBeenNthCalledWith(3, [
+      questionOne.id,
+      questionTwo.id,
+    ]);
+  });
+
+  it("初始取题网络错误仍可从错误状态恢复", async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    api.getRandomQuestion
+      .mockRejectedValueOnce(
+        new ApiNetworkError("/api/v1/practice/questions/random", {
+          message: "offline",
+        }),
+      )
+      .mockResolvedValueOnce(questionOne);
+
+    render(<PracticeSession api={api} />);
+
+    expect(
+      await screen.findByText("网络连接失败，请检查网络后重试"),
+    ).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "重新加载" }));
+    expect(await screen.findByText(questionOne.stem)).toBeVisible();
+    expect(api.getRandomQuestion).toHaveBeenNthCalledWith(2, []);
   });
 
   it("到达未答题队尾后禁用下一题，避免重复请求完成状态", async () => {

@@ -59,6 +59,7 @@ export default function StorePage({
   const [redeemError, setRedeemError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const automaticLoadKey = useRef<string | null>(null);
+  const fallbackFocusRef = useRef<HTMLDivElement>(null);
   const latestLoadRequest = useRef(0);
   const mounted = useRef(true);
 
@@ -223,7 +224,11 @@ export default function StorePage({
 
   return (
     <section className="student-page">
-      <div className="page-heading page-heading--split">
+      <div
+        className="page-heading page-heading--split"
+        ref={fallbackFocusRef}
+        tabIndex={-1}
+      >
         <div>
           <p className="page-kicker">积分奖励站</p>
           <h1>把学习成果兑换成喜欢的奖励</h1>
@@ -289,6 +294,7 @@ export default function StorePage({
         <RedeemDialog
           balance={balance}
           error={redeemError}
+          fallbackFocusRef={fallbackFocusRef}
           onCancel={() => {
             if (!redeeming) setRedemption(null);
           }}

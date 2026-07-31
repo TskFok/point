@@ -4,7 +4,13 @@ import type { ApiComponents } from "@point-quest/api-client";
 import { Button } from "@point-quest/ui";
 import { Coins, LoaderCircle, ShoppingBag, X } from "lucide-react";
 import Image from "next/image";
-import { Fragment, useEffect, useRef, useState } from "react";
+import {
+  Fragment,
+  type RefObject,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 
 import { productImageUrl } from "@/lib/product-image";
@@ -14,6 +20,7 @@ type Product = ApiComponents["schemas"]["ProductDto"];
 type RedeemDialogProps = {
   balance: number;
   error?: string | null;
+  fallbackFocusRef?: RefObject<HTMLElement | null>;
   onCancel: () => void;
   onConfirm: () => void;
   pending?: boolean;
@@ -23,6 +30,7 @@ type RedeemDialogProps = {
 export function RedeemDialog({
   balance,
   error,
+  fallbackFocusRef,
   onCancel,
   onConfirm,
   pending = false,
@@ -55,6 +63,7 @@ export function RedeemDialog({
   useEffect(() => {
     if (!portalHost) return;
     const opener = document.activeElement as HTMLElement | null;
+    const fallbackFocusTarget = fallbackFocusRef?.current ?? null;
     const currentDialog = dialogRef.current;
     if (!currentDialog) return;
     const dialog: HTMLDivElement = currentDialog;
@@ -127,6 +136,26 @@ export function RedeemDialog({
       }
     }
 
+    function canRestoreFocus(
+      element: HTMLElement | null,
+    ): element is HTMLElement {
+      if (
+        !element?.isConnected ||
+        element.getAttribute("aria-disabled") === "true"
+      ) {
+        return false;
+      }
+      if (
+        "disabled" in element &&
+        Boolean((element as HTMLButtonElement).disabled)
+      ) {
+        return false;
+      }
+      return element.matches(
+        'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+      );
+    }
+
     document.addEventListener("keydown", onKeyDown);
     document.addEventListener("focusin", onFocusIn);
     return () => {
@@ -146,9 +175,13 @@ export function RedeemDialog({
         }
         state.element.inert = state.inert;
       }
-      if (opener?.isConnected) opener.focus();
+      if (canRestoreFocus(opener)) {
+        opener.focus();
+      } else if (fallbackFocusTarget?.isConnected) {
+        fallbackFocusTarget.focus();
+      }
     };
-  }, [portalHost]);
+  }, [fallbackFocusRef, portalHost]);
 
   useEffect(() => {
     if (pending) dialogRef.current?.focus();

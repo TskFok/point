@@ -2,7 +2,12 @@ import {
   ApiClientError,
   ApiNetworkError,
 } from "@point-quest/api-client";
-import { fireEvent, render, screen } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
 import { renderToString } from "react-dom/server";
@@ -104,6 +109,84 @@ describe("积分商城页面", () => {
     expect(await screen.findByText("兑换成功，订单已生成")).toBeVisible();
     expect(screen.getByLabelText("当前可用积分 120")).toBeVisible();
   });
+
+  it.each([
+    { outcome: "SUCCESS_LAST", title: "成功兑换最后一件库存" },
+    { outcome: "OUT_OF_STOCK", title: "服务端判定售罄" },
+    { outcome: "PRODUCT_INACTIVE", title: "服务端判定商品下架" },
+  ] as const)(
+    "$title导致 opener 不可用时将焦点移到稳定页面目标",
+    async ({ outcome }) => {
+      const user = userEvent.setup();
+      const api = createApi();
+      const product = {
+        ...productOne,
+        stock: outcome === "SUCCESS_LAST" ? 1 : productOne.stock,
+      };
+      const firstPage = { data: [product], meta: pageMeta };
+      if (outcome === "PRODUCT_INACTIVE") {
+        api.listProducts
+          .mockResolvedValueOnce(firstPage)
+          .mockResolvedValueOnce({
+            data: [],
+            meta: { ...pageMeta, total: 0, totalPages: 0 },
+          });
+      } else {
+        api.listProducts.mockResolvedValue(firstPage);
+      }
+      if (outcome === "SUCCESS_LAST") {
+        api.createOrder.mockResolvedValue(pendingOrder);
+      } else {
+        api.createOrder.mockRejectedValue(
+          new ApiClientError(409, {
+            code: outcome,
+            details: {},
+            message:
+              outcome === "OUT_OF_STOCK"
+                ? "商品库存不足"
+                : "商品已下架",
+            requestId: `request-${outcome.toLowerCase()}`,
+          }),
+        );
+      }
+
+      render(<StorePage api={api} initialBalance={200} />);
+
+      const opener = await screen.findByRole("button", {
+        name: "兑换 80 积分",
+      });
+      const fallback = screen
+        .getByRole("heading", { name: "把学习成果兑换成喜欢的奖励" })
+        .closest<HTMLElement>(".page-heading");
+      await user.click(opener);
+      await user.click(screen.getByRole("button", { name: "确认兑换" }));
+
+      if (outcome === "SUCCESS_LAST") {
+        expect(
+          await screen.findByText("兑换成功，订单已生成"),
+        ).toBeVisible();
+      } else if (outcome === "OUT_OF_STOCK") {
+        expect(await screen.findByText("已售罄")).toBeVisible();
+      } else {
+        expect(
+          await screen.findByRole("heading", {
+            name: "商城正在补充奖励",
+          }),
+        ).toBeVisible();
+      }
+      await waitFor(() =>
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+      );
+      if (outcome === "PRODUCT_INACTIVE") {
+        expect(opener).not.toBeInTheDocument();
+      } else {
+        expect(opener).toBeDisabled();
+      }
+      expect(fallback).toHaveAttribute("tabindex", "-1");
+      expect(fallback).toHaveFocus();
+      expect(document.body).not.toHaveFocus();
+    },
+  );
 
   it("兑换失败后重试复用原幂等键", async () => {
     const user = userEvent.setup();

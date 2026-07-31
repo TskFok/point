@@ -38,10 +38,17 @@ export type PracticeQueueItem = {
   question: LearnerQuestion;
   result?: AnswerResult;
   selectedOptionId?: string;
+  submitError?: string;
   submission?: {
     idempotencyKey: string;
     selectedOptionId: string;
   };
+};
+
+type TailLoadError = {
+  excludeIds: string[];
+  message: string;
+  requestedTailIndex: number;
 };
 
 type PracticeSessionProps = {
@@ -92,8 +99,11 @@ export function PracticeSession({
   const [loadingNext, setLoadingNext] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [completed, setCompleted] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [initialLoadError, setInitialLoadError] = useState<string | null>(
+    null,
+  );
+  const [tailLoadError, setTailLoadError] =
+    useState<TailLoadError | null>(null);
   const initialLoadStarted = useRef(false);
   const mounted = useRef(true);
   const latestLoadRequest = useRef(0);
@@ -115,9 +125,13 @@ export function PracticeSession({
     ) => {
       const requestId = latestLoadRequest.current + 1;
       latestLoadRequest.current = requestId;
-      if (initial) setLoading(true);
-      else setLoadingNext(true);
-      setLoadError(null);
+      if (initial) {
+        setLoading(true);
+        setInitialLoadError(null);
+      } else {
+        setLoadingNext(true);
+        setTailLoadError(null);
+      }
 
       try {
         const question = await api.getRandomQuestion(excludeIds);
@@ -135,8 +149,16 @@ export function PracticeSession({
         if (!mounted.current || latestLoadRequest.current !== requestId) return;
         if (isEmptyQuestionPool(error)) {
           setCompleted(true);
+        } else if (initial) {
+          setInitialLoadError(getApiErrorMessage(error));
+        } else if (requestedTailIndex !== undefined) {
+          setTailLoadError({
+            excludeIds: [...excludeIds],
+            message: getApiErrorMessage(error),
+            requestedTailIndex,
+          });
         } else {
-          setLoadError(getApiErrorMessage(error));
+          setInitialLoadError(getApiErrorMessage(error));
         }
       } finally {
         if (mounted.current && latestLoadRequest.current === requestId) {
@@ -168,11 +190,10 @@ export function PracticeSession({
     ) {
       return;
     }
-    setSubmitError(null);
     setQueue((items) =>
       items.map((item, index) =>
         index === currentIndex
-          ? { ...item, selectedOptionId: optionId }
+          ? { ...item, selectedOptionId: optionId, submitError: undefined }
           : item,
       ),
     );
@@ -199,12 +220,12 @@ export function PracticeSession({
               ...item,
               selectedOptionId: submission.selectedOptionId,
               submission,
+              submitError: undefined,
             }
           : item,
       ),
     );
     setSubmitting(true);
-    setSubmitError(null);
 
     try {
       const input = {
@@ -217,7 +238,10 @@ export function PracticeSession({
           : await api.answerQuestion(currentItem.question.id, input);
       setQueue((items) =>
         items.map((item, index) =>
-          index === submittedIndex ? { ...item, result } : item,
+          index === submittedIndex &&
+          item.question.id === currentItem.question.id
+            ? { ...item, result, submitError: undefined }
+            : item,
         ),
       );
       publishPointBalance(result.balance);
@@ -226,7 +250,15 @@ export function PracticeSession({
         onMastered?.(currentItem.question.id);
       }
     } catch (error) {
-      setSubmitError(getApiErrorMessage(error));
+      const message = getApiErrorMessage(error);
+      setQueue((items) =>
+        items.map((item, index) =>
+          index === submittedIndex &&
+          item.question.id === currentItem.question.id
+            ? { ...item, submitError: message }
+            : item,
+        ),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -234,7 +266,6 @@ export function PracticeSession({
 
   async function goNext() {
     if (loadingNext) return;
-    setSubmitError(null);
     if (currentIndex < queue.length - 1) {
       setCurrentIndex((index) => index + 1);
       return;
@@ -248,9 +279,16 @@ export function PracticeSession({
   }
 
   function goPrevious() {
-    setSubmitError(null);
-    setLoadError(null);
     setCurrentIndex((index) => index - 1);
+  }
+
+  function retryTailQuestion() {
+    if (!tailLoadError) return;
+    void loadQuestion(
+      tailLoadError.excludeIds,
+      false,
+      tailLoadError.requestedTailIndex,
+    );
   }
 
   if (loading) {
@@ -280,10 +318,10 @@ export function PracticeSession({
     );
   }
 
-  if (!currentItem && loadError) {
+  if (!currentItem && initialLoadError) {
     return (
       <Card className="practice-load-error" role="alert">
-        <p>{loadError}</p>
+        <p>{initialLoadError}</p>
         <Button onClick={() => void loadQuestion([], true)} variant="secondary">
           <RefreshCw aria-hidden="true" />
           重新加载
@@ -293,6 +331,10 @@ export function PracticeSession({
   }
 
   if (!currentItem) return null;
+  const visibleTailLoadError =
+    tailLoadError?.requestedTailIndex === currentIndex
+      ? tailLoadError
+      : null;
 
   return (
     <section className="practice-session">
@@ -315,9 +357,9 @@ export function PracticeSession({
         selectedOptionId={currentItem.selectedOptionId}
       />
 
-      {submitError ? (
+      {currentItem.submitError ? (
         <div className="inline-error" role="alert">
-          <p>{submitError}</p>
+          <p>{currentItem.submitError}</p>
           <Button
             disabled={submitting}
             onClick={() => void submitCurrent()}
@@ -335,7 +377,7 @@ export function PracticeSession({
           question={currentItem.question}
           result={currentItem.result}
         />
-      ) : submitError ? null : (
+      ) : currentItem.submitError ? null : (
         <Button
           className="practice-submit"
           disabled={!currentItem.selectedOptionId || submitting}
@@ -391,10 +433,10 @@ export function PracticeSession({
         </p>
       ) : null}
 
-      {loadError && currentItem ? (
+      {visibleTailLoadError ? (
         <div className="inline-error" role="alert">
-          <p>{loadError}</p>
-          <Button onClick={() => void goNext()} variant="secondary">
+          <p>{visibleTailLoadError.message}</p>
+          <Button onClick={retryTailQuestion} variant="secondary">
             <RefreshCw aria-hidden="true" />
             重试取题
           </Button>
