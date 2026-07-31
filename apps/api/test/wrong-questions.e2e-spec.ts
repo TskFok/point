@@ -2,6 +2,7 @@ import { type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { Prisma } from '@prisma/client';
 import { hash } from 'bcryptjs';
+import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApiApp } from '../src/common/http/configure-api-app';
@@ -9,9 +10,13 @@ import { PrismaService } from '../src/prisma/prisma.service';
 
 const configuredWebOrigin = 'https://point-quest.example.test';
 const testJwtSecret = 'point-quest-task6-e2e-secret-at-least-32-bytes';
-const adminId = 'task6-admin';
-const studentId = 'task6-student';
-const otherStudentId = 'task6-other-student';
+const testRunId = randomUUID().replaceAll('-', '').slice(0, 10);
+const adminId = `task6-admin-${testRunId}`;
+const studentId = `task6-student-${testRunId}`;
+const otherStudentId = `task6-other-student-${testRunId}`;
+const adminUsername = `task6_admin_${testRunId}`;
+const studentUsername = `task6_student_${testRunId}`;
+const otherStudentUsername = `task6_other_student_${testRunId}`;
 const defaultTestDatabaseUrl =
   'postgresql://point:point@localhost:5433/point_test';
 
@@ -347,7 +352,7 @@ describe('错题列表与重练 API', () => {
 
   async function createQuestion(): Promise<QuestionFixture> {
     questionSequence += 1;
-    const id = `task6-question-${questionSequence}`;
+    const id = `task6-question-${testRunId}-${questionSequence}`;
     const correctOptionId = `${id}-correct`;
     const wrongOptionId = `${id}-wrong`;
     await prisma.question.create({
@@ -483,19 +488,19 @@ describe('错题列表与重练 API', () => {
       data: [
         {
           id: adminId,
-          username: 'task6_admin',
+          username: adminUsername,
           passwordHash,
           role: 'ADMIN',
         },
         {
           id: studentId,
-          username: 'task6_student',
+          username: studentUsername,
           passwordHash,
           role: 'STUDENT',
         },
         {
           id: otherStudentId,
-          username: 'task6_other_student',
+          username: otherStudentUsername,
           passwordHash,
           role: 'STUDENT',
         },
@@ -505,16 +510,16 @@ describe('错题列表与重练 API', () => {
     const [adminLogin, studentLogin, otherStudentLogin] = await Promise.all([
       request(server)
         .post('/api/v1/auth/token')
-        .send({ username: 'task6_admin', password: 'StrongPass123!' })
+        .send({ username: adminUsername, password: 'StrongPass123!' })
         .expect(201),
       request(server)
         .post('/api/v1/auth/token')
-        .send({ username: 'task6_student', password: 'StrongPass123!' })
+        .send({ username: studentUsername, password: 'StrongPass123!' })
         .expect(201),
       request(server)
         .post('/api/v1/auth/token')
         .send({
-          username: 'task6_other_student',
+          username: otherStudentUsername,
           password: 'StrongPass123!',
         })
         .expect(201),
