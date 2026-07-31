@@ -19,7 +19,8 @@ export function MobileNav({ currentPath, items }: MobileNavProps) {
         const Icon = item.icon;
         const active =
           currentPath === item.href ||
-          (item.href !== "/learn" && currentPath?.startsWith(item.href));
+          (item.href !== "/learn" &&
+            currentPath?.startsWith(`${item.href}/`));
 
         return (
           <Link

@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -21,8 +22,12 @@ const ToastContext = createContext<ToastContextValue | null>(null);
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const nextId = useRef(1);
+  const timers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
 
   const dismissToast = useCallback((id: number) => {
+    const timer = timers.current.get(id);
+    if (timer) clearTimeout(timer);
+    timers.current.delete(id);
     setToasts((current) => current.filter((toast) => toast.id !== id));
   }, []);
 
@@ -30,7 +35,20 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     const id = nextId.current;
     nextId.current += 1;
     setToasts((current) => [...current, { id, message, tone }]);
+    const timer = setTimeout(() => {
+      timers.current.delete(id);
+      setToasts((current) => current.filter((toast) => toast.id !== id));
+    }, 4_000);
+    timers.current.set(id, timer);
   }, []);
+
+  useEffect(
+    () => () => {
+      for (const timer of timers.current.values()) clearTimeout(timer);
+      timers.current.clear();
+    },
+    [],
+  );
 
   const value = useMemo(
     () => ({ dismissToast, pushToast }),
@@ -48,9 +66,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       >
         {toasts.map((toast) => (
           <div
+            aria-label={toast.message}
             className={`toast toast--${toast.tone}`}
             key={toast.id}
-            role={toast.tone === "danger" ? "alert" : "status"}
+            role="status"
           >
             <span>{toast.message}</span>
             <button

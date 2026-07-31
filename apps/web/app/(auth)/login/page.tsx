@@ -7,7 +7,10 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import { browserApiClient } from "@/lib/api/browser-client";
-import { getApiErrorMessage } from "@/lib/api/error-message";
+import {
+  getApiErrorMessage,
+  shouldClearAuthSecrets,
+} from "@/lib/api/error-message";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -27,7 +30,7 @@ export default function LoginPage() {
       router.push(destination);
       router.refresh();
     } catch (caught) {
-      setPassword("");
+      if (shouldClearAuthSecrets(caught)) setPassword("");
       setError(getApiErrorMessage(caught));
     } finally {
       setPending(false);

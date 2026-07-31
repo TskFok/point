@@ -1,3 +1,5 @@
+"use client";
+
 import {
   BookOpen,
   BookOpenCheck,
@@ -7,6 +9,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { MobileNav, type NavigationItem } from "./mobile-nav";
@@ -33,6 +36,9 @@ export function StudentShell({
   currentPath,
   user,
 }: StudentShellProps) {
+  const pathname = usePathname();
+  const activePath = currentPath ?? pathname;
+
   return (
     <div className="app-shell app-shell--student">
       <aside className="app-sidebar">
@@ -49,8 +55,9 @@ export function StudentShell({
           {studentItems.map((item) => {
             const Icon = item.icon;
             const active =
-              currentPath === item.href ||
-              (item.href !== "/learn" && currentPath?.startsWith(item.href));
+              activePath === item.href ||
+              (item.href !== "/learn" &&
+                activePath.startsWith(`${item.href}/`));
             return (
               <Link
                 aria-current={active ? "page" : undefined}
@@ -85,7 +92,7 @@ export function StudentShell({
         <main className="app-content">{children}</main>
       </div>
 
-      <MobileNav currentPath={currentPath} items={studentItems} />
+      <MobileNav currentPath={activePath} items={studentItems} />
     </div>
   );
 }

@@ -1,4 +1,8 @@
-import { ApiClientError } from "@point-quest/api-client";
+import {
+  ApiClientError,
+  ApiNetworkError,
+  ApiProtocolError,
+} from "@point-quest/api-client";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -25,8 +29,8 @@ jest.mock("@/lib/api/browser-client", () => ({
 
 const mockedApi = jest.mocked(browserApiClient);
 
-function apiError(code: string, message = "请求失败") {
-  return new ApiClientError(401, {
+function apiError(code: string, message = "请求失败", status = 401) {
+  return new ApiClientError(status, {
     code,
     message,
     requestId: "request-test",
@@ -55,6 +59,25 @@ describe("认证表单", () => {
     );
     expect(screen.getByLabelText("用户名")).toHaveValue("learner_01");
     expect(screen.getByLabelText("密码")).toHaveValue("");
+  });
+
+  it.each([
+    ["网络或超时", new ApiNetworkError("/api/v1/auth/login", new Error("timeout"))],
+    ["服务端 5xx", apiError("INTERNAL_ERROR", "内部错误", 503)],
+    ["协议", new ApiProtocolError(502, "<html>", "响应格式错误")],
+  ])("%s 失败保留登录凭据并允许原地重试", async (_scenario, failure) => {
+    mockedApi.loginWeb.mockRejectedValueOnce(failure);
+    const user = userEvent.setup();
+
+    render(<LoginPage />);
+    await user.type(screen.getByLabelText("用户名"), "learner_01");
+    await user.type(screen.getByLabelText("密码"), "password123");
+    await user.click(screen.getByRole("button", { name: "登录" }));
+
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(screen.getByLabelText("用户名")).toHaveValue("learner_01");
+    expect(screen.getByLabelText("密码")).toHaveValue("password123");
+    expect(screen.getByRole("button", { name: "登录" })).toBeEnabled();
   });
 
   it.each([
@@ -94,5 +117,24 @@ describe("认证表单", () => {
     expect(screen.getByLabelText("用户名")).toHaveValue("learner_01");
     expect(screen.getByLabelText("密码")).toHaveValue("");
     expect(screen.getByLabelText("确认密码")).toHaveValue("");
+  });
+
+  it("注册网络失败保留全部输入并允许原地重试", async () => {
+    mockedApi.register.mockRejectedValueOnce(
+      new ApiNetworkError("/api/v1/auth/register", new Error("offline")),
+    );
+    const user = userEvent.setup();
+
+    render(<RegisterPage />);
+    await user.type(screen.getByLabelText("用户名"), "learner_01");
+    await user.type(screen.getByLabelText("密码"), "password123");
+    await user.type(screen.getByLabelText("确认密码"), "password123");
+    await user.click(screen.getByRole("button", { name: "创建账号" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("网络连接失败");
+    expect(screen.getByLabelText("用户名")).toHaveValue("learner_01");
+    expect(screen.getByLabelText("密码")).toHaveValue("password123");
+    expect(screen.getByLabelText("确认密码")).toHaveValue("password123");
+    expect(screen.getByRole("button", { name: "创建账号" })).toBeEnabled();
   });
 });

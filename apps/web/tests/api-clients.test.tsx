@@ -55,6 +55,8 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 describe("Web API 客户端", () => {
+  const originalApiServerBaseUrl = process.env.API_SERVER_BASE_URL;
+
   beforeAll(() => {
     Object.defineProperty(globalThis, "Headers", {
       configurable: true,
@@ -73,7 +75,15 @@ describe("Web API 客户端", () => {
     document.cookie = "pq_csrf=; Max-Age=0; path=/";
   });
 
-  it("浏览器请求保留 /api/v1 基址并始终携带 Cookie", async () => {
+  afterEach(() => {
+    if (originalApiServerBaseUrl === undefined) {
+      delete process.env.API_SERVER_BASE_URL;
+    } else {
+      process.env.API_SERVER_BASE_URL = originalApiServerBaseUrl;
+    }
+  });
+
+  it("浏览器请求使用 Web 同源 /api/v1 并始终携带 Cookie", async () => {
     mockFetch.mockResolvedValueOnce(
       jsonResponse(
         {
@@ -94,7 +104,7 @@ describe("Web API 客户端", () => {
     });
 
     expect(mockFetch).toHaveBeenCalledWith(
-      "http://localhost:3000/api/v1/auth/login",
+      "/api/v1/auth/login",
       expect.objectContaining({ credentials: "include", method: "POST" }),
     );
   });
@@ -113,6 +123,7 @@ describe("Web API 客户端", () => {
   });
 
   it("服务端客户端精确转发当前请求 Cookie", async () => {
+    process.env.API_SERVER_BASE_URL = "http://api.internal:4100/api/v1/";
     mockCookieStore.toString.mockReturnValue(
       "pq_access=access-value; pq_refresh=refresh-value",
     );
@@ -136,7 +147,7 @@ describe("Web API 客户端", () => {
       "pq_access=access-value; pq_refresh=refresh-value",
     );
     expect(mockFetch.mock.calls[0]?.[0]).toBe(
-      "http://localhost:3000/api/v1/auth/me",
+      "http://api.internal:4100/api/v1/auth/me",
     );
   });
 });

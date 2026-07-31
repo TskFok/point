@@ -19,3 +19,12 @@ export function getApiErrorMessage(error: unknown): string {
 
   return "暂时无法完成操作，请稍后重试";
 }
+
+export function shouldClearAuthSecrets(error: unknown): boolean {
+  return (
+    error instanceof ApiClientError &&
+    error.status < 500 &&
+    (error.body.code === "AUTH_INVALID_CREDENTIALS" ||
+      error.body.code === "AUTH_USERNAME_TAKEN")
+  );
+}

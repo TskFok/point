@@ -2,13 +2,14 @@
   "name": "@point-quest/ui",
   "version": "0.0.0",
   "private": true,
+  "description": "仅供本仓库使用、由消费方编译的源码 UI 包",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
     "./tokens.css": "./src/tokens.css"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "pnpm run typecheck",
     "lint": "node -e \"\"",
     "typecheck": "tsc --noEmit",
     "test": "node -e \"\""

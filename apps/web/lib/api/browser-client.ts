@@ -2,9 +2,6 @@
 
 import { createApiClient } from "@point-quest/api-client";
 
-const apiBaseUrl =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3000/api/v1";
-
 function readCookie(name: string): string | undefined {
   if (typeof document === "undefined") {
     return undefined;
@@ -28,7 +25,7 @@ function readCookie(name: string): string | undefined {
 }
 
 export const browserApiClient = createApiClient({
-  baseUrl: apiBaseUrl,
+  baseUrl: "/api/v1",
   fetch: (input, init) =>
     fetch(input, {
       ...init,
