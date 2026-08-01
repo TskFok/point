@@ -29,6 +29,12 @@ Point Quest 是一个面向管理员与学员的英语答题积分商城。管�
 
 `.env` 中的 `PORT` 是 NestJS API 端口，`WEB_ORIGIN` 必须与浏览器实际访问的 Web Origin 完全一致，`API_SERVER_BASE_URL` 必须包含 `/api/v1`。生产部署前必须替换 `AUTH_JWT_SECRET`，并为 `PRODUCT_UPLOAD_ROOT` 使用仅服务账户可写的私有目录。
 
+## 生产 Docker 部署
+
+项目提供独立的 `compose.prod.yaml`，用于在已有 HTTPS 网关的单台服务器上运行 PostgreSQL、数据库迁移、API 和 Web。生产编排只把 Web 发布到 `127.0.0.1:3001`，API 与数据库仅在 Compose 内部网络可见；公网 `/api/v1` 由 Web 同源代理转发。
+
+首次上线、更新、网关配置、备份恢复与排障步骤见 [Docker 单机生产部署指南](docs/deployment/docker.md)。
+
 ## 演示账号与种子
 
 `pnpm db:seed` 可重复执行，并创建以下演示账号：

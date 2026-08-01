@@ -504,7 +504,7 @@ docker image inspect point-quest-prod-web --format '{{.Config.User}}'
 
 Expected: 三个目标构建 exit 0；API 和 Web 镜像用户均为 `node`。如果 Compose 生成的镜像名包含本机 Compose 版本的规范化差异，先用 `docker compose ... images` 取得实际镜像名再执行只读 inspect。
 
-- [ ] **Step 8: 提交镜像构建实现**
+- [x] **Step 8: 提交镜像构建实现**
 
 ```bash
 git add .dockerignore Dockerfile package.json apps/api/package.json pnpm-lock.yaml apps/web/next.config.ts
@@ -524,7 +524,7 @@ git commit -m "部署：构建生产 API Web 与迁移镜像"
 - Consumes: Task 1 的 `.env.production.example`、`compose.prod.yaml` 和固定回环端口；Task 2 的镜像 targets。
 - Produces: 运维人员可复制执行的首次部署、更新、网关、备份、恢复、轮换和排障说明；README 的稳定入口。
 
-- [ ] **Step 1: 编写 Docker 部署文档**
+- [x] **Step 1: 编写 Docker 部署文档**
 
 创建 `docs/deployment/docker.md`，按以下顺序给出明确内容和命令：
 
@@ -576,11 +576,11 @@ docker compose --env-file .env.production -f compose.prod.yaml up -d api web
 9. 排障：分别覆盖变量缺失、数据库不健康、迁移非零退出、API unhealthy、Web 返回 `UPSTREAM_UNAVAILABLE`、3001 被占用和上传卷权限异常。
 10. 停止服务：普通停止不删除卷；删除卷命令仅用于明确废弃环境，并用警告说明不可恢复。
 
-- [ ] **Step 2: 在根 README 增加生产部署入口**
+- [x] **Step 2: 在根 README 增加生产部署入口**
 
 在本地启动说明之后新增“生产 Docker 部署”小节，明确只有 `127.0.0.1:3001` 发布到宿主机、需要现有 HTTPS 网关，并链接 `docs/deployment/docker.md`；不要把完整运维命令复制到 README。
 
-- [ ] **Step 3: 验证文档引用的真实配置并检查 Markdown 差异**
+- [x] **Step 3: 验证文档引用的真实配置并检查 Markdown 差异**
 
 Run:
 
