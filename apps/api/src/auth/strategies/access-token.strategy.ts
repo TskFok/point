@@ -9,6 +9,7 @@ export type RequestUser = {
   id: string;
   username: string;
   role: UserRole;
+  pointsBalance: number;
 };
 
 export type AuthenticationSource = 'bearer' | 'cookie';
@@ -79,6 +80,7 @@ export class AccessTokenStrategy {
         id: true,
         username: true,
         role: true,
+        pointsBalance: true,
         isActive: true,
       },
     });
@@ -91,6 +93,7 @@ export class AccessTokenStrategy {
         id: user.id,
         username: user.username,
         role: user.role,
+        pointsBalance: user.pointsBalance,
       },
       source,
     };

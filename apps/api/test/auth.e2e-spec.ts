@@ -407,11 +407,17 @@ describe('认证 API', () => {
       .expect(200)
       .expect(({ body }) => {
         const responseBody = body as unknown as {
-          user: { id: string; username: string; role: string };
+          user: {
+            id: string;
+            username: string;
+            role: string;
+            pointsBalance: number;
+          };
         };
         expect(responseBody.user).toMatchObject({
           username: webRefreshStudentUsername,
           role: 'STUDENT',
+          pointsBalance: 0,
         });
         expect(responseBody.user.id).toEqual(expect.any(String));
       });

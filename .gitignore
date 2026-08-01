@@ -1,8 +1,14 @@
 .superpowers/
+.env
+.env.*
+!.env.example
 node_modules/
 .pnpm-store/
 dist/
 .next/
 coverage/
+uploads/
+test-results/
+playwright-report/
+blob-report/
 *.tsbuildinfo
-!.env.example
