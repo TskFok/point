@@ -36,7 +36,7 @@
 - Consumes: API 健康端点 `GET /api/v1/health`；Web 代理内部地址 `API_SERVER_BASE_URL`；现有环境变量 `DATABASE_URL`、`AUTH_JWT_SECRET`、`WEB_ORIGIN`、`PRODUCT_UPLOAD_ROOT`。
 - Produces: 四服务生产编排 `db`、`migrate`、`api`、`web`；命名卷 `point-postgres-data`、`point-upload-data`；可被后续镜像任务使用的 build targets `migrate`、`api`、`web`。
 
-- [ ] **Step 1: 先写生产环境与 Compose 契约测试**
+- [x] **Step 1: 先写生产环境与 Compose 契约测试**
 
 创建 `scripts/docker-production.test.mjs`，使用项目已有 `dotenv` 和 Docker Compose JSON 展开结果断言生产边界：
 
@@ -126,13 +126,13 @@ test("生产 Compose 隔离数据卷并启用基础运行时加固", () => {
 });
 ```
 
-- [ ] **Step 2: 运行测试确认因生产文件尚不存在而失败**
+- [x] **Step 2: 运行测试确认因生产文件尚不存在而失败**
 
 Run: `node --test scripts/docker-production.test.mjs`
 
 Expected: FAIL，错误包含无法读取 `.env.production.example` 或 `compose.prod.yaml`。
 
-- [ ] **Step 3: 创建生产环境模板并允许模板进入 Git**
+- [x] **Step 3: 创建生产环境模板并允许模板进入 Git**
 
 创建 `.env.production.example`：
 
@@ -160,7 +160,7 @@ WEB_MEMORY_LIMIT=512m
 !.env.production.example
 ```
 
-- [ ] **Step 4: 创建完整生产 Compose 文件**
+- [x] **Step 4: 创建完整生产 Compose 文件**
 
 创建 `compose.prod.yaml`，使用 YAML anchor 复用日志配置；必填变量全部使用 `${VARIABLE:?message}`，资源变量保留规格中的默认值：
 
@@ -285,7 +285,7 @@ volumes:
   point-upload-data:
 ```
 
-- [ ] **Step 5: 运行契约测试和 Compose 语义校验**
+- [x] **Step 5: 运行契约测试和 Compose 语义校验**
 
 Run:
 
