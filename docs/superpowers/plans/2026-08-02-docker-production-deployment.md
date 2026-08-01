@@ -314,47 +314,26 @@ git commit -m "部署：增加生产 Compose 配置契约"
 - Modify: `apps/api/package.json`
 - Modify: `pnpm-lock.yaml`
 - Modify: `apps/web/next.config.ts`
-- Modify: `scripts/docker-production.test.mjs`
-- Test: `scripts/docker-production.test.mjs`
+- Test: Docker Compose 三目标镜像构建
+- Test: Next.js standalone 运行产物
 
 **Interfaces:**
 - Consumes: Task 1 的 Compose build targets `migrate`、`api`、`web`；Prisma schema `prisma/schema.prisma`；API 构建产物 `apps/api/dist`。
 - Produces: 可直接被 Compose 构建的三个命名目标；Web standalone 入口 `/app/apps/web/server.js`；API 入口 `/app/dist/main.js`；迁移入口 `pnpm prisma migrate deploy`。
 
-- [ ] **Step 1: 扩展测试，先约束 Dockerfile 与 standalone 输出**
+- [ ] **Step 1: 先执行真实构建断言并确认生产产物缺失**
 
-向 `scripts/docker-production.test.mjs` 增加：
+分别运行：
 
-```js
-test("Dockerfile 提供三个生产目标且不固化密钥", async () => {
-  const dockerfile = await readFile(new URL("../Dockerfile", import.meta.url), "utf8");
-
-  for (const target of ["migrate", "api", "web"]) {
-    assert.match(dockerfile, new RegExp(`^FROM .+ AS ${target}$`, "m"));
-  }
-  assert.doesNotMatch(dockerfile, /AUTH_JWT_SECRET|POSTGRES_PASSWORD|DATABASE_URL/);
-  assert.match(dockerfile, /pnpm --filter @point-quest\/api deploy --legacy --prod/);
-  assert.match(dockerfile, /\.prisma/);
-});
-
-test("Next.js 为 Monorepo 生成 standalone 运行产物", async () => {
-  const nextConfig = await readFile(
-    new URL("../apps/web/next.config.ts", import.meta.url),
-    "utf8",
-  );
-
-  assert.match(nextConfig, /output:\s*["']standalone["']/);
-  assert.match(nextConfig, /outputFileTracingRoot:\s*repositoryRoot/);
-});
+```bash
+docker compose --env-file .env.production.example -f compose.prod.yaml build migrate api web
+pnpm build
+test -f apps/web/.next/standalone/apps/web/server.js
 ```
 
-- [ ] **Step 2: 运行测试确认 Dockerfile 尚不存在而失败**
+Expected: Docker 构建因根目录没有 `Dockerfile` 而失败；现有 `pnpm build` 成功，但 standalone 文件断言失败。两个失败分别证明三目标镜像和 standalone 产物当前确实缺失。
 
-Run: `node --test scripts/docker-production.test.mjs`
-
-Expected: 原有 4 个测试通过，新增测试因找不到 `Dockerfile` 或 standalone 配置而失败。
-
-- [ ] **Step 3: 修正生产依赖边界并刷新锁文件**
+- [ ] **Step 2: 修正生产依赖边界并刷新锁文件**
 
 对清单作以下精确调整：
 
@@ -367,7 +346,7 @@ Run: `pnpm install --lockfile-only --offline`
 
 Expected: exit 0；`pnpm-lock.yaml` 的根 importer 把 `prisma` 归入 dependencies，API importer 出现上述四项声明，没有升级任何版本。
 
-- [ ] **Step 4: 启用 Next.js standalone Monorepo 追踪**
+- [ ] **Step 3: 启用 Next.js standalone Monorepo 追踪**
 
 把 `apps/web/next.config.ts` 调整为：
 
@@ -388,7 +367,7 @@ const nextConfig: NextConfig = {
 export default nextConfig;
 ```
 
-- [ ] **Step 5: 创建 Docker 构建上下文排除规则**
+- [ ] **Step 4: 创建 Docker 构建上下文排除规则**
 
 创建 `.dockerignore`：
 
@@ -417,7 +396,7 @@ playwright
 *.tsbuildinfo
 ```
 
-- [ ] **Step 6: 创建多阶段 Dockerfile**
+- [ ] **Step 5: 创建多阶段 Dockerfile**
 
 创建根目录 `Dockerfile`。API deploy 阶段必须在 `pnpm deploy` 后显式把生成的 `.prisma` 目录复制到部署依赖树；最终 API 镜像只选择 `package.json`、`node_modules`、`dist` 和上传目录，不复制 deploy 目录中的源码或测试：
 
@@ -499,7 +478,7 @@ EXPOSE 3001
 CMD ["node", "server.js"]
 ```
 
-- [ ] **Step 7: 运行静态契约测试和本地生产构建**
+- [ ] **Step 6: 运行 Compose 契约测试和本地生产构建**
 
 Run:
 
@@ -508,11 +487,12 @@ node --test scripts/docker-production.test.mjs
 pnpm --filter @point-quest/api typecheck
 pnpm --filter @point-quest/web typecheck
 pnpm build
+test -f apps/web/.next/standalone/apps/web/server.js
 ```
 
-Expected: Docker 契约测试 6/6 PASS；API/Web 类型检查通过；Next 输出存在 `apps/web/.next/standalone/apps/web/server.js`；全仓构建 exit 0。
+Expected: Docker Compose 契约测试 4/4 PASS；API/Web 类型检查通过；Next 输出存在 `apps/web/.next/standalone/apps/web/server.js`；全仓构建 exit 0。
 
-- [ ] **Step 8: 构建三个 Docker 目标并验证镜像不使用 root**
+- [ ] **Step 7: 构建三个 Docker 目标并验证镜像不使用 root**
 
 Run:
 
@@ -524,10 +504,10 @@ docker image inspect point-quest-prod-web --format '{{.Config.User}}'
 
 Expected: 三个目标构建 exit 0；API 和 Web 镜像用户均为 `node`。如果 Compose 生成的镜像名包含本机 Compose 版本的规范化差异，先用 `docker compose ... images` 取得实际镜像名再执行只读 inspect。
 
-- [ ] **Step 9: 提交镜像构建实现**
+- [ ] **Step 8: 提交镜像构建实现**
 
 ```bash
-git add .dockerignore Dockerfile package.json apps/api/package.json pnpm-lock.yaml apps/web/next.config.ts scripts/docker-production.test.mjs
+git add .dockerignore Dockerfile package.json apps/api/package.json pnpm-lock.yaml apps/web/next.config.ts
 git commit -m "部署：构建生产 API Web 与迁移镜像"
 ```
 
@@ -538,42 +518,13 @@ git commit -m "部署：构建生产 API Web 与迁移镜像"
 **Files:**
 - Create: `docs/deployment/docker.md`
 - Modify: `README.md`
-- Modify: `scripts/docker-production.test.mjs`
-- Test: `scripts/docker-production.test.mjs`
+- Test: 文档中的 Compose 配置、部署启动和健康检查命令
 
 **Interfaces:**
 - Consumes: Task 1 的 `.env.production.example`、`compose.prod.yaml` 和固定回环端口；Task 2 的镜像 targets。
 - Produces: 运维人员可复制执行的首次部署、更新、网关、备份、恢复、轮换和排障说明；README 的稳定入口。
 
-- [ ] **Step 1: 先增加部署文档契约测试**
-
-向 `scripts/docker-production.test.mjs` 增加：
-
-```js
-test("部署文档覆盖上线、网关、备份恢复和排障", async () => {
-  const [readme, deployment] = await Promise.all([
-    readFile(new URL("../README.md", import.meta.url), "utf8"),
-    readFile(new URL("../docs/deployment/docker.md", import.meta.url), "utf8"),
-  ]);
-
-  assert.match(readme, /docs\/deployment\/docker\.md/);
-  assert.match(deployment, /127\.0\.0\.1:3001/);
-  assert.match(deployment, /docker compose --env-file \.env\.production -f compose\.prod\.yaml up -d --build/);
-  assert.match(deployment, /pg_dump/);
-  assert.match(deployment, /pg_restore/);
-  assert.match(deployment, /point-upload-data/);
-  assert.match(deployment, /UPSTREAM_UNAVAILABLE/);
-  assert.doesNotMatch(deployment, /prisma db seed/);
-});
-```
-
-- [ ] **Step 2: 运行测试确认部署文档不存在而失败**
-
-Run: `node --test scripts/docker-production.test.mjs`
-
-Expected: 前 6 个测试通过，新文档测试因 `docs/deployment/docker.md` 不存在而失败。
-
-- [ ] **Step 3: 编写 Docker 部署文档**
+- [ ] **Step 1: 编写 Docker 部署文档**
 
 创建 `docs/deployment/docker.md`，按以下顺序给出明确内容和命令：
 
@@ -625,25 +576,26 @@ docker compose --env-file .env.production -f compose.prod.yaml up -d api web
 9. 排障：分别覆盖变量缺失、数据库不健康、迁移非零退出、API unhealthy、Web 返回 `UPSTREAM_UNAVAILABLE`、3001 被占用和上传卷权限异常。
 10. 停止服务：普通停止不删除卷；删除卷命令仅用于明确废弃环境，并用警告说明不可恢复。
 
-- [ ] **Step 4: 在根 README 增加生产部署入口**
+- [ ] **Step 2: 在根 README 增加生产部署入口**
 
 在本地启动说明之后新增“生产 Docker 部署”小节，明确只有 `127.0.0.1:3001` 发布到宿主机、需要现有 HTTPS 网关，并链接 `docs/deployment/docker.md`；不要把完整运维命令复制到 README。
 
-- [ ] **Step 5: 运行文档契约和 Markdown 差异检查**
+- [ ] **Step 3: 验证文档引用的真实配置并检查 Markdown 差异**
 
 Run:
 
 ```bash
+docker compose --env-file .env.production.example -f compose.prod.yaml config --quiet
 node --test scripts/docker-production.test.mjs
 git diff --check
 ```
 
-Expected: Docker 契约测试 7/7 PASS；无行尾空白或冲突标记。
+Expected: Compose 配置有效；Docker Compose 契约测试 4/4 PASS；无行尾空白或冲突标记。备份、恢复和网关命令的运行效果在 Task 4 的隔离栈中验证，不为人类文档增加源码文本匹配测试。
 
-- [ ] **Step 6: 提交部署文档**
+- [ ] **Step 4: 提交部署文档**
 
 ```bash
-git add README.md docs/deployment/docker.md scripts/docker-production.test.mjs
+git add README.md docs/deployment/docker.md
 git commit -m "文档：补充 Docker 生产部署与备份指南"
 ```
 
@@ -671,7 +623,7 @@ docker compose --env-file .env.production.example -f compose.prod.yaml config --
 docker compose --env-file .env.production.example -f compose.prod.yaml build migrate api web
 ```
 
-Expected: 7/7 PASS；Compose config exit 0；三个镜像目标构建成功。
+Expected: 4/4 PASS；Compose config exit 0；三个镜像目标构建成功。
 
 - [ ] **Step 2: 确认宿主机 3001 未被无关进程占用**
 
