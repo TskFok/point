@@ -296,7 +296,7 @@ docker compose --env-file .env.production.example -f compose.prod.yaml config --
 
 Expected: Node 测试 4/4 PASS；Compose config exit 0，且不连接 Docker daemon。
 
-- [ ] **Step 6: 提交生产编排契约**
+- [x] **Step 6: 提交生产编排契约**
 
 ```bash
 git add .gitignore .env.production.example compose.prod.yaml scripts/docker-production.test.mjs
@@ -321,7 +321,7 @@ git commit -m "部署：增加生产 Compose 配置契约"
 - Consumes: Task 1 的 Compose build targets `migrate`、`api`、`web`；Prisma schema `prisma/schema.prisma`；API 构建产物 `apps/api/dist`。
 - Produces: 可直接被 Compose 构建的三个命名目标；Web standalone 入口 `/app/apps/web/server.js`；API 入口 `/app/dist/main.js`；迁移入口 `pnpm prisma migrate deploy`。
 
-- [ ] **Step 1: 先执行真实构建断言并确认生产产物缺失**
+- [x] **Step 1: 先执行真实构建断言并确认生产产物缺失**
 
 分别运行：
 
@@ -333,7 +333,7 @@ test -f apps/web/.next/standalone/apps/web/server.js
 
 Expected: Docker 构建因根目录没有 `Dockerfile` 而失败；现有 `pnpm build` 成功，但 standalone 文件断言失败。两个失败分别证明三目标镜像和 standalone 产物当前确实缺失。
 
-- [ ] **Step 2: 修正生产依赖边界并刷新锁文件**
+- [x] **Step 2: 修正生产依赖边界并刷新锁文件**
 
 对清单作以下精确调整：
 
@@ -346,7 +346,7 @@ Run: `pnpm install --lockfile-only --offline`
 
 Expected: exit 0；`pnpm-lock.yaml` 的根 importer 把 `prisma` 归入 dependencies，API importer 出现上述四项声明，没有升级任何版本。
 
-- [ ] **Step 3: 启用 Next.js standalone Monorepo 追踪**
+- [x] **Step 3: 启用 Next.js standalone Monorepo 追踪**
 
 把 `apps/web/next.config.ts` 调整为：
 
@@ -367,7 +367,7 @@ const nextConfig: NextConfig = {
 export default nextConfig;
 ```
 
-- [ ] **Step 4: 创建 Docker 构建上下文排除规则**
+- [x] **Step 4: 创建 Docker 构建上下文排除规则**
 
 创建 `.dockerignore`：
 
@@ -396,7 +396,7 @@ playwright
 *.tsbuildinfo
 ```
 
-- [ ] **Step 5: 创建多阶段 Dockerfile**
+- [x] **Step 5: 创建多阶段 Dockerfile**
 
 创建根目录 `Dockerfile`。API deploy 阶段必须在 `pnpm deploy` 后显式把生成的 `.prisma` 目录复制到部署依赖树；最终 API 镜像只选择 `package.json`、`node_modules`、`dist` 和上传目录，不复制 deploy 目录中的源码或测试：
 
@@ -478,7 +478,7 @@ EXPOSE 3001
 CMD ["node", "server.js"]
 ```
 
-- [ ] **Step 6: 运行 Compose 契约测试和本地生产构建**
+- [x] **Step 6: 运行 Compose 契约测试和本地生产构建**
 
 Run:
 
@@ -492,7 +492,7 @@ test -f apps/web/.next/standalone/apps/web/server.js
 
 Expected: Docker Compose 契约测试 4/4 PASS；API/Web 类型检查通过；Next 输出存在 `apps/web/.next/standalone/apps/web/server.js`；全仓构建 exit 0。
 
-- [ ] **Step 7: 构建三个 Docker 目标并验证镜像不使用 root**
+- [x] **Step 7: 构建三个 Docker 目标并验证镜像不使用 root**
 
 Run:
 
