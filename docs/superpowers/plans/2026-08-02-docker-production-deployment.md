@@ -592,7 +592,7 @@ git diff --check
 
 Expected: Compose 配置有效；Docker Compose 契约测试 4/4 PASS；无行尾空白或冲突标记。备份、恢复和网关命令的运行效果在 Task 4 的隔离栈中验证，不为人类文档增加源码文本匹配测试。
 
-- [ ] **Step 4: 提交部署文档**
+- [x] **Step 4: 提交部署文档**
 
 ```bash
 git add README.md docs/deployment/docker.md
@@ -613,7 +613,7 @@ git commit -m "文档：补充 Docker 生产部署与备份指南"
 - Consumes: 前三个任务的全部生产部署文件和现有 `pnpm verify` 门禁。
 - Produces: 镜像构建、启动依赖、Web→API 代理、非公开端口、数据库迁移和命名卷持久化的运行证据。
 
-- [ ] **Step 1: 执行静态契约、Compose 展开和镜像构建**
+- [x] **Step 1: 执行静态契约、Compose 展开和镜像构建**
 
 Run:
 
@@ -625,13 +625,13 @@ docker compose --env-file .env.production.example -f compose.prod.yaml build mig
 
 Expected: 4/4 PASS；Compose config exit 0；三个镜像目标构建成功。
 
-- [ ] **Step 2: 确认宿主机 3001 未被无关进程占用**
+- [x] **Step 2: 确认宿主机 3001 未被无关进程占用**
 
 Run: `lsof -nP -iTCP:3001 -sTCP:LISTEN`
 
 Expected: 无输出。如果端口已被无关服务占用，停止并向用户报告，不得终止或覆盖无关服务；可以继续完成不需要端口的验证，但不能声称完整烟测通过。
 
-- [ ] **Step 3: 启动隔离的生产烟测栈**
+- [x] **Step 3: 启动隔离的生产烟测栈**
 
 Run:
 
@@ -642,7 +642,7 @@ docker compose --project-name point-quest-prod-smoke --env-file .env.production.
 
 Expected: `db`、`api`、`web` 为 healthy；`migrate` 为 exited (0)。如果健康检查仍在启动期，每 5 秒读取一次 `docker compose ... ps --all`，最多等待 60 秒，不在等待循环中执行 SQL。
 
-- [ ] **Step 4: 验证 Web 页面和完整 API 代理链路**
+- [x] **Step 4: 验证 Web 页面和完整 API 代理链路**
 
 Run:
 
@@ -653,7 +653,7 @@ curl --fail --show-error --max-time 10 http://127.0.0.1:3001/api/v1/health
 
 Expected: 首页返回成功响应；健康响应 JSON 同时包含 `"status":"ok"` 与 `"service":"point-quest-api"`。
 
-- [ ] **Step 5: 验证 API 与 PostgreSQL 没有宿主机发布端口**
+- [x] **Step 5: 验证 API 与 PostgreSQL 没有宿主机发布端口**
 
 Run:
 
@@ -664,7 +664,7 @@ docker compose --project-name point-quest-prod-smoke --env-file .env.production.
 
 Expected: JSON 中只有 Web 包含 publisher，结果为 `127.0.0.1:3001`；API 和 db 没有 publisher。
 
-- [ ] **Step 6: 验证迁移与两个命名卷在重建后持久化**
+- [x] **Step 6: 验证迁移与两个命名卷在重建后持久化**
 
 先执行一次集合查询取得迁移数，再在隔离上传卷写入无业务含义的标记文件：
 
@@ -678,7 +678,7 @@ docker compose --project-name point-quest-prod-smoke --env-file .env.production.
 
 Expected: 重建前后迁移数都为 4；上传标记读取 exit 0。SQL 只作为两个独立命令各执行一次，不放入循环。
 
-- [ ] **Step 7: 清理仅用于烟测的隔离容器和卷**
+- [x] **Step 7: 清理仅用于烟测的隔离容器和卷**
 
 在确认项目名精确为 `point-quest-prod-smoke` 后运行：
 
@@ -699,7 +699,9 @@ pnpm verify
 
 Expected: OpenAPI/客户端生成零差异，lint、类型检查、单元测试、API 数据库 E2E、Playwright E2E 和生产构建全部通过。
 
-- [ ] **Step 9: 对照规格逐项复核并提交验证中产生的修复**
+验证记录：Docker 契约、Lint、类型检查、全部单元测试、API E2E 140/140 和生产构建均曾分别通过；但本次完整门禁多次在不同既有测试处出现不可复现的超时、404 或连接中断，且 Next.js/Jest 记录的 13.4 分钟、306 秒与命令实际运行时间不一致。为避免用重试或放宽超时掩盖执行环境的计时/挂起异常，本步骤保持未完成并在交付说明中单独披露。
+
+- [x] **Step 9: 对照规格逐项复核并提交验证中产生的修复**
 
 逐项核对设计规格的 7 条验收标准，运行：
 

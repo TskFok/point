@@ -7,10 +7,7 @@ import test from "node:test";
 import { parse } from "dotenv";
 
 const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
-const productionEnvUrl = new URL(
-  "../.env.production.example",
-  import.meta.url,
-);
+const productionEnvUrl = new URL("../.env.production.example", import.meta.url);
 const productionComposeUrl = new URL("../compose.prod.yaml", import.meta.url);
 
 async function readProductionEnvironment() {
@@ -39,9 +36,7 @@ function readProductionCompose() {
 test("生产环境模板要求强密钥和容器内数据库地址", async () => {
   const environment = await readProductionEnvironment();
 
-  assert.ok(
-    Buffer.byteLength(environment.AUTH_JWT_SECRET ?? "", "utf8") >= 32,
-  );
+  assert.ok(Buffer.byteLength(environment.AUTH_JWT_SECRET ?? "", "utf8") >= 32);
   assert.match(environment.AUTH_JWT_SECRET ?? "", /replace|example/i);
   assert.equal(new URL(environment.DATABASE_URL).hostname, "db");
   assert.match(environment.WEB_ORIGIN ?? "", /^https:\/\//);
