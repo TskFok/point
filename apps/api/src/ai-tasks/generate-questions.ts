@@ -74,6 +74,10 @@ export function buildGeneratePrompt(input: {
   return [
     `Generate exactly ${input.questionCount} multiple-choice vocabulary questions.`,
     `Words must be in strict English alphabetical order ${cursor}.`,
+    'Choose the next words densely after the cursor: prefer near-consecutive common dictionary words.',
+    'Adjacent words usually share the same first letter, and their second letters must differ by at most 2 (e.g. advocate→adze/affect OK; advocate→airport or advocate→kindle NOT OK).',
+    'Only when finishing a letter, advance to the immediate next letter with second letter a–c (e.g. azure→baby OK; azure→brown/kindle NOT OK).',
+    'Do not jump far ahead in the alphabet.',
     `Each question must have exactly ${input.optionCount} options.`,
     'Stem must be a complete English example sentence that MUST INCLUDE the target word itself (case-insensitive word boundary).',
     'Do NOT use blanks, underscores (___), ellipsis placeholders, or [blank] in the stem.',
@@ -163,6 +167,9 @@ export function validateOneGeneratedQuestion(
   if (!word) {
     return { ok: false, message: '缺少 word' };
   }
+  if (!WORD_PATTERN.test(word)) {
+    return { ok: false, message: `word "${word}" 须为纯小写字母` };
+  }
   if (
     minWordExclusive &&
     word.localeCompare(minWordExclusive, 'en') <= 0
@@ -170,6 +177,12 @@ export function validateOneGeneratedQuestion(
     return {
       ok: false,
       message: `word "${word}" 未大于游标 "${minWordExclusive}"`,
+    };
+  }
+  if (minWordExclusive && !isDenseWordProgression(minWordExclusive, word)) {
+    return {
+      ok: false,
+      message: `word "${word}" 相对游标 "${minWordExclusive}" 跨度过大（须密推进）`,
     };
   }
   if (typeof value.stem !== 'string' || !value.stem.trim()) {

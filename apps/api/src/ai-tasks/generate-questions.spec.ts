@@ -9,7 +9,7 @@ import {
 
 describe('isDenseWordProgression', () => {
   it('同首字母且第2字母距离≤2 通过', () => {
-    expect(isDenseWordProgression('advocate', 'advice')).toBe(true);
+    expect(isDenseWordProgression('advocate', 'adze')).toBe(true);
     expect(isDenseWordProgression('advocate', 'affect')).toBe(true);
   });
 
@@ -86,6 +86,69 @@ describe('generate-questions parse', () => {
       'abandon',
     );
     expect(result.ok).toBe(true);
+  });
+
+  it('validate 拒绝跨度过大的 word', () => {
+    const result = validateOneGeneratedQuestion(
+      {
+        word: 'kindle',
+        stem: 'Please kindle the fire carefully. What does "kindle" mean?',
+        explanation: '他们小心地点燃了火。「kindle」表示点燃、激起。',
+        options: [
+          { label: 'A', content: '点燃', isCorrect: true },
+          { label: 'B', content: '熄灭', isCorrect: false },
+        ],
+      },
+      2,
+      'advocate',
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toMatch(/跨度过大|密推进/);
+  });
+
+  it('validate 接受密推进 word', () => {
+    const result = validateOneGeneratedQuestion(
+      {
+        word: 'affect',
+        stem: 'The news will affect the market soon. What does "affect" mean?',
+        explanation: '这条新闻很快会影响市场。「affect」表示影响。',
+        options: [
+          { label: 'A', content: '影响', isCorrect: true },
+          { label: 'B', content: '忽略', isCorrect: false },
+        ],
+      },
+      2,
+      'advocate',
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it('prompt 要求密推进与跨度约束', () => {
+    const p = buildGeneratePrompt({
+      lastWord: 'advocate',
+      questionCount: 3,
+      optionCount: 4,
+    });
+    const lower = p.toLowerCase();
+    expect(lower).toMatch(/dense|close|adjacent|紧|密/);
+    expect(lower).toMatch(/second letter|第.?2/);
+    expect(p).toMatch(/kindle|跨|jump/i);
+  });
+
+  it('parse 遇跨度过大整批失败', () => {
+    const raw = JSON.stringify([
+      {
+        word: 'kindle',
+        stem: 'Please kindle the fire carefully. What does "kindle" mean?',
+        explanation: '点燃火。「kindle」表示点燃。',
+        options: [
+          { label: 'A', content: '点燃', isCorrect: true },
+          { label: 'B', content: '熄灭', isCorrect: false },
+        ],
+      },
+    ]);
+    const result = parseGeneratedQuestionsJson(raw, 2, 'advocate');
+    expect(result.ok).toBe(false);
   });
 
   it('prompt 要求完整例句包含 word 且禁止挖空', () => {
