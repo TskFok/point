@@ -50,6 +50,7 @@ model User {
   pointLedgers       PointLedger[]
   orders             Order[]            @relation("OrderOwner")
   ordersUpdated      Order[]            @relation("OrderUpdater")
+  aiModelConfigs     AiModelConfig[]    @relation("AiModelConfigUpdater")
 }
 
 model RefreshToken {
@@ -199,4 +200,20 @@ model Order {
 
   @@unique([userId, idempotencyKey])
   @@index([status, createdAt])
+}
+
+model AiModelConfig {
+  id               String   @id @default(cuid())
+  name             String   @unique
+  baseUrl          String
+  apiKeyCiphertext String
+  apiKeyLast4      String
+  isEnabled        Boolean  @default(true)
+  updatedBy        String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  updater          User     @relation("AiModelConfigUpdater", fields: [updatedBy], references: [id], onDelete: Restrict)
+
+  @@index([updatedAt, id])
+  @@index([isEnabled])
 }
