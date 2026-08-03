@@ -135,4 +135,38 @@ describe("管理员 AI 任务页", () => {
       expect(screen.getByText("执行记录 · 每日词汇")).toBeInTheDocument();
     });
   });
+
+  it("翻页时按 page 重新拉取列表并更新 URL", async () => {
+    const user = userEvent.setup();
+    const api = createApi({
+      listAdminAiTasks: jest
+        .fn()
+        .mockResolvedValueOnce({
+          data: [task],
+          meta: { ...meta, total: 21, totalPages: 2 },
+        })
+        .mockResolvedValueOnce({
+          data: [{ ...task, id: "task-2", name: "第二页任务" }],
+          meta: { ...meta, page: 2, total: 21, totalPages: 2 },
+        }),
+    });
+    window.history.replaceState(null, "", "/admin/ai-tasks");
+    render(<AdminAiTasksPage api={api} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("每日词汇")).toBeInTheDocument();
+    });
+    expect(screen.getByText("第 1 / 2 页")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "下一页" }));
+
+    await waitFor(() => {
+      expect(api.listAdminAiTasks).toHaveBeenLastCalledWith({
+        page: 2,
+        pageSize: 20,
+      });
+      expect(screen.getByText("第二页任务")).toBeInTheDocument();
+    });
+    expect(window.location.search).toBe("?page=2");
+  });
 });

@@ -363,7 +363,14 @@ export default function AdminAiModelsPage({
               </tbody>
             </table>
           </div>
-          {meta ? <Pagination meta={meta} onPageChange={setPage} /> : null}
+          {meta ? (
+            <Pagination
+              disabled={loading}
+              onPageChange={setPage}
+              page={meta.page}
+              totalPages={meta.totalPages}
+            />
+          ) : null}
         </>
       )}
     </section>

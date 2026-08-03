@@ -702,7 +702,7 @@ export class AiTaskLatestRunDto {
   @ApiProperty({ format: 'date-time' })
   startedAt!: string;
 
-  @ApiPropertyOptional({ format: 'date-time', nullable: true })
+  @ApiPropertyOptional({ type: String, format: 'date-time', nullable: true })
   finishedAt!: string | null;
 
   @ApiProperty({ ...int32, minimum: 0 })
@@ -737,7 +737,7 @@ export class AiTaskDto {
   @ApiProperty()
   isEnabled!: boolean;
 
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ type: String, nullable: true })
   lastWord!: string | null;
 
   @ApiProperty({ format: 'date-time' })
@@ -820,19 +820,19 @@ export class AiTaskRunDto {
   @ApiProperty({ format: 'date-time' })
   startedAt!: string;
 
-  @ApiPropertyOptional({ format: 'date-time', nullable: true })
+  @ApiPropertyOptional({ type: String, format: 'date-time', nullable: true })
   finishedAt!: string | null;
 
   @ApiProperty({ ...int32, minimum: 0 })
   questionsCreated!: number;
 
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ type: String, nullable: true })
   lastWordBefore!: string | null;
 
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ type: String, nullable: true })
   lastWordAfter!: string | null;
 
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ type: String, nullable: true })
   errorMessage!: string | null;
 }
 

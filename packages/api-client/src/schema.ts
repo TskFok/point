@@ -765,7 +765,7 @@ export interface components {
             cronExpression: string;
             id: string;
             isEnabled: boolean;
-            lastWord?: Record<string, never> | null;
+            lastWord?: string | null;
             latestRun?: components["schemas"]["AiTaskLatestRunDto"] | null;
             name: string;
             /** Format: int32 */
@@ -777,7 +777,7 @@ export interface components {
         };
         AiTaskLatestRunDto: {
             /** Format: date-time */
-            finishedAt?: Record<string, never> | null;
+            finishedAt?: string | null;
             id: string;
             /** Format: int32 */
             questionsCreated: number;
@@ -794,12 +794,12 @@ export interface components {
         };
         AiTaskRunDto: {
             aiTaskId: string;
-            errorMessage?: Record<string, never> | null;
+            errorMessage?: string | null;
             /** Format: date-time */
-            finishedAt?: Record<string, never> | null;
+            finishedAt?: string | null;
             id: string;
-            lastWordAfter?: Record<string, never> | null;
-            lastWordBefore?: Record<string, never> | null;
+            lastWordAfter?: string | null;
+            lastWordBefore?: string | null;
             /** Format: int32 */
             questionsCreated: number;
             /** Format: date-time */

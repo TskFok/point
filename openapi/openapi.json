@@ -323,7 +323,7 @@
           },
           "lastWord": {
             "nullable": true,
-            "type": "object"
+            "type": "string"
           },
           "latestRun": {
             "allOf": [
@@ -374,7 +374,7 @@
           "finishedAt": {
             "format": "date-time",
             "nullable": true,
-            "type": "object"
+            "type": "string"
           },
           "id": {
             "type": "string"
@@ -438,23 +438,23 @@
           },
           "errorMessage": {
             "nullable": true,
-            "type": "object"
+            "type": "string"
           },
           "finishedAt": {
             "format": "date-time",
             "nullable": true,
-            "type": "object"
+            "type": "string"
           },
           "id": {
             "type": "string"
           },
           "lastWordAfter": {
             "nullable": true,
-            "type": "object"
+            "type": "string"
           },
           "lastWordBefore": {
             "nullable": true,
-            "type": "object"
+            "type": "string"
           },
           "questionsCreated": {
             "format": "int32",

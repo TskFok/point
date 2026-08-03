@@ -422,6 +422,41 @@ describe('OpenAPI 契约', () => {
     );
   });
 
+  it('AI 任务可空字符串字段声明为 string 而非 object', () => {
+    const aiTask = document.components?.schemas?.AiTaskDto as SchemaObject;
+    const latestRun = document.components?.schemas
+      ?.AiTaskLatestRunDto as SchemaObject;
+    const aiTaskRun = document.components?.schemas
+      ?.AiTaskRunDto as SchemaObject;
+
+    expect(aiTask.properties?.lastWord).toMatchObject({
+      type: 'string',
+      nullable: true,
+    });
+    expect(latestRun.properties?.finishedAt).toMatchObject({
+      type: 'string',
+      format: 'date-time',
+      nullable: true,
+    });
+    expect(aiTaskRun.properties?.finishedAt).toMatchObject({
+      type: 'string',
+      format: 'date-time',
+      nullable: true,
+    });
+    expect(aiTaskRun.properties?.lastWordBefore).toMatchObject({
+      type: 'string',
+      nullable: true,
+    });
+    expect(aiTaskRun.properties?.lastWordAfter).toMatchObject({
+      type: 'string',
+      nullable: true,
+    });
+    expect(aiTaskRun.properties?.errorMessage).toMatchObject({
+      type: 'string',
+      nullable: true,
+    });
+  });
+
   it('所有领域整数都声明为 OpenAPI integer/int32', () => {
     const integerFields = new Set([
       'accessTokenExpiresIn',
