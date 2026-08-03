@@ -49,6 +49,18 @@ describe("管理员 AI 模型页", () => {
     expect(screen.getByText("https://api.example.com/v1")).toBeInTheDocument();
   });
 
+  it("操作列使用 admin-table__actions 布局", async () => {
+    const { container } = render(<AdminAiModelsPage api={createApi()} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("gpt-test")).toBeInTheDocument();
+    });
+
+    const actions = container.querySelector(".admin-table__actions");
+    expect(actions).toBeTruthy();
+    expect(actions?.querySelectorAll("button")).toHaveLength(4);
+  });
+
   it("行内测试调用已保存配置探测接口", async () => {
     const user = userEvent.setup();
     const api = createApi();

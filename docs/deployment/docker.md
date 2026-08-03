@@ -2,15 +2,13 @@
 
 本文档用于把 Point Quest 部署到一台已经运行 HTTPS 网关的 Linux 服务器。项目自身只发布 `127.0.0.1:3001`，由宿主机网关负责域名、TLS 和公网接入；NestJS API 与 PostgreSQL 不发布宿主机端口。
 
-生产使用根目录 `docker-compose.yml`，应用服务通过预构建镜像启动（`IMAGE_REGISTRY` / `IMAGE_TAG`）。本仓库不包含把镜像推送到远程仓库的流程；部署前需确保 `point-quest-migrate`、`point-quest-api`、`point-quest-web` 已按约定 tag 存在于可拉取的仓库或本机。
-
-本地可用根目录 `Makefile` 按平台构建三个应用镜像：
+生产使用根目录 `docker-compose.yml`，应用服务通过预构建镜像启动（`IMAGE_REGISTRY` / `IMAGE_TAG`）。本地可用根目录 `Makefile` 按平台构建并推送三个应用镜像（`migrate` / `api` / `web`）；推送前需已 `docker login` 到目标仓库。
 
 ```bash
 make help
 make build-amd64 IMAGE_REGISTRY=registry.cn-hangzhou.aliyuncs.com/<your-namespace> IMAGE_TAG=v1.0.0
 make build-arm64 IMAGE_REGISTRY=... IMAGE_TAG=...
-make build   # 当前宿主机平台
+make build   # 当前宿主机平台：构建并推送
 ```
 
 ## 前置条件

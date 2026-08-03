@@ -101,6 +101,18 @@ describe("管理员 AI 任务页", () => {
     expect(screen.getByText("ability")).toBeInTheDocument();
   });
 
+  it("操作列使用 admin-table__actions 布局", async () => {
+    const { container } = render(<AdminAiTasksPage api={createApi()} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("每日词汇")).toBeInTheDocument();
+    });
+
+    const actions = container.querySelector(".admin-table__actions");
+    expect(actions).toBeTruthy();
+    expect(actions?.querySelectorAll("button")).toHaveLength(5);
+  });
+
   it("立即执行调用 runAdminAiTask", async () => {
     const user = userEvent.setup();
     const api = createApi();

@@ -5,7 +5,7 @@ import test from "node:test";
 
 const makefilePath = fileURLToPath(new URL("../Makefile", import.meta.url));
 
-test("Makefile 提供跨平台 Docker 构建入口", async () => {
+test("Makefile 提供跨平台 Docker 构建与推送入口", async () => {
   const makefile = await readFile(makefilePath, "utf8");
 
   assert.match(makefile, /^IMAGE_REGISTRY\s*\?=/m);
@@ -19,4 +19,6 @@ test("Makefile 提供跨平台 Docker 构建入口", async () => {
   assert.match(makefile, /point-quest-/);
   assert.match(makefile, /--target/);
   assert.match(makefile, /docker buildx build/);
+  assert.match(makefile, /docker push/);
+  assert.match(makefile, /IMAGE_REGISTRY is required/);
 });

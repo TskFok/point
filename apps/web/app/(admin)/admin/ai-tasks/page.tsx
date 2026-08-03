@@ -433,7 +433,7 @@ export default function AdminAiTasksPage({
                       : "—"}
                   </td>
                   <td>
-                    <div className="admin-row-actions">
+                    <div className="admin-table__actions">
                       <Button
                         disabled={busyId === task.id}
                         onClick={() => {

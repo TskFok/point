@@ -12,6 +12,20 @@ function createApi() {
 }
 
 describe("管理员 AI 模型表单", () => {
+  it("操作区使用 admin-form__actions 并包含保存、测试、取消", () => {
+    const { container } = render(
+      <AiModelForm api={createApi()} mode="create" onCancel={() => undefined} />,
+    );
+
+    const actions = container.querySelector(".admin-form__actions");
+    expect(actions).toBeTruthy();
+    expect(
+      Array.from(actions?.querySelectorAll("button") ?? []).map((button) =>
+        button.textContent?.replace(/\s+/g, ""),
+      ),
+    ).toEqual(["保存配置", "测试连通", "取消"]);
+  });
+
   it("新建时校验名称、地址和 API Key", async () => {
     const user = userEvent.setup();
     const api = createApi();
