@@ -230,4 +230,32 @@ describe('AiModelsService', () => {
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
+
+  it('testDraft 优先使用请求体 apiKey', async () => {
+    const fetchImpl = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ data: [] }),
+    });
+    const originalFetch = global.fetch;
+    global.fetch = fetchImpl as unknown as typeof fetch;
+    try {
+      const service = createService({ existing: null });
+      const result = await service.testDraft({
+        baseUrl: 'https://api.example.com/v1',
+        apiKey: 'sk-draft',
+      });
+      expect(result.ok).toBe(true);
+      expect(fetchImpl).toHaveBeenCalledWith(
+        'https://api.example.com/v1/models',
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Authorization: 'Bearer sk-draft',
+          }),
+        }),
+      );
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
 });

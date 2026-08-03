@@ -11,9 +11,14 @@ import { type ListAiModelsDto } from './dto/list-ai-models.dto';
 import { type UpdateAiModelDto } from './dto/update-ai-model.dto';
 import {
   encryptSecret,
+  decryptSecret,
   maskApiKey,
   resolveEncryptionKey,
 } from './secret-crypto';
+import {
+  probeOpenAiCompatibleModels,
+  type ProbeResult,
+} from './probe-openai-compatible';
 
 export type AiModelConfigView = {
   id: string;
@@ -263,5 +268,30 @@ export class AiModelsService {
       throw aiModelNotFound();
     }
     return row;
+  }
+
+  async testById(id: string): Promise<ProbeResult> {
+    const row = await this.requireRow(id);
+    const apiKey = decryptSecret(row.apiKeyCiphertext, this.encryptionKey());
+    return probeOpenAiCompatibleModels(row.baseUrl, apiKey);
+  }
+
+  async testDraft(input: {
+    baseUrl: string;
+    apiKey?: string;
+    id?: string;
+  }): Promise<ProbeResult> {
+    const baseUrl = assertHttpUrl(
+      normalizeText(input.baseUrl, '调用地址', 500),
+    );
+    let apiKey = input.apiKey?.trim() ?? '';
+    if (!apiKey) {
+      if (!input.id) {
+        throw validationFailed('测试连通需要 API Key 或已保存配置 id');
+      }
+      const row = await this.requireRow(input.id);
+      apiKey = decryptSecret(row.apiKeyCiphertext, this.encryptionKey());
+    }
+    return probeOpenAiCompatibleModels(baseUrl, apiKey);
   }
 }
