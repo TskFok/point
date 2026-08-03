@@ -4,6 +4,15 @@
 
 生产使用根目录 `docker-compose.yml`，应用服务通过预构建镜像启动（`IMAGE_REGISTRY` / `IMAGE_TAG`）。本仓库不包含把镜像推送到远程仓库的流程；部署前需确保 `point-quest-migrate`、`point-quest-api`、`point-quest-web` 已按约定 tag 存在于可拉取的仓库或本机。
 
+本地可用根目录 `Makefile` 按平台构建三个应用镜像：
+
+```bash
+make help
+make build-amd64 IMAGE_REGISTRY=registry.cn-hangzhou.aliyuncs.com/<your-namespace> IMAGE_TAG=v1.0.0
+make build-arm64 IMAGE_REGISTRY=... IMAGE_TAG=...
+make build   # 当前宿主机平台
+```
+
 ## 前置条件
 
 - Linux 服务器已安装 Docker Engine 29 或兼容版本，以及 Docker Compose。
@@ -34,6 +43,8 @@ chmod 600 .env
 - `DATABASE_URL`：用户名、密码和数据库名必须与 PostgreSQL 变量一致，主机固定为 `db`；密码包含 URI 保留字符时必须进行百分号编码。
 - `AUTH_JWT_SECRET`：至少 32 字节的随机值，不得继续使用模板内容。
 - `WEB_ORIGIN`：精确的公网 HTTPS Origin，例如 `https://point.example.com`，不能包含路径或结尾斜杠。
+- `BOOTSTRAP_ADMIN_USERNAME` / `BOOTSTRAP_ADMIN_PASSWORD`：空库首次启动时，若库中尚无任何管理员，API 会用这两项创建默认管理员。模板默认值为 `admin` / `Admin123!x`。登录后应尽快修改密码；已有管理员时不会自动创建或覆盖。
+- `AI_CONFIG_ENCRYPTION_KEY`：32 字节随机密钥的 base64，用于加密管理端 AI 模型 API Key；不得继续使用模板占位。
 
 先验证配置，再拉取并启动（镜像已在本机时可跳过 `pull`）：
 
@@ -51,6 +62,7 @@ curl --fail --show-error http://127.0.0.1:3001/api/v1/health
 - `migrate` 显示为 `exited (0)`；它是一次性迁移任务，不应常驻运行。
 - 健康接口返回 `status: ok` 和 `service: point-quest-api`。
 - 只有 Web 显示 `127.0.0.1:3001->3001/tcp`，API 与数据库没有宿主机端口。
+- 空库首次启动可用 `.env` 中的 bootstrap 管理员登录 Web `/admin`；登录后请立即修改密码。
 
 ## 网关转发
 

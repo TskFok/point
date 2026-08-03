@@ -43,6 +43,41 @@ test("生产环境模板要求镜像坐标、强密钥和容器内数据库地�
   assert.match(environment.AUTH_JWT_SECRET ?? "", /replace|example/i);
   assert.equal(new URL(environment.DATABASE_URL).hostname, "db");
   assert.match(environment.WEB_ORIGIN ?? "", /^https:\/\//);
+  assert.equal(environment.BOOTSTRAP_ADMIN_USERNAME, "admin");
+  assert.ok(
+    Buffer.byteLength(environment.BOOTSTRAP_ADMIN_PASSWORD ?? "", "utf8") >= 10,
+  );
+  assert.match(environment.BOOTSTRAP_ADMIN_PASSWORD ?? "", /[A-Za-z]/);
+  assert.match(environment.BOOTSTRAP_ADMIN_PASSWORD ?? "", /\d/);
+  assert.ok(environment.AI_CONFIG_ENCRYPTION_KEY);
+  assert.equal(
+    Buffer.from(environment.AI_CONFIG_ENCRYPTION_KEY, "base64").length,
+    32,
+  );
+  assert.match(
+    Buffer.from(environment.AI_CONFIG_ENCRYPTION_KEY, "base64").toString(
+      "utf8",
+    ),
+    /replace|example/i,
+  );
+});
+
+test("生产 Compose 向 API 注入 bootstrap 管理员变量", async () => {
+  const environment = await readProductionEnvironment();
+  const compose = readProductionCompose();
+
+  assert.equal(
+    compose.services.api.environment.BOOTSTRAP_ADMIN_USERNAME,
+    environment.BOOTSTRAP_ADMIN_USERNAME,
+  );
+  assert.equal(
+    compose.services.api.environment.BOOTSTRAP_ADMIN_PASSWORD,
+    environment.BOOTSTRAP_ADMIN_PASSWORD,
+  );
+  assert.equal(
+    compose.services.api.environment.AI_CONFIG_ENCRYPTION_KEY,
+    environment.AI_CONFIG_ENCRYPTION_KEY,
+  );
 });
 
 test("生产 Compose 只把 Web 发布到宿主机回环地址", () => {
