@@ -69,7 +69,7 @@
 
 - 题干（`stem`）：英文完整例句，必须按单词边界包含目标词 `word`（大小写不敏感），并点名考查该词（如 `What does "abhor" mean?`）；禁止 `___` / `[blank]` 等挖空。详见 `2026-08-03-ai-question-stem-must-include-word-design.md`。
 - 选项（`content`）：中文词义；`label` 仍用 A/B/C…；恰 1 个 `isCorrect=true`，对应 `word` 的意思。
-- `explanation`：中文简短解析。
+- `explanation`：中文；须含题干整句译文 + 词义/考点说明。详见 `2026-08-03-ai-question-explanation-include-stem-translation-design.md`。
 - `basePoints` / `optionCount`：取自任务配置；`isActive` 默认 `true`。
 - AI 返回严格 JSON 数组；每项至少包含：`word`（本题锚定的英文单词）、`stem`、`explanation`、`options`（`label`/`content`/`isCorrect`）。`word` 用于校验字母序与更新游标，**不**单独落库字段。入库前校验：stem 须含 `word` 且不得挖空，否则跳过该题。
 - 游标：`lastWord` 为空 → 首次从字母序最前一带开始；成功写入至少 1 题后，将任务 `lastWord` 更新为本次成功题目中按字母序最大的 `word`（规范化小写）。
@@ -113,7 +113,7 @@
    1. 事务内尝试创建 `AiTaskRun(RUNNING)`（抢锁）；失败则跳过或对 manual 返回 `409`。
    2. 记录 `lastWordBefore`。
    3. 解密模型密钥，调用 OpenAI 兼容 `chat/completions`（超时 **60 秒**；单测 mock）。
-   4. Prompt 要求：从 `lastWord` 之后按英文字母序生成 `questionCount` 道题；每题带 `word`；题干为含 `word` 的完整英文例句并点名考查该词（禁止挖空）、选项中文词义、`optionCount` 个选项、恰一正确项、中文解析；**严格 JSON** 数组。
+   4. Prompt 要求：从 `lastWord` 之后按英文字母序生成 `questionCount` 道题；每题带 `word`；题干为含 `word` 的完整英文例句并点名考查该词（禁止挖空）、选项中文词义、`optionCount` 个选项、恰一正确项、中文解析（须含整句题干译文 + 词义说明）；**严格 JSON** 数组。
    5. 校验每题（含 `word` 须严格大于 `lastWordBefore`、彼此按序不重复）并批量写入题库；更新 `questionsCreated`、`lastWordAfter`；成功时更新任务 `lastWord`。
    6. 标记 run `SUCCESS` / `FAILED`，写 `finishedAt` 与可选 `errorMessage`。
 4. 出站仅由 API 发起；日志与 `errorMessage` 不得包含 API Key 或 Authorization。

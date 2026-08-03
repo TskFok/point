@@ -9,7 +9,7 @@ AI 任务生成的词汇题偶发把目标词挖空（如 `The scholar claimed t
 - **题干（`stem`）**：完整英文例句，必须原样包含目标词 `word`；并点名考查该词（如 `What does "abhor" mean?`）。
 - **禁止**：`___`、`…`（用作挖空）、`[blank]`、`[ ]` 等占位挖空。
 - **选项**：中文词义；恰 1 个正确项，对应 `word` 的意思。
-- **解析**：中文。
+- **解析**：中文；须含题干整句译文 + 词义说明。详见 `2026-08-03-ai-question-explanation-include-stem-translation-design.md`。
 - **`word`**：仍仅用于字母序游标与校验，不单独落库。
 
 ### 正例
