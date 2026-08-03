@@ -68,6 +68,18 @@ describe('generate-questions parse', () => {
     expect(p.toLowerCase()).toMatch(/what does/);
   });
 
+  it('prompt 要求 explanation 含整句译文与词义说明', () => {
+    const p = buildGeneratePrompt({
+      lastWord: null,
+      questionCount: 1,
+      optionCount: 4,
+    });
+    const lower = p.toLowerCase();
+    expect(lower).toMatch(/explanation/);
+    expect(lower).toMatch(/translat/);
+    expect(p).toMatch(/放弃|abandon|词义|meaning/i);
+  });
+
   it('拒绝 stem 含挖空占位', () => {
     const result = validateOneGeneratedQuestion(
       {

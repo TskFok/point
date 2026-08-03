@@ -48,7 +48,9 @@ export function buildGeneratePrompt(input: {
     'Stem must be a complete English example sentence that MUST INCLUDE the target word itself (case-insensitive word boundary).',
     'Do NOT use blanks, underscores (___), ellipsis placeholders, or [blank] in the stem.',
     'End the stem by naming the word to test, e.g. What does "abhor" mean?',
-    'Option contents must be Chinese meanings. Explanation must be Chinese.',
+    'Option contents must be Chinese meanings.',
+    'Explanation must be Chinese and MUST include: (1) a full Chinese translation of the entire stem sentence, and (2) a brief meaning note for the target word.',
+    'Example explanation: 他们决定放弃这个计划。「abandon」表示放弃、抛弃。',
     'Exactly one option isCorrect=true per question (the Chinese meaning of the target word).',
     'Return ONLY a JSON array. Each item: { "word", "stem", "explanation", "options": [{ "label", "content", "isCorrect" }] }.',
   ].join(' ');

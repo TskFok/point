@@ -41,7 +41,7 @@
 - Consumes: 现有 `buildGeneratePrompt({ lastWord, questionCount, optionCount }): string`
 - Produces: 同签名；prompt 字符串新增「整句译文 + 词义说明」约束与正例
 
-- [ ] **Step 1: 先写失败测试**
+- [x] **Step 1: 先写失败测试**
 
 在 `apps/api/src/ai-tasks/generate-questions.spec.ts` 的 `describe('generate-questions parse')` 内追加：
 
@@ -61,7 +61,7 @@
 
 说明：`translat` 匹配 `translation` / `translate`；中文正例关键词用 `/放弃|abandon|词义|meaning/i` 覆盖 prompt 中的示例句。
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run:
 
@@ -71,7 +71,7 @@ pnpm --filter @point-quest/api test -- generate-questions.spec.ts
 
 Expected: 新建用例失败（当前 prompt 仅有 `Explanation must be Chinese.`，无 translation / 正例）。
 
-- [ ] **Step 3: 实现最小改动**
+- [x] **Step 3: 实现最小改动**
 
 在 `apps/api/src/ai-tasks/generate-questions.ts` 的 `buildGeneratePrompt` 中，将：
 
@@ -117,7 +117,7 @@ export function buildGeneratePrompt(input: {
 
 不改 `validateOneGeneratedQuestion`。既有测试样例里的短 `explanation: '放弃'` 可保留（校验仍只要求非空）。
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run:
 
@@ -127,7 +127,7 @@ pnpm --filter @point-quest/api test -- generate-questions.spec.ts
 
 Expected: 全部 PASS。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/api/src/ai-tasks/generate-questions.ts \
