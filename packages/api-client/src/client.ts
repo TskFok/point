@@ -125,6 +125,10 @@ export const operationRegistry = {
     path: "/api/v1/practice/questions/{questionId}/answer",
     method: "POST",
   },
+  practiceGetPreviewQuestions: {
+    path: "/api/v1/practice/preview",
+    method: "GET",
+  },
   practiceGetRandomQuestion: {
     path: "/api/v1/practice/random",
     method: "GET",
@@ -535,6 +539,11 @@ export function createApiClient(options: ApiClientOptions) {
         body: input,
       }),
 
+    getPreviewQuestions: (count?: number) =>
+      request("practiceGetPreviewQuestions", {
+        authMode: "authenticated",
+        query: { count },
+      }),
     getRandomQuestion: (excludeIds: string[] = []) =>
       request("practiceGetRandomQuestion", {
         authMode: "authenticated",

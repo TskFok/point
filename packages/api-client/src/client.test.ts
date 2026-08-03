@@ -31,6 +31,7 @@ describe("createApiClient", () => {
         "getOrder",
         "getPointBalance",
         "getPracticeSummary",
+        "getPreviewQuestions",
         "getProduct",
         "getRandomQuestion",
         "issueAndroidToken",
@@ -105,6 +106,28 @@ describe("createApiClient", () => {
     );
     expect(fetchSpy.mock.calls[1]?.[0]).toBe(
       "http://localhost:3001/api/v1/admin/points/config/history?page=2&pageSize=10",
+    );
+  });
+
+  it("预习抽题使用版本化 GET 路径并携带可选数量参数", async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockImplementation(async () =>
+        new Response(JSON.stringify({ data: [] }), { status: 200 }),
+      );
+    const client = createApiClient({
+      baseUrl: "http://localhost:3001/api/v1",
+      fetch: fetchSpy,
+    });
+
+    await client.getPreviewQuestions(5);
+    await client.getPreviewQuestions();
+
+    expect(fetchSpy.mock.calls[0]?.[0]).toBe(
+      "http://localhost:3001/api/v1/practice/preview?count=5",
+    );
+    expect(fetchSpy.mock.calls[1]?.[0]).toBe(
+      "http://localhost:3001/api/v1/practice/preview",
     );
   });
 

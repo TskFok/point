@@ -15,6 +15,7 @@ const password = "StrongPass123!";
 const fileNamespaces: Record<string, string> = {
   "auth-and-questions.spec.ts": "pw_authq",
   "practice-and-wrong-book.spec.ts": "pw_wrong",
+  "preview.spec.ts": "pw_prev",
   "responsive-and-a11y.spec.ts": "pw_a11y",
   "store-and-orders.spec.ts": "pw_store",
 };

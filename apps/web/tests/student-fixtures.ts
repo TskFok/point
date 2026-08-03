@@ -32,6 +32,18 @@ export const questionThree: Schemas["LearnerQuestionDto"] = {
   stem: "She usually ___ to school by bus.",
 };
 
+export const previewQuestionOne: Schemas["PreviewQuestionDto"] = {
+  ...questionOne,
+  correctOptionId: "option-1-a",
+  explanation: "虚拟语气中，与过去事实相反时从句使用过去完成时。",
+};
+
+export const previewQuestionTwo: Schemas["PreviewQuestionDto"] = {
+  ...questionTwo,
+  correctOptionId: "option-2-a",
+  explanation: "since 2020 表示从过去持续到现在，使用现在完成时。",
+};
+
 export const correctAnswer: Schemas["AnswerResultDto"] = {
   balance: 120,
   correct: true,

@@ -1,22 +1,25 @@
+import type { PrismaClient } from '@prisma/client';
 import { compare } from 'bcryptjs';
 import { bootstrapAdminIfNeeded } from './bootstrap-admin';
 
+type CreateUserArgs = {
+  data: { passwordHash: string; role: string; username: string };
+};
+
 describe('bootstrapAdminIfNeeded', () => {
-  const createUser = jest.fn();
-  const count = jest.fn();
+  const createUser = jest.fn((args: CreateUserArgs) =>
+    Promise.resolve({ id: 'admin-1', ...args.data }),
+  );
+  const count = jest.fn(() => Promise.resolve(0));
   const prisma = {
     user: {
       count,
       create: createUser,
     },
-  };
+  } as unknown as Pick<PrismaClient, 'user'>;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    createUser.mockImplementation(async ({ data }) => ({
-      id: 'admin-1',
-      ...data,
-    }));
   });
 
   it('未配置环境变量时跳过', async () => {

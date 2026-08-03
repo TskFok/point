@@ -10,14 +10,17 @@ import { PrismaService } from '../prisma/prisma.service';
 import { type ListWrongQuestionsDto } from './dto/list-wrong-questions.dto';
 import {
   type AnswerResultDto,
+  type PreviewQuestionDto,
   mapAnswerResult,
   mapLearnerQuestion,
+  mapPreviewQuestion,
 } from './practice-response.mapper';
 
 const MAX_DATABASE_INTEGER = 2_147_483_647;
 const MAX_ID_LENGTH = 191;
 const MAX_IDEMPOTENCY_KEY_LENGTH = 128;
 const MAX_EXCLUDED_QUESTIONS = 50;
+const MAX_PREVIEW_QUESTIONS = 50;
 
 const attemptResultSelection = {
   mode: true,
@@ -322,6 +325,78 @@ export class PracticeService {
       throw noUnansweredQuestions();
     }
     return mapLearnerQuestion(question);
+  }
+
+  async getPreviewQuestions(
+    userId: string,
+    count: number,
+  ): Promise<{ data: PreviewQuestionDto[] }> {
+    const normalizedUserId = normalizeBoundedString(
+      userId,
+      '用户 ID',
+      MAX_ID_LENGTH,
+    );
+    if (
+      !Number.isInteger(count) ||
+      count < 1 ||
+      count > MAX_PREVIEW_QUESTIONS
+    ) {
+      throw validationFailed(
+        `预习题目数量必须为 1–${MAX_PREVIEW_QUESTIONS} 的整数`,
+      );
+    }
+    const selected = await this.prisma.$queryRaw<Array<{ id: string }>>(
+      Prisma.sql`
+        SELECT question.id
+        FROM "Question" AS question
+        WHERE question."isActive" = true
+          AND NOT EXISTS (
+            SELECT 1
+            FROM "QuestionProgress" AS progress
+            WHERE progress."questionId" = question.id
+              AND progress."userId" = ${normalizedUserId}
+          )
+        ORDER BY random()
+        LIMIT ${count}
+      `,
+    );
+    const selectedIds = selected.map(({ id }) => id);
+    if (selectedIds.length === 0) {
+      throw noUnansweredQuestions();
+    }
+
+    const questions = await this.prisma.question.findMany({
+      where: { id: { in: selectedIds }, isActive: true },
+      select: {
+        id: true,
+        stem: true,
+        explanation: true,
+        basePoints: true,
+        options: {
+          select: {
+            id: true,
+            label: true,
+            content: true,
+            position: true,
+            isCorrect: true,
+          },
+          orderBy: [{ position: 'asc' }, { id: 'asc' }],
+        },
+      },
+    });
+    const questionMap = new Map(
+      questions.map((question) => [question.id, question]),
+    );
+    const data = selectedIds
+      .map((id) => {
+        const question = questionMap.get(id);
+        return question ? mapPreviewQuestion(question) : null;
+      })
+      .filter((question): question is PreviewQuestionDto => question !== null);
+    if (data.length === 0) {
+      throw noUnansweredQuestions();
+    }
+    return { data };
   }
 
   async answerFirst(

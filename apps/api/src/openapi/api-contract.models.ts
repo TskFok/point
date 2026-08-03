@@ -279,6 +279,31 @@ export class LearnerQuestionDto {
   options!: LearnerQuestionOptionDto[];
 }
 
+export class PreviewQuestionDto {
+  @ApiProperty()
+  id!: string;
+
+  @ApiProperty()
+  stem!: string;
+
+  @ApiProperty(int32)
+  basePoints!: number;
+
+  @ApiProperty({ type: () => [LearnerQuestionOptionDto] })
+  options!: LearnerQuestionOptionDto[];
+
+  @ApiProperty()
+  explanation!: string;
+
+  @ApiProperty()
+  correctOptionId!: string;
+}
+
+export class PreviewQuestionListDto {
+  @ApiProperty({ type: () => [PreviewQuestionDto] })
+  data!: PreviewQuestionDto[];
+}
+
 export class AnswerQuestionRequestDto {
   @ApiProperty({ minLength: 1, maxLength: 191 })
   selectedOptionId!: string;
@@ -843,4 +868,3 @@ export class AiTaskRunListResponseDto {
   @ApiProperty({ type: () => PageMetaDto })
   meta!: PageMetaDto;
 }
-

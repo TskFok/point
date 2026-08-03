@@ -21,10 +21,12 @@ import {
   AnswerResultDto,
   LearnerQuestionDto,
   PracticeSummaryDto,
+  PreviewQuestionListDto,
   WrongQuestionListResponseDto,
 } from '../openapi/api-contract.models';
 import { AnswerQuestionDto } from './dto/answer-question.dto';
 import { ListWrongQuestionsDto } from './dto/list-wrong-questions.dto';
+import { PreviewQuestionsQueryDto } from './dto/preview-questions-query.dto';
 import { RandomQuestionQueryDto } from './dto/random-question-query.dto';
 import { PracticeService } from './practice.service';
 
@@ -54,6 +56,34 @@ export class PracticeController {
     @Query() query: RandomQuestionQueryDto,
   ) {
     return this.practiceService.getRandomQuestion(user.id, query.excludeIds);
+  }
+
+  @Get('preview')
+  @ApiContract({
+    operationId: 'practiceGetPreviewQuestions',
+    summary: '随机抽取一批未答题目用于预习（含题解与正确选项）',
+    responseType: PreviewQuestionListDto,
+    authenticated: true,
+    queries: [
+      {
+        name: 'count',
+        required: false,
+        schema: {
+          type: 'integer',
+          format: 'int32',
+          minimum: 1,
+          maximum: 50,
+          default: 10,
+        },
+        description: '本次预习抽取的题目数量，最多 50 道',
+      },
+    ],
+  })
+  preview(
+    @CurrentUser() user: RequestUser,
+    @Query() query: PreviewQuestionsQueryDto,
+  ) {
+    return this.practiceService.getPreviewQuestions(user.id, query.count);
   }
 
   @Post('questions/:questionId/answer')

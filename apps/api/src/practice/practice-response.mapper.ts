@@ -34,6 +34,37 @@ export function mapLearnerQuestion(question: LearnerQuestionInput) {
   };
 }
 
+type PreviewQuestionInput = Omit<LearnerQuestionInput, 'options'> & {
+  explanation: string;
+  options: Array<{
+    id: string;
+    label: string;
+    content: string;
+    position: number;
+    isCorrect: boolean;
+  }>;
+};
+
+export type PreviewQuestionDto = ReturnType<typeof mapLearnerQuestion> & {
+  explanation: string;
+  correctOptionId: string;
+};
+
+export function mapPreviewQuestion(
+  question: PreviewQuestionInput,
+): PreviewQuestionDto | null {
+  const correctOptions = question.options.filter(({ isCorrect }) => isCorrect);
+  const correctOption = correctOptions[0];
+  if (correctOptions.length !== 1 || !correctOption) {
+    return null;
+  }
+  return {
+    ...mapLearnerQuestion(question),
+    explanation: question.explanation,
+    correctOptionId: correctOption.id,
+  };
+}
+
 export function mapAnswerResult(input: {
   isCorrect: boolean;
   selectedOptionId: string;

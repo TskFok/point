@@ -10,10 +10,12 @@ import { validate } from 'class-validator';
 import { PointsService } from '../points/points.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ListWrongQuestionsDto } from './dto/list-wrong-questions.dto';
+import { PreviewQuestionsQueryDto } from './dto/preview-questions-query.dto';
 import { RandomQuestionQueryDto } from './dto/random-question-query.dto';
 import {
   mapAnswerResult,
   mapLearnerQuestion,
+  mapPreviewQuestion,
 } from './practice-response.mapper';
 import { PracticeService } from './practice.service';
 
@@ -673,6 +675,271 @@ describe('PracticeService', () => {
       pointsAwarded: 0,
       balance: 7,
     });
+  });
+
+  it('预习抽题数量必须为 1–50 的整数', async () => {
+    const prisma = {
+      $queryRaw: jest.fn(),
+    };
+    const service = new PracticeService(
+      prisma as unknown as PrismaService,
+      {} as PointsService,
+    );
+
+    for (const count of [0, 51, 1.5, Number.NaN]) {
+      const error = await caughtHttpException(
+        service.getPreviewQuestions('student-1', count),
+      );
+      expect(error).toBeInstanceOf(BadRequestException);
+      expect(error.getResponse()).toMatchObject({
+        code: 'VALIDATION_FAILED',
+      });
+    }
+    expect(prisma.$queryRaw).not.toHaveBeenCalled();
+  });
+
+  it('预习按随机结果顺序返回题解与正确选项且不泄漏 isCorrect', async () => {
+    const prisma = {
+      $queryRaw: jest
+        .fn()
+        .mockResolvedValue([{ id: 'question-2' }, { id: 'question-1' }]),
+      question: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'question-1',
+            stem: 'Stem 1',
+            explanation: 'Explanation 1',
+            basePoints: 5,
+            options: [
+              {
+                id: 'option-1a',
+                label: 'A',
+                content: 'Right',
+                position: 0,
+                isCorrect: true,
+              },
+              {
+                id: 'option-1b',
+                label: 'B',
+                content: 'Wrong',
+                position: 1,
+                isCorrect: false,
+              },
+            ],
+          },
+          {
+            id: 'question-2',
+            stem: 'Stem 2',
+            explanation: 'Explanation 2',
+            basePoints: 8,
+            options: [
+              {
+                id: 'option-2a',
+                label: 'A',
+                content: 'Wrong',
+                position: 0,
+                isCorrect: false,
+              },
+              {
+                id: 'option-2b',
+                label: 'B',
+                content: 'Right',
+                position: 1,
+                isCorrect: true,
+              },
+            ],
+          },
+        ]),
+      },
+    };
+    const service = new PracticeService(
+      prisma as unknown as PrismaService,
+      {} as PointsService,
+    );
+
+    const result = await service.getPreviewQuestions('student-1', 2);
+    expect(result.data).toEqual([
+      {
+        id: 'question-2',
+        stem: 'Stem 2',
+        basePoints: 8,
+        options: [
+          { id: 'option-2a', label: 'A', content: 'Wrong', position: 0 },
+          { id: 'option-2b', label: 'B', content: 'Right', position: 1 },
+        ],
+        explanation: 'Explanation 2',
+        correctOptionId: 'option-2b',
+      },
+      {
+        id: 'question-1',
+        stem: 'Stem 1',
+        basePoints: 5,
+        options: [
+          { id: 'option-1a', label: 'A', content: 'Right', position: 0 },
+          { id: 'option-1b', label: 'B', content: 'Wrong', position: 1 },
+        ],
+        explanation: 'Explanation 1',
+        correctOptionId: 'option-1a',
+      },
+    ]);
+    expect(prisma.question.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.question.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: { in: ['question-2', 'question-1'] },
+          isActive: true,
+        },
+      }),
+    );
+  });
+
+  it('预习跳过没有唯一正确选项的题目', async () => {
+    const prisma = {
+      $queryRaw: jest
+        .fn()
+        .mockResolvedValue([{ id: 'question-bad' }, { id: 'question-ok' }]),
+      question: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'question-bad',
+            stem: 'Bad',
+            explanation: 'Bad',
+            basePoints: 5,
+            options: [
+              {
+                id: 'option-x',
+                label: 'A',
+                content: 'X',
+                position: 0,
+                isCorrect: true,
+              },
+              {
+                id: 'option-y',
+                label: 'B',
+                content: 'Y',
+                position: 1,
+                isCorrect: true,
+              },
+            ],
+          },
+          {
+            id: 'question-ok',
+            stem: 'Ok',
+            explanation: 'Ok explanation',
+            basePoints: 3,
+            options: [
+              {
+                id: 'option-ok',
+                label: 'A',
+                content: 'Right',
+                position: 0,
+                isCorrect: true,
+              },
+              {
+                id: 'option-no',
+                label: 'B',
+                content: 'Wrong',
+                position: 1,
+                isCorrect: false,
+              },
+            ],
+          },
+        ]),
+      },
+    };
+    const service = new PracticeService(
+      prisma as unknown as PrismaService,
+      {} as PointsService,
+    );
+
+    const result = await service.getPreviewQuestions('student-1', 2);
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0]).toMatchObject({
+      id: 'question-ok',
+      correctOptionId: 'option-ok',
+    });
+  });
+
+  it('预习空题池时抛出 NO_UNANSWERED_QUESTIONS', async () => {
+    const prisma = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      question: {
+        findMany: jest.fn(),
+      },
+    };
+    const service = new PracticeService(
+      prisma as unknown as PrismaService,
+      {} as PointsService,
+    );
+
+    const error = await caughtHttpException(
+      service.getPreviewQuestions('student-1', 5),
+    );
+    expect(error).toBeInstanceOf(NotFoundException);
+    expect(error.getResponse()).toMatchObject({
+      code: 'NO_UNANSWERED_QUESTIONS',
+    });
+    expect(prisma.question.findMany).not.toHaveBeenCalled();
+  });
+
+  it('预习数量 DTO 只接受 1–50 的整数并默认 10', async () => {
+    const fallback = plainToInstance(PreviewQuestionsQueryDto, {});
+    expect(await validate(fallback)).toHaveLength(0);
+    expect(fallback.count).toBe(10);
+
+    const valid = plainToInstance(PreviewQuestionsQueryDto, { count: '20' });
+    expect(await validate(valid)).toHaveLength(0);
+    expect(valid.count).toBe(20);
+
+    for (const count of [0, 51, 1.5, 'abc']) {
+      const invalid = plainToInstance(PreviewQuestionsQueryDto, { count });
+      expect(await validate(invalid)).not.toHaveLength(0);
+    }
+  });
+
+  it('预习映射公开题解与正确选项，异常题返回 null', () => {
+    const question = {
+      id: 'question-1',
+      stem: 'Choose one.',
+      explanation: 'Preview explanation',
+      basePoints: 10,
+      options: [
+        {
+          id: 'option-1',
+          label: 'A',
+          content: 'Right',
+          position: 0,
+          isCorrect: true,
+        },
+        {
+          id: 'option-2',
+          label: 'B',
+          content: 'Wrong',
+          position: 1,
+          isCorrect: false,
+        },
+      ],
+    };
+    expect(mapPreviewQuestion(question)).toEqual({
+      id: 'question-1',
+      stem: 'Choose one.',
+      basePoints: 10,
+      options: [
+        { id: 'option-1', label: 'A', content: 'Right', position: 0 },
+        { id: 'option-2', label: 'B', content: 'Wrong', position: 1 },
+      ],
+      explanation: 'Preview explanation',
+      correctOptionId: 'option-1',
+    });
+    expect(
+      mapPreviewQuestion({
+        ...question,
+        options: question.options.map((option) => ({
+          ...option,
+          isCorrect: false,
+        })),
+      }),
+    ).toBeNull();
   });
 
   it('服务层拒绝空白或超长幂等键', async () => {

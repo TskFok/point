@@ -548,6 +548,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/practice/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 随机抽取一批未答题目用于预习（含题解与正确选项） */
+        get: operations["practiceGetPreviewQuestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/practice/questions/{questionId}/answer": {
         parameters: {
             query?: never;
@@ -1012,6 +1029,18 @@ export interface components {
             pendingWrongCount: number;
             /** Format: int32 */
             unansweredCount: number;
+        };
+        PreviewQuestionDto: {
+            /** Format: int32 */
+            basePoints: number;
+            correctOptionId: string;
+            explanation: string;
+            id: string;
+            options: components["schemas"]["LearnerQuestionOptionDto"][];
+            stem: string;
+        };
+        PreviewQuestionListDto: {
+            data: components["schemas"]["PreviewQuestionDto"][];
         };
         ProductDto: {
             /** Format: date-time */
@@ -4792,6 +4821,92 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PointLedgerListResponseDto"];
+                };
+            };
+            /** @description 请求参数验证失败 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description 身份认证失败 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description 权限不足或 CSRF 校验失败 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description 资源不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description 状态、幂等或并发冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description 请求体或上传文件过大 */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description 服务器内部错误 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    practiceGetPreviewQuestions: {
+        parameters: {
+            query?: {
+                /** @description 本次预习抽取的题目数量，最多 50 道 */
+                count?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreviewQuestionListDto"];
                 };
             };
             /** @description 请求参数验证失败 */

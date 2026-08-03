@@ -1192,6 +1192,55 @@
         ],
         "type": "object"
       },
+      "PreviewQuestionDto": {
+        "properties": {
+          "basePoints": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "correctOptionId": {
+            "type": "string"
+          },
+          "explanation": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/LearnerQuestionOptionDto"
+            },
+            "type": "array"
+          },
+          "stem": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "stem",
+          "basePoints",
+          "options",
+          "explanation",
+          "correctOptionId"
+        ],
+        "type": "object"
+      },
+      "PreviewQuestionListDto": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/PreviewQuestionDto"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
       "ProductDto": {
         "properties": {
           "createdAt": {
@@ -6776,6 +6825,120 @@
         "summary": "分页查询积分流水",
         "tags": [
           "学生端-积分"
+        ]
+      }
+    },
+    "/api/v1/practice/preview": {
+      "get": {
+        "operationId": "practiceGetPreviewQuestions",
+        "parameters": [
+          {
+            "description": "本次预习抽取的题目数量，最多 50 道",
+            "in": "query",
+            "name": "count",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "format": "int32",
+              "maximum": 50,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewQuestionListDto"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            },
+            "description": "请求参数验证失败"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            },
+            "description": "身份认证失败"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            },
+            "description": "权限不足或 CSRF 校验失败"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            },
+            "description": "资源不存在"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            },
+            "description": "状态、幂等或并发冲突"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            },
+            "description": "请求体或上传文件过大"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            },
+            "description": "服务器内部错误"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "随机抽取一批未答题目用于预习（含题解与正确选项）",
+        "tags": [
+          "学生端-练习"
         ]
       }
     },

@@ -10,6 +10,9 @@ import { pageMeta } from "./student-fixtures";
 
 jest.mock("next/navigation", () => ({
   usePathname: () => "/learn",
+  useRouter: () => ({
+    replace: jest.fn(),
+  }),
 }));
 
 describe("学员概览与个人中心", () => {
