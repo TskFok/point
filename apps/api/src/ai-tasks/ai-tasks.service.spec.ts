@@ -55,12 +55,13 @@ function createService(options?: {
   runCreateImpl?: (args: {
     data: Record<string, unknown>;
   }) => Promise<unknown>;
+  existingRuns?: Record<string, unknown>[];
   questionCreates?: unknown[];
 }) {
   const model = options?.model === undefined ? makeModel() : options.model;
   const task = options?.task === undefined ? makeTask() : options.task;
   const taskState = task ? { ...task } : null;
-  const runs: Record<string, unknown>[] = [];
+  const runs: Record<string, unknown>[] = [...(options?.existingRuns ?? [])];
   const questionCreates = options?.questionCreates ?? [];
 
   const prisma = {
@@ -194,6 +195,23 @@ function createService(options?: {
         Object.assign(run, data);
         return Promise.resolve(run);
       },
+      updateMany: ({
+        where,
+        data,
+      }: {
+        where: { status?: string };
+        data: Record<string, unknown>;
+      }) => {
+        let count = 0;
+        for (const run of runs) {
+          if (where.status !== undefined && run.status !== where.status) {
+            continue;
+          }
+          Object.assign(run, data);
+          count += 1;
+        }
+        return Promise.resolve({ count });
+      },
       findMany: () => Promise.resolve([]),
       count: () => Promise.resolve(0),
     },
@@ -218,6 +236,7 @@ function createService(options?: {
     service: new AiTasksService(prisma as never),
     taskState,
     questionCreates,
+    runs,
     runs,
   };
 }
@@ -353,6 +372,44 @@ describe('AiTasksService runTask', () => {
     expect(taskState?.lastWord).toBe('cat');
   });
 
+  it('密度跨度过大时 FAILED 且游标不变', async () => {
+    const { service, taskState, questionCreates } = createService({
+      task: makeTask({ lastWord: 'advocate' }),
+    });
+    const result = await service.runTask('task-1', {
+      trigger: 'MANUAL',
+      actorUserId: 'admin-1',
+      generate: async () => ({
+        ok: true,
+        questions: [
+          {
+            word: 'affect',
+            stem: 'The news will affect the market soon. What does "affect" mean?',
+            explanation: '这条新闻很快会影响市场。「affect」表示影响。',
+            options: [
+              { label: 'A', content: '影响', isCorrect: true },
+              { label: 'B', content: '忽略', isCorrect: false },
+            ],
+          },
+          {
+            word: 'kindle',
+            stem: 'Please kindle the fire carefully. What does "kindle" mean?',
+            explanation: '点燃火。「kindle」表示点燃。',
+            options: [
+              { label: 'A', content: '点燃', isCorrect: true },
+              { label: 'B', content: '熄灭', isCorrect: false },
+            ],
+          },
+        ],
+      }),
+    });
+    expect(result.status).toBe('FAILED');
+    expect(result.errorMessage).toMatch(/跨度过大|密推进/);
+    expect(result.questionsCreated).toBe(0);
+    expect(taskState?.lastWord).toBe('advocate');
+    expect(questionCreates).toHaveLength(0);
+  });
+
   it('模型停用时 FAILED', async () => {
     const { service } = createService({
       model: makeModel({ isEnabled: false }),
@@ -381,5 +438,115 @@ describe('AiTasksService runTask', () => {
         generate: async () => ({ ok: true, questions: sampleQuestions }),
       }),
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('启动恢复会将遗留 RUNNING 标记为 FAILED', async () => {
+    const { service, runs } = createService({
+      existingRuns: [
+        {
+          id: 'stale-run',
+          aiTaskId: 'task-1',
+          trigger: 'CRON',
+          status: 'RUNNING',
+          startedAt: new Date('2026-08-03T01:00:00.000Z'),
+          finishedAt: null,
+          questionsCreated: 0,
+          lastWordBefore: null,
+          lastWordAfter: null,
+          errorMessage: null,
+        },
+        {
+          id: 'done-run',
+          aiTaskId: 'task-1',
+          trigger: 'MANUAL',
+          status: 'SUCCESS',
+          startedAt: new Date('2026-08-03T00:00:00.000Z'),
+          finishedAt: new Date('2026-08-03T00:01:00.000Z'),
+          questionsCreated: 2,
+          lastWordBefore: null,
+          lastWordAfter: 'ability',
+          errorMessage: null,
+        },
+      ],
+    });
+
+    const recovered = await service.recoverInterruptedRuns();
+
+    expect(recovered).toBe(1);
+    expect(runs[0]).toMatchObject({
+      id: 'stale-run',
+      status: 'FAILED',
+      errorMessage: expect.stringMatching(/中断|未完成/),
+    });
+    expect(runs[0]?.finishedAt).toBeInstanceOf(Date);
+    expect(runs[1]).toMatchObject({ id: 'done-run', status: 'SUCCESS' });
+  });
+
+  it('onModuleInit 会恢复遗留 RUNNING，使后续任务可执行', async () => {
+    let createCalls = 0;
+    const { service } = createService({
+      existingRuns: [
+        {
+          id: 'stale-run',
+          aiTaskId: 'task-1',
+          trigger: 'CRON',
+          status: 'RUNNING',
+          startedAt: new Date('2026-08-03T01:00:00.000Z'),
+          finishedAt: null,
+          questionsCreated: 0,
+          lastWordBefore: null,
+          lastWordAfter: null,
+          errorMessage: null,
+        },
+      ],
+      runCreateImpl: async ({ data }) => {
+        createCalls += 1;
+        if (createCalls === 1) {
+          const error = new Error('unique') as Error & { code: string };
+          error.code = 'P2002';
+          throw error;
+        }
+        return {
+          id: 'run-new',
+          startedAt: new Date('2026-08-03T02:00:00.000Z'),
+          finishedAt: null,
+          questionsCreated: 0,
+          lastWordAfter: null,
+          errorMessage: null,
+          ...data,
+        };
+      },
+    });
+
+    await expect(
+      service.runTask('task-1', {
+        trigger: 'MANUAL',
+        actorUserId: 'admin-1',
+        generate: async () => ({ ok: true, questions: sampleQuestions }),
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    await service.onModuleInit();
+
+    const result = await service.runTask('task-1', {
+      trigger: 'MANUAL',
+      actorUserId: 'admin-1',
+      generate: async () => ({ ok: true, questions: sampleQuestions }),
+    });
+    expect(result.status).toBe('SUCCESS');
+  });
+
+  it('generate 抛错时将 run 标记为 FAILED 而非遗留 RUNNING', async () => {
+    const { service, runs } = createService();
+    const result = await service.runTask('task-1', {
+      trigger: 'MANUAL',
+      actorUserId: 'admin-1',
+      generate: async () => {
+        throw new Error('unexpected boom');
+      },
+    });
+    expect(result.status).toBe('FAILED');
+    expect(result.errorMessage).toMatch(/unexpected boom|执行异常/);
+    expect(runs[0]).toMatchObject({ status: 'FAILED' });
   });
 });

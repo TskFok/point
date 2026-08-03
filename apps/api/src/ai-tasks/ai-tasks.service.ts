@@ -2,7 +2,9 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
+  type OnModuleInit,
 } from '@nestjs/common';
 import {
   type AiModelConfig,
@@ -26,6 +28,8 @@ import {
   type GenerateQuestionsResult,
   type GeneratedQuestion,
 } from './generate-questions';
+
+const INTERRUPTED_RUN_MESSAGE = '服务中断，执行未完成';
 
 export type AiTaskLatestRunView = {
   id: string;
@@ -219,8 +223,35 @@ const taskInclude = {
 } satisfies Prisma.AiTaskInclude;
 
 @Injectable()
-export class AiTasksService {
+export class AiTasksService implements OnModuleInit {
+  private readonly logger = new Logger(AiTasksService.name);
+
   constructor(private readonly prisma: PrismaService) {}
+
+  async onModuleInit(): Promise<void> {
+    const recovered = await this.recoverInterruptedRuns();
+    if (recovered > 0) {
+      this.logger.warn(
+        `Recovered ${recovered} interrupted AI task run(s) left in RUNNING`,
+      );
+    }
+  }
+
+  /**
+   * 进程被 docker compose down / SIGKILL 等强杀后，RUNNING 记录会遗留并挡住后续执行。
+   * 服务启动时将全部遗留 RUNNING 标记为 FAILED，释放部分唯一索引锁。
+   */
+  async recoverInterruptedRuns(): Promise<number> {
+    const result = await this.prisma.aiTaskRun.updateMany({
+      where: { status: 'RUNNING' },
+      data: {
+        status: 'FAILED',
+        finishedAt: new Date(),
+        errorMessage: INTERRUPTED_RUN_MESSAGE,
+      },
+    });
+    return result.count;
+  }
 
   private encryptionKey(): Buffer {
     try {
@@ -491,103 +522,115 @@ export class AiTasksService {
       return toRunView(finished);
     };
 
-    if (!task.aiModelConfig.isEnabled) {
-      return finish('FAILED', {
-        errorMessage: '绑定的 AI 模型已停用',
-      });
-    }
-
-    let apiKey: string;
     try {
-      apiKey = decryptSecret(
-        task.aiModelConfig.apiKeyCiphertext,
-        this.encryptionKey(),
-      );
-    } catch {
-      return finish('FAILED', {
-        errorMessage: 'AI 模型密钥解密失败',
-      });
-    }
-
-    const generate =
-      options.generate ?? generateQuestionsWithChatCompletions;
-    const generated = await generate({
-      baseUrl: task.aiModelConfig.baseUrl,
-      apiKey,
-      modelName: task.aiModelConfig.name,
-      lastWord: task.lastWord,
-      questionCount: task.questionCount,
-      optionCount: task.optionCount,
-    });
-
-    if (!generated.ok) {
-      return finish('FAILED', {
-        errorMessage: generated.message,
-      });
-    }
-
-    const accepted: GeneratedQuestion[] = [];
-    const skipMessages: string[] = [];
-    let minWordExclusive = task.lastWord?.trim().toLowerCase() || null;
-    for (const item of generated.questions) {
-      const validated = validateOneGeneratedQuestion(
-        item,
-        task.optionCount,
-        minWordExclusive,
-      );
-      if (!validated.ok) {
-        skipMessages.push(validated.message);
-        continue;
+      if (!task.aiModelConfig.isEnabled) {
+        return await finish('FAILED', {
+          errorMessage: '绑定的 AI 模型已停用',
+        });
       }
-      accepted.push(validated.question);
-      minWordExclusive = validated.question.word;
-    }
 
-    if (accepted.length === 0) {
-      return finish('FAILED', {
-        errorMessage: skipMessages[0] ?? '未生成任何有效题目',
+      let apiKey: string;
+      try {
+        apiKey = decryptSecret(
+          task.aiModelConfig.apiKeyCiphertext,
+          this.encryptionKey(),
+        );
+      } catch {
+        return await finish('FAILED', {
+          errorMessage: 'AI 模型密钥解密失败',
+        });
+      }
+
+      const generate =
+        options.generate ?? generateQuestionsWithChatCompletions;
+      const generated = await generate({
+        baseUrl: task.aiModelConfig.baseUrl,
+        apiKey,
+        modelName: task.aiModelConfig.name,
+        lastWord: task.lastWord,
+        questionCount: task.questionCount,
+        optionCount: task.optionCount,
       });
-    }
 
-    try {
-      // N≤50：同事务内逐题写入（无循环查询）
-      await this.prisma.$transaction(async (tx) => {
-        for (const question of accepted) {
-          await tx.question.create({
-            data: {
-              stem: question.stem,
-              explanation: question.explanation,
-              basePoints: task.basePoints,
-              isActive: true,
-              createdBy: options.actorUserId,
-              options: {
-                create: question.options.map((option, index) => ({
-                  label: option.label,
-                  content: option.content,
-                  position: index,
-                  isCorrect: option.isCorrect,
-                })),
-              },
-            },
-          });
+      if (!generated.ok) {
+        return await finish('FAILED', {
+          errorMessage: generated.message,
+        });
+      }
+
+      const accepted: GeneratedQuestion[] = [];
+      const skipMessages: string[] = [];
+      let minWordExclusive = task.lastWord?.trim().toLowerCase() || null;
+      for (const item of generated.questions) {
+        const validated = validateOneGeneratedQuestion(
+          item,
+          task.optionCount,
+          minWordExclusive,
+        );
+        if (!validated.ok) {
+          if (/跨度过大|密推进/.test(validated.message)) {
+            return await finish('FAILED', {
+              errorMessage: validated.message,
+            });
+          }
+          skipMessages.push(validated.message);
+          continue;
         }
+        accepted.push(validated.question);
+        minWordExclusive = validated.question.word;
+      }
+
+      if (accepted.length === 0) {
+        return await finish('FAILED', {
+          errorMessage: skipMessages[0] ?? '未生成任何有效题目',
+        });
+      }
+
+      try {
+        // N≤50：同事务内逐题写入（无循环查询）
+        await this.prisma.$transaction(async (tx) => {
+          for (const question of accepted) {
+            await tx.question.create({
+              data: {
+                stem: question.stem,
+                explanation: question.explanation,
+                basePoints: task.basePoints,
+                isActive: true,
+                createdBy: options.actorUserId,
+                options: {
+                  create: question.options.map((option, index) => ({
+                    label: option.label,
+                    content: option.content,
+                    position: index,
+                    isCorrect: option.isCorrect,
+                  })),
+                },
+              },
+            });
+          }
+        });
+      } catch {
+        return await finish('FAILED', {
+          errorMessage: '写入题库失败',
+        });
+      }
+
+      const lastWordAfter = accepted[accepted.length - 1]!.word;
+      return await finish('SUCCESS', {
+        questionsCreated: accepted.length,
+        lastWordAfter,
+        nextLastWord: lastWordAfter,
+        errorMessage:
+          skipMessages.length > 0
+            ? `跳过 ${skipMessages.length} 题：${skipMessages.slice(0, 3).join('；')}`
+            : null,
       });
-    } catch {
+    } catch (error) {
       return finish('FAILED', {
-        errorMessage: '写入题库失败',
+        errorMessage:
+          error instanceof Error ? error.message : '执行异常',
       });
     }
-
-    const lastWordAfter = accepted[accepted.length - 1]!.word;
-    return finish('SUCCESS', {
-      questionsCreated: accepted.length,
-      lastWordAfter,
-      nextLastWord: lastWordAfter,
-      errorMessage:
-        skipMessages.length > 0
-          ? `跳过 ${skipMessages.length} 题：${skipMessages.slice(0, 3).join('；')}`
-          : null,
-    });
   }
 
   private async requireTask(id: string): Promise<AiTask> {
