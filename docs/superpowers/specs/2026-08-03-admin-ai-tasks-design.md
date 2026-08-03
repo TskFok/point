@@ -71,9 +71,10 @@
 - 选项（`content`）：中文词义；`label` 仍用 A/B/C…；恰 1 个 `isCorrect=true`，对应 `word` 的意思。
 - `explanation`：中文；须含题干整句译文 + 词义/考点说明。详见 `2026-08-03-ai-question-explanation-include-stem-translation-design.md`。
 - `basePoints` / `optionCount`：取自任务配置；`isActive` 默认 `true`。
-- AI 返回严格 JSON 数组；每项至少包含：`word`（本题锚定的英文单词）、`stem`、`explanation`、`options`（`label`/`content`/`isCorrect`）。`word` 用于校验字母序与更新游标，**不**单独落库字段。入库前校验：stem 须含 `word` 且不得挖空，否则跳过该题。
+- AI 返回严格 JSON 数组；每项至少包含：`word`（本题锚定的英文单词）、`stem`、`explanation`、`options`（`label`/`content`/`isCorrect`）。`word` 用于校验字母序、密推进与更新游标，**不**单独落库字段。入库前校验：stem 须含 `word` 且不得挖空，否则跳过该题。
+- **密推进**：相邻 `word` 须尽量紧挨推进——同首字母时第 2 字母距离 ≤ 2；仅当换字母时允许进入**下一个**字母且第 2 字母为 `a`–`c`。密度违规 → 整轮 `FAILED`，不写题、游标不前进。详见 `2026-08-03-ai-task-dense-word-progression-design.md`。
 - 游标：`lastWord` 为空 → 首次从字母序最前一带开始；成功写入至少 1 题后，将任务 `lastWord` 更新为本次成功题目中按字母序最大的 `word`（规范化小写）。
-- 部分失败：单题 JSON/校验不过则跳过并记入错误摘要；若 0 题成功 → run `FAILED`，**游标不前进**；若 ≥1 题成功 → run `SUCCESS`（可在 `errorMessage` 附带跳过摘要），游标按上条规则前进。
+- 部分失败：单题 JSON/校验不过则跳过并记入错误摘要（**密度/跨度错误除外，见上**）；若 0 题成功 → run `FAILED`，**游标不前进**；若 ≥1 题成功 → run `SUCCESS`（可在 `errorMessage` 附带跳过摘要），游标按上条规则前进。
 
 ## Admin API
 
@@ -113,8 +114,8 @@
    1. 事务内尝试创建 `AiTaskRun(RUNNING)`（抢锁）；失败则跳过或对 manual 返回 `409`。
    2. 记录 `lastWordBefore`。
    3. 解密模型密钥，调用 OpenAI 兼容 `chat/completions`（超时 **60 秒**；单测 mock）。
-   4. Prompt 要求：从 `lastWord` 之后按英文字母序生成 `questionCount` 道题；每题带 `word`；题干为含 `word` 的完整英文例句并点名考查该词（禁止挖空）、选项中文词义、`optionCount` 个选项、恰一正确项、中文解析（须含整句题干译文 + 词义说明）；**严格 JSON** 数组。
-   5. 校验每题（含 `word` 须严格大于 `lastWordBefore`、彼此按序不重复）并批量写入题库；更新 `questionsCreated`、`lastWordAfter`；成功时更新任务 `lastWord`。
+   4. Prompt 要求：从 `lastWord` 之后按英文字母序且**密推进**生成 `questionCount` 道题；每题带 `word`；题干为含 `word` 的完整英文例句并点名考查该词（禁止挖空）、选项中文词义、`optionCount` 个选项、恰一正确项、中文解析（须含整句题干译文 + 词义说明）；**严格 JSON** 数组。密推进规则见 `2026-08-03-ai-task-dense-word-progression-design.md`。
+   5. 校验每题（含 `word` 须严格大于 `lastWordBefore`、彼此按序不重复、密推进跨度合法）并批量写入题库；密度违规整轮 `FAILED`；更新 `questionsCreated`、`lastWordAfter`；成功时更新任务 `lastWord`。
    6. 标记 run `SUCCESS` / `FAILED`，写 `finishedAt` 与可选 `errorMessage`。
 4. 出站仅由 API 发起；日志与 `errorMessage` 不得包含 API Key 或 Authorization。
 
@@ -150,5 +151,5 @@
 
 - 管理员可在 `/admin/ai-tasks` 维护多套任务，配置模型、数量、选项数、积分、crontab、启用状态，并立即执行。
 - 已启用任务在 crontab 命中时自动出题；未启用仍可手动执行。
-- 题目题干为含目标词的完整英文例句（禁止挖空）、选项中文词义，按单词字母序游标续写；执行历史可查。
+- 题目题干为含目标词的完整英文例句（禁止挖空）、选项中文词义，按单词字母序且密推进游标续写；执行历史可查。
 - 相关单元测试通过；OpenAPI 与 api-client 已更新。
