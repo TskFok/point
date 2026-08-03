@@ -224,3 +224,17 @@ export const orderIdParam: ApiParamOptions = {
   name: 'orderId',
   schema: { type: 'string', minLength: 1, maxLength: 191 },
 };
+
+export const aiModelIdParam: ApiParamOptions = {
+  name: 'id',
+  schema: { type: 'string', minLength: 1, maxLength: 191 },
+};
+
+export const aiModelQueries: ApiQueryOptions[] = [
+  {
+    name: 'isEnabled',
+    required: false,
+    schema: { type: 'boolean' },
+  },
+  ...pageQueries,
+];

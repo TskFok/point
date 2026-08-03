@@ -113,19 +113,30 @@ describe('OpenAPI 契约', () => {
 
   afterAll(async () => close());
 
-  it('完整覆盖 30 个路径下 35 个稳定 operationId 的版本化路由', () => {
+  it('完整覆盖 34 个路径下 42 个稳定 operationId 的版本化路由', () => {
     const allOperations = operations(document);
     const operationIds = allOperations.map(
       (operation) => operation.operationId,
     );
 
-    expect(Object.keys(document.paths)).toHaveLength(30);
-    expect(allOperations).toHaveLength(35);
-    expect(new Set(operationIds).size).toBe(35);
+    expect(Object.keys(document.paths)).toHaveLength(34);
+    expect(allOperations).toHaveLength(42);
+    expect(new Set(operationIds).size).toBe(42);
     expect(operationIds).not.toContain(undefined);
     expect(
       Object.keys(document.paths).every((path) => path.startsWith('/api/v1/')),
     ).toBe(true);
+    expect(operationIds).toEqual(
+      expect.arrayContaining([
+        'adminListAiModels',
+        'adminCreateAiModel',
+        'adminGetAiModel',
+        'adminUpdateAiModel',
+        'adminDeleteAiModel',
+        'adminTestAiModelDraft',
+        'adminTestAiModel',
+      ]),
+    );
   });
 
   it('声明管理员概览与倍率历史的响应和分页契约', () => {

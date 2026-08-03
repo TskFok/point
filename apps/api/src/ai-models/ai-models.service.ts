@@ -51,10 +51,6 @@ function nameConflict(): ConflictException {
   });
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
 function isPrismaError(error: unknown, code: string): boolean {
   return (
     typeof error === 'object' &&
@@ -204,10 +200,6 @@ export class AiModelsService {
     input: UpdateAiModelDto,
     userId: string,
   ): Promise<AiModelConfigView> {
-    if (!isRecord(input)) {
-      throw validationFailed('更新参数必须是对象');
-    }
-
     const data: Prisma.AiModelConfigUpdateInput = {
       updater: { connect: { id: userId } },
     };

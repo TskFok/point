@@ -604,3 +604,88 @@ export class AdminOrderListResponseDto {
   @ApiProperty({ type: () => PageMetaDto })
   meta!: PageMetaDto;
 }
+
+export class CreateAiModelRequestDto {
+  @ApiProperty({ minLength: 1, maxLength: 100 })
+  name!: string;
+
+  @ApiProperty({ minLength: 1, maxLength: 500 })
+  baseUrl!: string;
+
+  @ApiProperty({ minLength: 1, maxLength: 2000 })
+  apiKey!: string;
+
+  @ApiPropertyOptional()
+  isEnabled?: boolean;
+}
+
+export class UpdateAiModelRequestDto {
+  @ApiPropertyOptional({ minLength: 1, maxLength: 100 })
+  name?: string;
+
+  @ApiPropertyOptional({ minLength: 1, maxLength: 500 })
+  baseUrl?: string;
+
+  @ApiPropertyOptional({ maxLength: 2000 })
+  apiKey?: string;
+
+  @ApiPropertyOptional()
+  isEnabled?: boolean;
+}
+
+export class TestAiModelDraftRequestDto {
+  @ApiProperty({ minLength: 1, maxLength: 500 })
+  baseUrl!: string;
+
+  @ApiPropertyOptional({ maxLength: 2000 })
+  apiKey?: string;
+
+  @ApiPropertyOptional({ minLength: 1 })
+  id?: string;
+}
+
+export class AiModelConfigDto {
+  @ApiProperty()
+  id!: string;
+
+  @ApiProperty()
+  name!: string;
+
+  @ApiProperty()
+  baseUrl!: string;
+
+  @ApiProperty({ example: '••••abcd' })
+  apiKeyMasked!: string;
+
+  @ApiProperty()
+  isEnabled!: boolean;
+
+  @ApiProperty({ format: 'date-time' })
+  createdAt!: string;
+
+  @ApiProperty({ format: 'date-time' })
+  updatedAt!: string;
+}
+
+export class AiModelConfigListResponseDto {
+  @ApiProperty({ type: () => [AiModelConfigDto] })
+  data!: AiModelConfigDto[];
+
+  @ApiProperty({ type: () => PageMetaDto })
+  meta!: PageMetaDto;
+}
+
+export class AiModelProbeResultDto {
+  @ApiProperty()
+  ok!: boolean;
+
+  @ApiProperty({ ...int32, minimum: 0 })
+  latencyMs!: number;
+
+  @ApiPropertyOptional({ ...int32, minimum: 0 })
+  modelCount?: number;
+
+  @ApiPropertyOptional()
+  message?: string;
+}
+

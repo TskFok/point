@@ -23,6 +23,25 @@ type ValidBinding = {
 
 export const operationRegistry = {
   adminGetDashboard: { path: "/api/v1/admin/dashboard", method: "GET" },
+  adminListAiModels: { path: "/api/v1/admin/ai-models", method: "GET" },
+  adminCreateAiModel: { path: "/api/v1/admin/ai-models", method: "POST" },
+  adminTestAiModelDraft: {
+    path: "/api/v1/admin/ai-models/test",
+    method: "POST",
+  },
+  adminGetAiModel: { path: "/api/v1/admin/ai-models/{id}", method: "GET" },
+  adminUpdateAiModel: {
+    path: "/api/v1/admin/ai-models/{id}",
+    method: "PATCH",
+  },
+  adminDeleteAiModel: {
+    path: "/api/v1/admin/ai-models/{id}",
+    method: "DELETE",
+  },
+  adminTestAiModel: {
+    path: "/api/v1/admin/ai-models/{id}/test",
+    method: "POST",
+  },
   adminListOrders: { path: "/api/v1/admin/orders", method: "GET" },
   adminGetOrder: {
     path: "/api/v1/admin/orders/{orderId}",
@@ -521,6 +540,48 @@ export function createApiClient(options: ApiClientOptions) {
       request("adminUpdatePointConfig", {
         authMode: "authenticated",
         body: input,
+      }),
+
+    listAdminAiModels: (
+      query: ParameterOf<"adminListAiModels", "query"> = {},
+    ) =>
+      request("adminListAiModels", {
+        authMode: "authenticated",
+        query,
+      }),
+    createAdminAiModel: (input: JsonBodyOf<"adminCreateAiModel">) =>
+      request("adminCreateAiModel", {
+        authMode: "authenticated",
+        body: input,
+      }),
+    getAdminAiModel: (id: string) =>
+      request("adminGetAiModel", {
+        authMode: "authenticated",
+        pathParams: { id },
+      }),
+    updateAdminAiModel: (
+      id: string,
+      input: JsonBodyOf<"adminUpdateAiModel">,
+    ) =>
+      request("adminUpdateAiModel", {
+        authMode: "authenticated",
+        pathParams: { id },
+        body: input,
+      }),
+    deleteAdminAiModel: (id: string) =>
+      request("adminDeleteAiModel", {
+        authMode: "authenticated",
+        pathParams: { id },
+      }),
+    testAdminAiModelDraft: (input: JsonBodyOf<"adminTestAiModelDraft">) =>
+      request("adminTestAiModelDraft", {
+        authMode: "authenticated",
+        body: input,
+      }),
+    testAdminAiModel: (id: string) =>
+      request("adminTestAiModel", {
+        authMode: "authenticated",
+        pathParams: { id },
       }),
 
     listProducts: (query: ParameterOf<"productsList", "query"> = {}) =>
