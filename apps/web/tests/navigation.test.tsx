@@ -104,7 +104,7 @@ describe("响应式应用导航", () => {
     const closeButton = within(dialog).getByRole("button", {
       name: "关闭管理员菜单",
     });
-    const lastLink = within(dialog).getByRole("link", { name: "积分设置" });
+    const lastLink = within(dialog).getByRole("link", { name: "AI 模型" });
     expect(dialog).toHaveAttribute("aria-modal", "true");
     expect(opener).toHaveAttribute("aria-controls", dialog.id);
     expect(workspace).toHaveAttribute("aria-hidden", "true");

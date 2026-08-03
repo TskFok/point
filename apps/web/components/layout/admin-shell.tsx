@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Bot,
   Boxes,
   ClipboardList,
   Gauge,
@@ -25,6 +26,7 @@ const adminItems = [
   { href: "/admin/products", icon: Boxes, label: "商品管理" },
   { href: "/admin/orders", icon: ShieldCheck, label: "订单管理" },
   { href: "/admin/points", icon: Settings2, label: "积分设置" },
+  { href: "/admin/ai-models", icon: Bot, label: "AI 模型" },
 ];
 
 function isActivePath(pathname: string, href: string) {
