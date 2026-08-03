@@ -45,8 +45,11 @@ export function buildGeneratePrompt(input: {
     `Generate exactly ${input.questionCount} multiple-choice vocabulary questions.`,
     `Words must be in strict English alphabetical order ${cursor}.`,
     `Each question must have exactly ${input.optionCount} options.`,
-    'Stem must be English. Option contents must be Chinese. Explanation must be Chinese.',
-    'Exactly one option isCorrect=true per question.',
+    'Stem must be a complete English example sentence that MUST INCLUDE the target word itself (case-insensitive word boundary).',
+    'Do NOT use blanks, underscores (___), ellipsis placeholders, or [blank] in the stem.',
+    'End the stem by naming the word to test, e.g. What does "abhor" mean?',
+    'Option contents must be Chinese meanings. Explanation must be Chinese.',
+    'Exactly one option isCorrect=true per question (the Chinese meaning of the target word).',
     'Return ONLY a JSON array. Each item: { "word", "stem", "explanation", "options": [{ "label", "content", "isCorrect" }] }.',
   ].join(' ');
 }
@@ -81,6 +84,22 @@ function normalizeWord(value: unknown): string | null {
   return word || null;
 }
 
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function stemHasBlankPlaceholder(stem: string): boolean {
+  return /\b_{2,}\b|___+|\[\s*blank\s*\]|\[\s*\]/i.test(stem);
+}
+
+function stemIncludesWord(stem: string, word: string): boolean {
+  const wordInStem = new RegExp(
+    `(^|[^A-Za-z])${escapeRegExp(word)}(?![A-Za-z])`,
+    'i',
+  );
+  return wordInStem.test(stem);
+}
+
 export function validateOneGeneratedQuestion(
   value: unknown,
   optionCount: number,
@@ -104,6 +123,13 @@ export function validateOneGeneratedQuestion(
   }
   if (typeof value.stem !== 'string' || !value.stem.trim()) {
     return { ok: false, message: `题目 ${word} 缺少 stem` };
+  }
+  const stem = value.stem.trim();
+  if (stemHasBlankPlaceholder(stem)) {
+    return { ok: false, message: `题目 ${word} stem 禁止挖空占位` };
+  }
+  if (!stemIncludesWord(stem, word)) {
+    return { ok: false, message: `题目 ${word} stem 未包含目标词` };
   }
   if (typeof value.explanation !== 'string' || !value.explanation.trim()) {
     return { ok: false, message: `题目 ${word} 缺少 explanation` };
@@ -145,7 +171,7 @@ export function validateOneGeneratedQuestion(
     ok: true,
     question: {
       word,
-      stem: value.stem.trim(),
+      stem,
       explanation: value.explanation.trim(),
       options,
     },

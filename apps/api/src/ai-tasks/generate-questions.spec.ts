@@ -9,7 +9,7 @@ describe('generate-questions parse', () => {
   const sample = JSON.stringify([
     {
       word: 'abandon',
-      stem: 'What does "abandon" mean?',
+      stem: 'They decided to abandon the plan. What does "abandon" mean?',
       explanation: '放弃',
       options: [
         { label: 'A', content: '放弃', isCorrect: true },
@@ -44,7 +44,7 @@ describe('generate-questions parse', () => {
     const result = validateOneGeneratedQuestion(
       {
         word: 'able',
-        stem: 'What does able mean?',
+        stem: 'She is able to finish the work. What does "able" mean?',
         explanation: '能够的',
         options: [
           { label: 'A', content: '能够的', isCorrect: true },
@@ -53,6 +53,70 @@ describe('generate-questions parse', () => {
       },
       2,
       'abandon',
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it('prompt 要求完整例句包含 word 且禁止挖空', () => {
+    const p = buildGeneratePrompt({
+      lastWord: null,
+      questionCount: 1,
+      optionCount: 4,
+    });
+    expect(p.toLowerCase()).toMatch(/must include/);
+    expect(p.toLowerCase()).toMatch(/blank|___|placeholder/);
+    expect(p.toLowerCase()).toMatch(/what does/);
+  });
+
+  it('拒绝 stem 含挖空占位', () => {
+    const result = validateOneGeneratedQuestion(
+      {
+        word: 'abhor',
+        stem: 'The scholar claimed to ___ violence in all forms.',
+        explanation: '憎恶',
+        options: [
+          { label: 'A', content: '憎恶', isCorrect: true },
+          { label: 'B', content: '崇拜', isCorrect: false },
+        ],
+      },
+      2,
+      null,
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toMatch(/挖空|blank|___/i);
+  });
+
+  it('拒绝 stem 未包含 word', () => {
+    const result = validateOneGeneratedQuestion(
+      {
+        word: 'abhor',
+        stem: 'What does this word mean in context?',
+        explanation: '憎恶',
+        options: [
+          { label: 'A', content: '憎恶', isCorrect: true },
+          { label: 'B', content: '崇拜', isCorrect: false },
+        ],
+      },
+      2,
+      null,
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toMatch(/未包含|不包含|word/i);
+  });
+
+  it('接受含完整 word 的例句题干', () => {
+    const result = validateOneGeneratedQuestion(
+      {
+        word: 'abhor',
+        stem: 'The scholar claimed to abhor violence in all forms. What does "abhor" mean?',
+        explanation: '憎恶、痛恨',
+        options: [
+          { label: 'A', content: '憎恶', isCorrect: true },
+          { label: 'B', content: '崇拜', isCorrect: false },
+        ],
+      },
+      2,
+      null,
     );
     expect(result.ok).toBe(true);
   });
@@ -69,7 +133,7 @@ describe('generateQuestionsWithChatCompletions', () => {
               content: JSON.stringify([
                 {
                   word: 'abandon',
-                  stem: 'What does "abandon" mean?',
+                  stem: 'They decided to abandon the plan. What does "abandon" mean?',
                   explanation: '放弃',
                   options: [
                     { label: 'A', content: '放弃', isCorrect: true },
