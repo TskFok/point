@@ -28,6 +28,36 @@ export type GenerateQuestionsResult =
 
 const DEFAULT_TIMEOUT_MS = 60_000;
 
+export const MAX_SECOND_LETTER_DELTA = 2;
+
+const WORD_PATTERN = /^[a-z]+$/;
+const NEXT_LETTER_SECOND_MAX = 'c'; // a–c
+
+export function isDenseWordProgression(prev: string, next: string): boolean {
+  if (!WORD_PATTERN.test(prev) || !WORD_PATTERN.test(next)) {
+    return false;
+  }
+  if (prev.length < 2 || next.length < 2) {
+    return false;
+  }
+  const p0 = prev[0]!;
+  const n0 = next[0]!;
+  const p1 = prev[1]!;
+  const n1 = next[1]!;
+
+  if (n0 === p0) {
+    return (
+      Math.abs(n1.charCodeAt(0) - p1.charCodeAt(0)) <= MAX_SECOND_LETTER_DELTA
+    );
+  }
+
+  if (n0.charCodeAt(0) === p0.charCodeAt(0) + 1) {
+    return n1 >= 'a' && n1 <= NEXT_LETTER_SECOND_MAX;
+  }
+
+  return false;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

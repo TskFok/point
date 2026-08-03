@@ -1,10 +1,40 @@
 import {
   buildGeneratePrompt,
   generateQuestionsWithChatCompletions,
+  isDenseWordProgression,
   parseGeneratedQuestionsJson,
   shuffleQuestionOptions,
   validateOneGeneratedQuestion,
 } from './generate-questions';
+
+describe('isDenseWordProgression', () => {
+  it('同首字母且第2字母距离≤2 通过', () => {
+    expect(isDenseWordProgression('advocate', 'advice')).toBe(true);
+    expect(isDenseWordProgression('advocate', 'affect')).toBe(true);
+  });
+
+  it('同首字母第2字母距离过大拒绝', () => {
+    expect(isDenseWordProgression('advocate', 'airport')).toBe(false);
+  });
+
+  it('跨多个首字母拒绝', () => {
+    expect(isDenseWordProgression('advocate', 'kindle')).toBe(false);
+  });
+
+  it('换至下一字母且第2字母为 a–c 通过', () => {
+    expect(isDenseWordProgression('azure', 'baby')).toBe(true);
+  });
+
+  it('换字母但非下一字母或第2字母不在 a–c 拒绝', () => {
+    expect(isDenseWordProgression('azure', 'kindle')).toBe(false);
+    expect(isDenseWordProgression('azure', 'brown')).toBe(false);
+  });
+
+  it('非纯字母或过短拒绝', () => {
+    expect(isDenseWordProgression('a', 'ab')).toBe(false);
+    expect(isDenseWordProgression('well-known', 'wellness')).toBe(false);
+  });
+});
 
 describe('generate-questions parse', () => {
   const sample = JSON.stringify([
