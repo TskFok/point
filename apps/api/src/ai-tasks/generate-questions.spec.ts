@@ -2,6 +2,7 @@ import {
   buildGeneratePrompt,
   generateQuestionsWithChatCompletions,
   parseGeneratedQuestionsJson,
+  shuffleQuestionOptions,
   validateOneGeneratedQuestion,
 } from './generate-questions';
 
@@ -131,6 +132,65 @@ describe('generate-questions parse', () => {
       null,
     );
     expect(result.ok).toBe(true);
+  });
+});
+
+describe('shuffleQuestionOptions', () => {
+  it('按固定 rng 打乱并重标 A/B/C，正解跟随内容', () => {
+    const options = [
+      { label: 'A', content: '正确', isCorrect: true },
+      { label: 'B', content: '错1', isCorrect: false },
+      { label: 'C', content: '错2', isCorrect: false },
+    ];
+    const values = [0.9, 0.1];
+    let i = 0;
+    const rng = () => values[i++] ?? 0;
+    const shuffled = shuffleQuestionOptions(options, rng);
+    expect(shuffled.map((o) => o.content)).not.toEqual([
+      '正确',
+      '错1',
+      '错2',
+    ]);
+    expect(shuffled.map((o) => o.label)).toEqual(['A', 'B', 'C']);
+    expect(shuffled.filter((o) => o.isCorrect)).toHaveLength(1);
+    expect(shuffled.find((o) => o.isCorrect)?.content).toBe('正确');
+  });
+
+  it('parseGeneratedQuestionsJson 出口已洗牌（固定 rng）', () => {
+    const raw = JSON.stringify([
+      {
+        word: 'abandon',
+        stem: 'They decided to abandon the plan. What does "abandon" mean?',
+        explanation: '他们决定放弃这个计划。「abandon」表示放弃。',
+        options: [
+          { label: 'A', content: '放弃', isCorrect: true },
+          { label: 'B', content: '获得', isCorrect: false },
+          { label: 'C', content: '坚持', isCorrect: false },
+          { label: 'D', content: '拒绝', isCorrect: false },
+        ],
+      },
+    ]);
+    const values = [0.99, 0.01, 0.5];
+    let i = 0;
+    const result = parseGeneratedQuestionsJson(
+      raw,
+      4,
+      null,
+      () => values[i++] ?? 0,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const labels = result.questions[0]!.options.map((o) => o.label);
+    expect(labels).toEqual(['A', 'B', 'C', 'D']);
+    expect(
+      result.questions[0]!.options.find((o) => o.isCorrect)?.content,
+    ).toBe('放弃');
+    expect(result.questions[0]!.options.map((o) => o.content)).not.toEqual([
+      '放弃',
+      '获得',
+      '坚持',
+      '拒绝',
+    ]);
   });
 });
 

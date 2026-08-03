@@ -52,8 +52,27 @@ export function buildGeneratePrompt(input: {
     'Explanation must be Chinese and MUST include: (1) a full Chinese translation of the entire stem sentence, and (2) a brief meaning note for the target word.',
     'Example explanation: 他们决定放弃这个计划。「abandon」表示放弃、抛弃。',
     'Exactly one option isCorrect=true per question (the Chinese meaning of the target word).',
+    'Option order does not matter; labels will be reassigned.',
     'Return ONLY a JSON array. Each item: { "word", "stem", "explanation", "options": [{ "label", "content", "isCorrect" }] }.',
   ].join(' ');
+}
+
+const OPTION_LABELS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+export function shuffleQuestionOptions(
+  options: GeneratedQuestionOption[],
+  rng: () => number = Math.random,
+): GeneratedQuestionOption[] {
+  const shuffled = [...options];
+  for (let i = shuffled.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(rng() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
+  }
+  return shuffled.map((option, index) => ({
+    label: OPTION_LABELS[index] ?? String(index + 1),
+    content: option.content,
+    isCorrect: option.isCorrect,
+  }));
 }
 
 export function extractJsonArray(raw: string): unknown[] | null {
@@ -184,6 +203,7 @@ export function parseGeneratedQuestionsJson(
   raw: string,
   optionCount: number,
   lastWordBefore: string | null,
+  rng: () => number = Math.random,
 ): { ok: true; questions: GeneratedQuestion[] } | { ok: false; message: string } {
   const array = extractJsonArray(raw);
   if (!array) {
@@ -200,7 +220,10 @@ export function parseGeneratedQuestionsJson(
     if (!validated.ok) {
       return validated;
     }
-    questions.push(validated.question);
+    questions.push({
+      ...validated.question,
+      options: shuffleQuestionOptions(validated.question.options, rng),
+    });
     minWordExclusive = validated.question.word;
   }
   return { ok: true, questions };
