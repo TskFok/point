@@ -5,6 +5,7 @@ import {
   Boxes,
   ClipboardList,
   Gauge,
+  ListTodo,
   Menu,
   Settings2,
   ShieldCheck,
@@ -27,6 +28,7 @@ const adminItems = [
   { href: "/admin/orders", icon: ShieldCheck, label: "订单管理" },
   { href: "/admin/points", icon: Settings2, label: "积分设置" },
   { href: "/admin/ai-models", icon: Bot, label: "AI 模型" },
+  { href: "/admin/ai-tasks", icon: ListTodo, label: "AI 任务" },
 ];
 
 function isActivePath(pathname: string, href: string) {
