@@ -2,6 +2,8 @@
 
 本文档用于把 Point Quest 部署到一台已经运行 HTTPS 网关的 Linux 服务器。项目自身只发布 `127.0.0.1:3001`，由宿主机网关负责域名、TLS 和公网接入；NestJS API 与 PostgreSQL 不发布宿主机端口。
 
+生产使用根目录 `docker-compose.yml`，应用服务通过预构建镜像启动（`IMAGE_REGISTRY` / `IMAGE_TAG`）。本仓库不包含把镜像推送到远程仓库的流程；部署前需确保 `point-quest-migrate`、`point-quest-api`、`point-quest-web` 已按约定 tag 存在于可拉取的仓库或本机。
+
 ## 前置条件
 
 - Linux 服务器已安装 Docker Engine 29 或兼容版本，以及 Docker Compose。
@@ -9,31 +11,37 @@
 - 已有 HTTPS 网关能够转发到宿主机回环地址。
 - 部署账户可以读取仓库、执行 Docker 命令，并能以 `0600` 权限保存环境文件。
 - 服务器应为数据库卷、上传卷和 Docker 镜像预留足够磁盘空间。
+- 三个应用镜像已按 `.env` 中的 `IMAGE_REGISTRY` 与 `IMAGE_TAG` 就绪。
 
 生产编排包含 `db`、`migrate`、`api`、`web` 四个服务。启动时先等待 PostgreSQL 健康，再执行一次 `prisma migrate deploy`；只有迁移成功后才会启动 API 和 Web。生产流程不会创建演示账户。
+
+本地开发数据库请使用 `compose.dev.yaml`，不要与生产 `docker-compose.yml` 混用。
 
 ## 首次部署
 
 复制环境模板并限制权限：
 
 ```bash
-cp .env.production.example .env.production
-chmod 600 .env.production
+cp .env.docker.example .env
+chmod 600 .env
 ```
 
-编辑 `.env.production`，至少替换以下值：
+编辑 `.env`，至少替换以下值：
 
+- `IMAGE_REGISTRY`：镜像仓库前缀，无尾斜杠，例如 `registry.cn-hangzhou.aliyuncs.com/<your-namespace>`。
+- `IMAGE_TAG`：版本 tag，例如 `v1.0.0`。
 - `POSTGRES_PASSWORD`：使用高强度随机密码。为了避免连接串编码错误，建议只使用足够长的字母和数字组合。
 - `DATABASE_URL`：用户名、密码和数据库名必须与 PostgreSQL 变量一致，主机固定为 `db`；密码包含 URI 保留字符时必须进行百分号编码。
 - `AUTH_JWT_SECRET`：至少 32 字节的随机值，不得继续使用模板内容。
 - `WEB_ORIGIN`：精确的公网 HTTPS Origin，例如 `https://point.example.com`，不能包含路径或结尾斜杠。
 
-先验证配置，再构建并启动：
+先验证配置，再拉取并启动（镜像已在本机时可跳过 `pull`）：
 
 ```bash
-docker compose --env-file .env.production -f compose.prod.yaml config --quiet
-docker compose --env-file .env.production -f compose.prod.yaml up -d --build
-docker compose --env-file .env.production -f compose.prod.yaml ps --all
+docker compose config --quiet
+docker compose pull
+docker compose up -d
+docker compose ps --all
 curl --fail --show-error http://127.0.0.1:3001/api/v1/health
 ```
 
@@ -65,27 +73,28 @@ location / {
 ## 查看状态和日志
 
 ```bash
-docker compose --env-file .env.production -f compose.prod.yaml ps --all
-docker compose --env-file .env.production -f compose.prod.yaml logs --tail=200 migrate api web db
-docker compose --env-file .env.production -f compose.prod.yaml exec -T db sh -c 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+docker compose ps --all
+docker compose logs --tail=200 migrate api web db
+docker compose exec -T db sh -c 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 ```
 
 持续跟踪 API 与 Web 日志：
 
 ```bash
-docker compose --env-file .env.production -f compose.prod.yaml logs --follow --tail=100 api web
+docker compose logs --follow --tail=100 api web
 ```
 
 Docker 日志默认单文件最多 10 MiB，保留 3 个文件。
 
 ## 更新部署
 
-更新前先完成数据库和上传卷备份。切换到已经审核的代码版本后运行：
+更新前先完成数据库和上传卷备份。将 `.env` 中的 `IMAGE_TAG`（及必要时 `IMAGE_REGISTRY`）改为目标版本后运行：
 
 ```bash
-docker compose --env-file .env.production -f compose.prod.yaml config --quiet
-docker compose --env-file .env.production -f compose.prod.yaml up -d --build
-docker compose --env-file .env.production -f compose.prod.yaml ps --all
+docker compose config --quiet
+docker compose pull
+docker compose up -d
+docker compose ps --all
 curl --fail --show-error http://127.0.0.1:3001/api/v1/health
 ```
 
@@ -98,7 +107,7 @@ Compose 会先运行前向迁移。迁移失败时 `migrate` 以非零状态退�
 ```bash
 mkdir -p backups
 chmod 700 backups
-docker compose --env-file .env.production -f compose.prod.yaml exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > backups/point.dump
+docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > backups/point.dump
 chmod 600 backups/point.dump
 ```
 
@@ -111,10 +120,10 @@ chmod 600 backups/point.dump
 停止业务写流量，恢复数据库，重新运行迁移后再启动服务：
 
 ```bash
-docker compose --env-file .env.production -f compose.prod.yaml stop web api
-docker compose --env-file .env.production -f compose.prod.yaml exec -T db sh -c 'pg_restore --clean --if-exists -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < backups/point.dump
-docker compose --env-file .env.production -f compose.prod.yaml run --rm migrate
-docker compose --env-file .env.production -f compose.prod.yaml up -d api web
+docker compose stop web api
+docker compose exec -T db sh -c 'pg_restore --clean --if-exists -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < backups/point.dump
+docker compose run --rm migrate
+docker compose up -d api web
 curl --fail --show-error http://127.0.0.1:3001/api/v1/health
 ```
 
@@ -138,19 +147,19 @@ chmod 600 backups/point-uploads.tar.gz
 > 严重警告：以下命令会删除上传卷中的所有现有文件，然后用归档覆盖。此操作不可撤销。执行前必须确认卷名、归档路径和数据库恢复点完全匹配。
 
 ```bash
-docker compose --env-file .env.production -f compose.prod.yaml stop api
+docker compose stop api
 docker run --rm -v point-quest-prod_point-upload-data:/target -v "$PWD/backups":/backup:ro alpine:3.23 sh -c 'find /target -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + && tar -xzf /backup/point-uploads.tar.gz -C /target'
-docker compose --env-file .env.production -f compose.prod.yaml up -d api web
+docker compose up -d api web
 ```
 
 恢复后检查 API 日志。如果出现上传目录权限错误，确认卷内目录归属运行镜像的 `node` 用户，并从可信备份重新恢复；不要把该卷同时挂载给其他可写服务。
 
 ## 密钥轮换
 
-修改 `.env.production` 后重建相关容器：
+修改 `.env` 后重建相关容器：
 
 ```bash
-docker compose --env-file .env.production -f compose.prod.yaml up -d --force-recreate api web
+docker compose up -d --force-recreate api web
 ```
 
 轮换 `AUTH_JWT_SECRET` 会立即使现有 Access Token、Refresh Token 和 Web 登录 Cookie 失效，用户需要重新登录。轮换数据库密码时必须在同一维护窗口同步更新 `POSTGRES_PASSWORD`、`DATABASE_URL` 和数据库角色密码，否则应用无法连接。
@@ -159,13 +168,17 @@ docker compose --env-file .env.production -f compose.prod.yaml up -d --force-rec
 
 ### 配置展开失败
 
-`docker compose ... config --quiet` 会在必填变量为空时直接失败。确认命令包含 `--env-file .env.production`，并检查真实文件仍为 `0600`。
+`docker compose config --quiet` 会在必填变量为空时直接失败。确认项目目录存在已填写的 `.env`（可由 `.env.docker.example` 复制），权限仍为 `0600`，且 `IMAGE_REGISTRY` / `IMAGE_TAG` 已设置。
+
+### 镜像拉取失败
+
+确认 `.env` 中的镜像坐标正确，本机或仓库中已有对应 tag，并且当前 Docker 账户有权拉取。本仓库不规定远程仓库的登录与推送步骤。
 
 ### 数据库不健康
 
 ```bash
-docker compose --env-file .env.production -f compose.prod.yaml logs --tail=200 db
-docker compose --env-file .env.production -f compose.prod.yaml exec -T db sh -c 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+docker compose logs --tail=200 db
+docker compose exec -T db sh -c 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 ```
 
 检查磁盘空间、卷权限和数据库变量。数据库未健康时迁移、API、Web 都不会启动。
@@ -173,11 +186,11 @@ docker compose --env-file .env.production -f compose.prod.yaml exec -T db sh -c 
 ### 迁移失败
 
 ```bash
-docker compose --env-file .env.production -f compose.prod.yaml ps --all
-docker compose --env-file .env.production -f compose.prod.yaml logs --tail=200 migrate
+docker compose ps --all
+docker compose logs --tail=200 migrate
 ```
 
-修复原因后运行 `docker compose --env-file .env.production -f compose.prod.yaml run --rm migrate`，成功后再启动 API 与 Web。
+修复原因后运行 `docker compose run --rm migrate`，成功后再启动 API 与 Web。
 
 ### API 或 Web 不健康
 
@@ -194,7 +207,7 @@ lsof -nP -iTCP:3001 -sTCP:LISTEN
 ### 上传卷权限异常
 
 ```bash
-docker compose --env-file .env.production -f compose.prod.yaml exec -T api node -e "require('node:fs').accessSync('/app/uploads', require('node:fs').constants.R_OK | require('node:fs').constants.W_OK)"
+docker compose exec -T api node -e "require('node:fs').accessSync('/app/uploads', require('node:fs').constants.R_OK | require('node:fs').constants.W_OK)"
 ```
 
 该命令应以状态码 0 退出。不要通过放宽为全局可写权限解决问题；上传根目录应只允许 API 服务账户写入。
@@ -204,13 +217,13 @@ docker compose --env-file .env.production -f compose.prod.yaml exec -T api node 
 停止服务但保留数据库和上传卷：
 
 ```bash
-docker compose --env-file .env.production -f compose.prod.yaml stop
+docker compose stop
 ```
 
 移除容器和网络但保留卷：
 
 ```bash
-docker compose --env-file .env.production -f compose.prod.yaml down
+docker compose down
 ```
 
 > 严重警告：`down --volumes` 会永久删除 PostgreSQL 与上传图片卷。只有在明确废弃整个部署、已经验证异机备份可恢复，并再次确认 Compose 项目名后，才可执行该操作。

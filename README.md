@@ -14,7 +14,7 @@ Point Quest 是一个面向管理员与学员的英语答题积分商城。管�
 以下六步会创建本地环境文件、启动开发数据库、安装依赖、执行迁移与演示种子，然后同时启动 API 和 Web：
 
 1. `cp .env.example .env`
-2. `docker compose up -d db`
+2. `docker compose -f compose.dev.yaml up -d db`
 3. `pnpm install`
 4. `pnpm db:migrate`
 5. `pnpm db:seed`
@@ -31,9 +31,16 @@ Point Quest 是一个面向管理员与学员的英语答题积分商城。管�
 
 ## 生产 Docker 部署
 
-项目提供独立的 `compose.prod.yaml`，用于在已有 HTTPS 网关的单台服务器上运行 PostgreSQL、数据库迁移、API 和 Web。生产编排只把 Web 发布到 `127.0.0.1:3001`，API 与数据库仅在 Compose 内部网络可见；公网 `/api/v1` 由 Web 同源代理转发。
+生产使用根目录 `docker-compose.yml`：在已有 HTTPS 网关的服务器上运行 PostgreSQL、迁移、API 与 Web。编排只把 Web 发布到 `127.0.0.1:3001`；应用服务使用预构建镜像（`IMAGE_REGISTRY` / `IMAGE_TAG`），不再在服务器上 `build`。
 
-首次上线、更新、网关配置、备份恢复与排障步骤见 [Docker 单机生产部署指南](docs/deployment/docker.md)。
+```bash
+cp .env.docker.example .env
+# 编辑镜像坐标与密钥后：
+docker compose pull
+docker compose up -d
+```
+
+完整步骤见 [Docker 单机生产部署指南](docs/deployment/docker.md)。
 
 ## 演示账号与种子
 
@@ -64,7 +71,7 @@ API 契约位于 `openapi/openapi.json`，TypeScript 客户端位于 `packages/a
 API 数据库 E2E 和 Playwright 浏览器 E2E 只允许使用 `localhost:5433/point_test`，不会连接或重置开发库：
 
 ```bash
-docker compose up -d db-test
+docker compose -f compose.dev.yaml up -d db-test
 DATABASE_URL=postgresql://point:point@localhost:5433/point_test pnpm prisma migrate deploy
 pnpm test:e2e
 ```
@@ -78,7 +85,7 @@ pnpm exec playwright install chromium
 完整交付验证：
 
 ```bash
-docker compose up -d db-test
+docker compose -f compose.dev.yaml up -d db-test
 pnpm verify
 ```
 
