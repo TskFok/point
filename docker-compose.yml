@@ -31,9 +31,7 @@ services:
     logging: *default-logging
 
   migrate:
-    build:
-      context: .
-      target: migrate
+    image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/point-quest-migrate:${IMAGE_TAG:?IMAGE_TAG is required}
     environment:
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
     depends_on:
@@ -46,9 +44,7 @@ services:
     logging: *default-logging
 
   api:
-    build:
-      context: .
-      target: api
+    image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/point-quest-api:${IMAGE_TAG:?IMAGE_TAG is required}
     environment:
       NODE_ENV: production
       PORT: "3000"
@@ -84,9 +80,7 @@ services:
     logging: *default-logging
 
   web:
-    build:
-      context: .
-      target: web
+    image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/point-quest-web:${IMAGE_TAG:?IMAGE_TAG is required}
     environment:
       NODE_ENV: production
       PORT: "3001"
