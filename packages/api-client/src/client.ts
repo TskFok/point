@@ -42,6 +42,25 @@ export const operationRegistry = {
     path: "/api/v1/admin/ai-models/{id}/test",
     method: "POST",
   },
+  adminListAiTasks: { path: "/api/v1/admin/ai-tasks", method: "GET" },
+  adminCreateAiTask: { path: "/api/v1/admin/ai-tasks", method: "POST" },
+  adminGetAiTask: { path: "/api/v1/admin/ai-tasks/{id}", method: "GET" },
+  adminUpdateAiTask: {
+    path: "/api/v1/admin/ai-tasks/{id}",
+    method: "PATCH",
+  },
+  adminDeleteAiTask: {
+    path: "/api/v1/admin/ai-tasks/{id}",
+    method: "DELETE",
+  },
+  adminRunAiTask: {
+    path: "/api/v1/admin/ai-tasks/{id}/run",
+    method: "POST",
+  },
+  adminListAiTaskRuns: {
+    path: "/api/v1/admin/ai-tasks/{id}/runs",
+    method: "GET",
+  },
   adminListOrders: { path: "/api/v1/admin/orders", method: "GET" },
   adminGetOrder: {
     path: "/api/v1/admin/orders/{orderId}",
@@ -616,6 +635,52 @@ export function createApiClient(options: ApiClientOptions) {
       request("adminTestAiModel", {
         authMode: "authenticated",
         pathParams: { id },
+      }),
+
+    listAdminAiTasks: (
+      query: ParameterOf<"adminListAiTasks", "query"> = {},
+    ) =>
+      request("adminListAiTasks", {
+        authMode: "authenticated",
+        query,
+      }),
+    createAdminAiTask: (input: JsonBodyOf<"adminCreateAiTask">) =>
+      request("adminCreateAiTask", {
+        authMode: "authenticated",
+        body: input,
+      }),
+    getAdminAiTask: (id: string) =>
+      request("adminGetAiTask", {
+        authMode: "authenticated",
+        pathParams: { id },
+      }),
+    updateAdminAiTask: (
+      id: string,
+      input: JsonBodyOf<"adminUpdateAiTask">,
+    ) =>
+      request("adminUpdateAiTask", {
+        authMode: "authenticated",
+        pathParams: { id },
+        body: input,
+      }),
+    deleteAdminAiTask: (id: string) =>
+      request("adminDeleteAiTask", {
+        authMode: "authenticated",
+        pathParams: { id },
+      }),
+    runAdminAiTask: (id: string) =>
+      request("adminRunAiTask", {
+        authMode: "authenticated",
+        pathParams: { id },
+      }),
+    listAdminAiTaskRuns: (
+      id: string,
+      query: ParameterOf<"adminListAiTaskRuns", "query"> = {},
+    ) =>
+      request("adminListAiTaskRuns", {
+        authMode: "authenticated",
+        pathParams: { id },
+        query,
       }),
 
     listProducts: (query: ParameterOf<"productsList", "query"> = {}) =>

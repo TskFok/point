@@ -689,3 +689,158 @@ export class AiModelProbeResultDto {
   message?: string;
 }
 
+export class AiTaskLatestRunDto {
+  @ApiProperty()
+  id!: string;
+
+  @ApiProperty({ enum: ['RUNNING', 'SUCCESS', 'FAILED'] })
+  status!: 'RUNNING' | 'SUCCESS' | 'FAILED';
+
+  @ApiProperty({ enum: ['CRON', 'MANUAL'] })
+  trigger!: 'CRON' | 'MANUAL';
+
+  @ApiProperty({ format: 'date-time' })
+  startedAt!: string;
+
+  @ApiPropertyOptional({ format: 'date-time', nullable: true })
+  finishedAt!: string | null;
+
+  @ApiProperty({ ...int32, minimum: 0 })
+  questionsCreated!: number;
+}
+
+export class AiTaskDto {
+  @ApiProperty()
+  id!: string;
+
+  @ApiProperty()
+  name!: string;
+
+  @ApiProperty()
+  aiModelConfigId!: string;
+
+  @ApiProperty()
+  aiModelName!: string;
+
+  @ApiProperty({ ...int32, minimum: 1, maximum: 50 })
+  questionCount!: number;
+
+  @ApiProperty({ ...int32, minimum: 2, maximum: 6 })
+  optionCount!: number;
+
+  @ApiProperty({ ...int32, minimum: 1, maximum: 1000 })
+  basePoints!: number;
+
+  @ApiProperty()
+  cronExpression!: string;
+
+  @ApiProperty()
+  isEnabled!: boolean;
+
+  @ApiPropertyOptional({ nullable: true })
+  lastWord!: string | null;
+
+  @ApiProperty({ format: 'date-time' })
+  createdAt!: string;
+
+  @ApiProperty({ format: 'date-time' })
+  updatedAt!: string;
+
+  @ApiPropertyOptional({ type: () => AiTaskLatestRunDto, nullable: true })
+  latestRun?: AiTaskLatestRunDto | null;
+}
+
+export class AiTaskListResponseDto {
+  @ApiProperty({ type: () => [AiTaskDto] })
+  data!: AiTaskDto[];
+
+  @ApiProperty({ type: () => PageMetaDto })
+  meta!: PageMetaDto;
+}
+
+export class CreateAiTaskRequestDto {
+  @ApiProperty({ maxLength: 100 })
+  name!: string;
+
+  @ApiProperty()
+  aiModelConfigId!: string;
+
+  @ApiProperty({ ...int32, minimum: 1, maximum: 50 })
+  questionCount!: number;
+
+  @ApiProperty({ ...int32, minimum: 2, maximum: 6 })
+  optionCount!: number;
+
+  @ApiProperty({ ...int32, minimum: 1, maximum: 1000 })
+  basePoints!: number;
+
+  @ApiProperty({ maxLength: 100, example: '0 8 * * *' })
+  cronExpression!: string;
+
+  @ApiPropertyOptional()
+  isEnabled?: boolean;
+}
+
+export class UpdateAiTaskRequestDto {
+  @ApiPropertyOptional({ maxLength: 100 })
+  name?: string;
+
+  @ApiPropertyOptional()
+  aiModelConfigId?: string;
+
+  @ApiPropertyOptional({ ...int32, minimum: 1, maximum: 50 })
+  questionCount?: number;
+
+  @ApiPropertyOptional({ ...int32, minimum: 2, maximum: 6 })
+  optionCount?: number;
+
+  @ApiPropertyOptional({ ...int32, minimum: 1, maximum: 1000 })
+  basePoints?: number;
+
+  @ApiPropertyOptional({ maxLength: 100 })
+  cronExpression?: string;
+
+  @ApiPropertyOptional()
+  isEnabled?: boolean;
+}
+
+export class AiTaskRunDto {
+  @ApiProperty()
+  id!: string;
+
+  @ApiProperty()
+  aiTaskId!: string;
+
+  @ApiProperty({ enum: ['CRON', 'MANUAL'] })
+  trigger!: 'CRON' | 'MANUAL';
+
+  @ApiProperty({ enum: ['RUNNING', 'SUCCESS', 'FAILED'] })
+  status!: 'RUNNING' | 'SUCCESS' | 'FAILED';
+
+  @ApiProperty({ format: 'date-time' })
+  startedAt!: string;
+
+  @ApiPropertyOptional({ format: 'date-time', nullable: true })
+  finishedAt!: string | null;
+
+  @ApiProperty({ ...int32, minimum: 0 })
+  questionsCreated!: number;
+
+  @ApiPropertyOptional({ nullable: true })
+  lastWordBefore!: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  lastWordAfter!: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  errorMessage!: string | null;
+}
+
+export class AiTaskRunListResponseDto {
+  @ApiProperty({ type: () => [AiTaskRunDto] })
+  data!: AiTaskRunDto[];
+
+  @ApiProperty({ type: () => PageMetaDto })
+  meta!: PageMetaDto;
+}
+

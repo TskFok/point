@@ -238,3 +238,17 @@ export const aiModelQueries: ApiQueryOptions[] = [
   },
   ...pageQueries,
 ];
+
+export const aiTaskIdParam: ApiParamOptions = {
+  name: 'id',
+  schema: { type: 'string', minLength: 1, maxLength: 191 },
+};
+
+export const aiTaskQueries: ApiQueryOptions[] = [
+  {
+    name: 'isEnabled',
+    required: false,
+    schema: { type: 'boolean' },
+  },
+  ...pageQueries,
+];
