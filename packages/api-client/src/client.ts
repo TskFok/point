@@ -309,6 +309,21 @@ export class ApiProtocolError extends Error {
 export function createApiClient(options: ApiClientOptions) {
   const baseUrl = withoutTrailingSlash(options.baseUrl);
   const fetchImplementation = options.fetch ?? globalThis.fetch;
+  let cookieRefreshInFlight: Promise<void> | null = null;
+
+  async function refreshCookieSession(): Promise<void> {
+    if (!cookieRefreshInFlight) {
+      cookieRefreshInFlight = request("authRefresh", {
+        authMode: "refresh-cookie",
+        body: {},
+      })
+        .then(() => undefined)
+        .finally(() => {
+          cookieRefreshInFlight = null;
+        });
+    }
+    await cookieRefreshInFlight;
+  }
 
   async function request<Name extends OperationName>(
     operationId: Name,
@@ -363,16 +378,35 @@ export function createApiClient(options: ApiClientOptions) {
       body = JSON.stringify(requestOptions.body);
     }
 
-    let response: Response;
-    try {
-      response = await fetchImplementation(url, {
-        method: binding.method,
-        credentials,
-        headers,
-        body,
-      });
-    } catch (cause) {
-      throw new ApiNetworkError(url, cause);
+    const cookieAuthenticated =
+      authMode === "authenticated" && credentials === "include";
+
+    const send = async () => {
+      try {
+        return await fetchImplementation(url, {
+          method: binding.method,
+          credentials,
+          headers,
+          body,
+        });
+      } catch (cause) {
+        throw new ApiNetworkError(url, cause);
+      }
+    };
+
+    let response = await send();
+
+    if (response.status === 401 && cookieAuthenticated) {
+      await refreshCookieSession();
+      if (needsCsrf) {
+        const csrfToken = await options.getCsrfToken?.();
+        if (csrfToken) {
+          headers["X-CSRF-Token"] = csrfToken;
+        } else {
+          delete headers["X-CSRF-Token"];
+        }
+      }
+      response = await send();
     }
 
     if (response.status === 204) {

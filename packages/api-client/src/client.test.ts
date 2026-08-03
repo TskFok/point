@@ -289,6 +289,153 @@ describe("createApiClient", () => {
     expect(error).toBeInstanceOf(ApiClientError);
     expect(error).toMatchObject({ status: 409, body: errorBody });
   });
+
+  it("Cookie authenticated 遇 401 时自动 refresh 并重试原请求", async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            code: "AUTH_TOKEN_EXPIRED",
+            message: "expired",
+            requestId: "r1",
+            details: {},
+          }),
+          { status: 401 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ user: userResponse }), { status: 201 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ user: userResponse }), { status: 200 }),
+      );
+
+    const client = createApiClient({
+      baseUrl: "http://localhost:3001/api/v1",
+      fetch: fetchSpy,
+      getCsrfToken: () => "csrf-value",
+    });
+
+    const result = await client.getCurrentUser();
+
+    expect(result).toEqual({ user: userResponse });
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+    expect(String(fetchSpy.mock.calls[0]?.[0])).toContain("/auth/me");
+    expect(String(fetchSpy.mock.calls[1]?.[0])).toContain("/auth/refresh");
+    expect(String(fetchSpy.mock.calls[2]?.[0])).toContain("/auth/me");
+    expect(fetchSpy.mock.calls[1]?.[1]).toMatchObject({
+      method: "POST",
+      credentials: "include",
+      headers: expect.objectContaining({ "X-CSRF-Token": "csrf-value" }),
+    });
+  });
+
+  it("并发 Cookie 401 只触发一次 refresh", async () => {
+    let refreshCalls = 0;
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/auth/refresh")) {
+        refreshCalls += 1;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return new Response(JSON.stringify({ user: userResponse }), {
+          status: 201,
+        });
+      }
+      if (refreshCalls === 0) {
+        return new Response(
+          JSON.stringify({
+            code: "AUTH_TOKEN_EXPIRED",
+            message: "expired",
+            requestId: "r1",
+            details: {},
+          }),
+          { status: 401 },
+        );
+      }
+      if (url.includes("/auth/me")) {
+        return new Response(JSON.stringify({ user: userResponse }), {
+          status: 200,
+        });
+      }
+      return new Response(JSON.stringify({ balance: 10 }), { status: 200 });
+    });
+
+    const client = createApiClient({
+      baseUrl: "http://localhost:3001/api/v1",
+      fetch: fetchSpy,
+      getCsrfToken: () => "csrf-value",
+    });
+
+    const [a, b] = await Promise.all([
+      client.getCurrentUser(),
+      client.getPointBalance(),
+    ]);
+
+    expect(a).toEqual({ user: userResponse });
+    expect(b).toEqual({ balance: 10 });
+    expect(refreshCalls).toBe(1);
+  });
+
+  it("Bearer authenticated 遇 401 不自动 refresh", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          code: "AUTH_TOKEN_EXPIRED",
+          message: "expired",
+          requestId: "r1",
+          details: {},
+        }),
+        { status: 401 },
+      ),
+    );
+    const client = createApiClient({
+      baseUrl: "http://localhost:3001/api/v1",
+      fetch: fetchSpy,
+      getAccessToken: () => "access-token",
+      getCsrfToken: () => "csrf-value",
+    });
+
+    await expect(client.getCurrentUser()).rejects.toMatchObject({ status: 401 });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(String(fetchSpy.mock.calls[0]?.[0])).toContain("/auth/me");
+  });
+
+  it("refresh 失败时不再重试原请求且错误上抛", async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            code: "AUTH_TOKEN_EXPIRED",
+            message: "expired",
+            requestId: "r1",
+            details: {},
+          }),
+          { status: 401 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            code: "AUTH_INVALID_REFRESH_TOKEN",
+            message: "invalid",
+            requestId: "r2",
+            details: {},
+          }),
+          { status: 401 },
+        ),
+      );
+
+    const client = createApiClient({
+      baseUrl: "http://localhost:3001/api/v1",
+      fetch: fetchSpy,
+      getCsrfToken: () => "csrf-value",
+    });
+
+    await expect(client.getCurrentUser()).rejects.toBeInstanceOf(ApiClientError);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
 });
 
 const orderResponse = {
