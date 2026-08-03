@@ -7,8 +7,8 @@ import test from "node:test";
 import { parse } from "dotenv";
 
 const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
-const productionEnvUrl = new URL("../.env.production.example", import.meta.url);
-const productionComposeUrl = new URL("../compose.prod.yaml", import.meta.url);
+const productionEnvUrl = new URL("../.env.docker.example", import.meta.url);
+const productionComposeUrl = new URL("../docker-compose.yml", import.meta.url);
 
 async function readProductionEnvironment() {
   return parse(await readFile(productionEnvUrl, "utf8"));
@@ -33,9 +33,12 @@ function readProductionCompose() {
   );
 }
 
-test("生产环境模板要求强密钥和容器内数据库地址", async () => {
+test("生产环境模板要求镜像坐标、强密钥和容器内数据库地址", async () => {
   const environment = await readProductionEnvironment();
 
+  assert.ok(environment.IMAGE_REGISTRY);
+  assert.doesNotMatch(environment.IMAGE_REGISTRY, /\/$/);
+  assert.ok(environment.IMAGE_TAG);
   assert.ok(Buffer.byteLength(environment.AUTH_JWT_SECRET ?? "", "utf8") >= 32);
   assert.match(environment.AUTH_JWT_SECRET ?? "", /replace|example/i);
   assert.equal(new URL(environment.DATABASE_URL).hostname, "db");
@@ -99,4 +102,17 @@ test("生产 Compose 隔离数据卷并启用基础运行时加固", () => {
   assert.ok(
     compose.services.web.security_opt.includes("no-new-privileges:true"),
   );
+});
+
+test("生产应用服务使用预构建镜像且不包含 build", async () => {
+  const environment = await readProductionEnvironment();
+  const compose = readProductionCompose();
+
+  for (const name of ["migrate", "api", "web"]) {
+    assert.equal(compose.services[name].build, undefined);
+    assert.equal(
+      compose.services[name].image,
+      `${environment.IMAGE_REGISTRY}/point-quest-${name}:${environment.IMAGE_TAG}`,
+    );
+  }
 });
