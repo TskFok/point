@@ -13,11 +13,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { LoginDto } from './dto/login.dto';
 import type { RegisterDto } from './dto/register.dto';
 import { hashRefreshToken } from './token-hash';
+import {
+  PASSWORD_PATTERN,
+  USERNAME_PATTERN,
+  normalizeUsername,
+} from './user-credentials';
 
 const ACCESS_TOKEN_SECONDS = 15 * 60;
 const REFRESH_TOKEN_MILLISECONDS = 30 * 24 * 60 * 60 * 1000;
-const USERNAME_PATTERN = /^[a-z0-9_]{3,32}$/;
-const PASSWORD_PATTERN = /^(?=.*[A-Za-z])(?=.*\d).{10,}$/;
 
 export type PublicUser = {
   id: string;
@@ -37,10 +40,6 @@ export type TokenPair = {
 export type RotatedTokenPair = TokenPair & {
   clientType: ClientType;
 };
-
-function normalizeUsername(username: string): string {
-  return username.trim().toLowerCase();
-}
 
 function publicUser(
   user: Pick<User, 'id' | 'username' | 'role' | 'pointsBalance'>,

@@ -40,7 +40,7 @@ docker compose pull
 docker compose up -d
 ```
 
-完整步骤见 [Docker 单机生产部署指南](docs/deployment/docker.md)。
+空库首次启动时，API 会按 `.env` 中的 `BOOTSTRAP_ADMIN_USERNAME` / `BOOTSTRAP_ADMIN_PASSWORD`（模板默认 `admin` / `Admin123!x`）创建管理员；已有管理员则跳过。完整步骤见 [Docker 单机生产部署指南](docs/deployment/docker.md)。
 
 ## 演示账号与种子
 
