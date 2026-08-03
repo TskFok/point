@@ -454,9 +454,14 @@ svg {
   background: rgb(255 255 255 / 10%);
 }
 
-.sidebar-tip {
+.sidebar-footer {
   display: grid;
   margin-top: auto;
+  gap: 0.75rem;
+}
+
+.sidebar-tip {
+  display: grid;
   gap: 0.6rem;
   border: 1px solid rgb(255 255 255 / 10%);
   border-radius: var(--radius-md);
@@ -468,6 +473,43 @@ svg {
 
 .sidebar-tip svg {
   color: var(--color-reward);
+}
+
+.sidebar-logout__button {
+  display: flex;
+  min-height: 2.9rem;
+  width: 100%;
+  align-items: center;
+  gap: 0.75rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 0.7rem 0.8rem;
+  color: rgb(255 255 255 / 56%);
+  background: transparent;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition:
+    color 180ms ease,
+    background-color 180ms ease;
+}
+
+.sidebar-logout__button:hover:not(:disabled) {
+  color: #fff;
+  background: rgb(255 255 255 / 10%);
+}
+
+.sidebar-logout__button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.sidebar-logout__error {
+  margin: 0;
+  color: #ffb4ab;
+  font-size: 0.75rem;
+  line-height: 1.4;
 }
 
 .app-workspace {

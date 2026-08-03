@@ -21,6 +21,8 @@ import {
   type ReactNode,
 } from "react";
 
+import { LogoutButton } from "./logout-button";
+
 const adminItems = [
   { href: "/admin", icon: Gauge, label: "管理概览" },
   { href: "/admin/questions", icon: ClipboardList, label: "题库管理" },
@@ -156,6 +158,9 @@ export function AdminShell({ children, user }: AdminShellProps) {
           ariaLabel="管理员主导航"
           currentPath={pathname}
         />
+        <div className="sidebar-footer">
+          <LogoutButton />
+        </div>
       </aside>
 
       <div

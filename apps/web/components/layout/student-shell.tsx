@@ -17,6 +17,7 @@ import {
   pointBalanceFromEvent,
 } from "@/lib/point-balance-event";
 
+import { LogoutButton } from "./logout-button";
 import { MobileNav, type NavigationItem } from "./mobile-nav";
 
 const studentItems: NavigationItem[] = [
@@ -89,9 +90,12 @@ export function StudentShell({
             );
           })}
         </nav>
-        <div className="sidebar-tip">
-          <Sparkles aria-hidden="true" />
-          <p>每一次认真作答，都在为目标积蓄能量。</p>
+        <div className="sidebar-footer">
+          <div className="sidebar-tip">
+            <Sparkles aria-hidden="true" />
+            <p>每一次认真作答，都在为目标积蓄能量。</p>
+          </div>
+          <LogoutButton />
         </div>
       </aside>
 

@@ -5,14 +5,19 @@ import { AdminShell } from "@/components/layout/admin-shell";
 import { StudentShell } from "@/components/layout/student-shell";
 
 const mockUsePathname = jest.fn(() => "/learn");
+const mockReplace = jest.fn();
 
 jest.mock("next/navigation", () => ({
   usePathname: () => mockUsePathname(),
+  useRouter: () => ({
+    replace: mockReplace,
+  }),
 }));
 
 describe("响应式应用导航", () => {
   beforeEach(() => {
     mockUsePathname.mockReturnValue("/learn");
+    mockReplace.mockClear();
   });
 
   it("学员桌面端提供五个主入口且不暴露管理员菜单", () => {
@@ -39,6 +44,7 @@ describe("响应式应用导航", () => {
     ).toHaveAttribute("href", "/learn/profile");
     expect(within(desktopNav).queryByText("后台管理")).not.toBeInTheDocument();
     expect(screen.queryByText("题库管理")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "退出" })).toBeInTheDocument();
   });
 
   it("学员真实路径同时激活桌面和移动端入口", () => {
@@ -85,6 +91,7 @@ describe("响应式应用导航", () => {
       screen.getByRole("button", { name: "打开管理员菜单" }),
     ).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByText("错题本")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "退出" })).toBeInTheDocument();
   });
 
   it("管理员抽屉圈定焦点、Escape 关闭并把焦点归还触发按钮", async () => {
@@ -96,6 +103,8 @@ describe("响应式应用导航", () => {
       </AdminShell>,
     );
 
+    expect(screen.getByRole("button", { name: "退出" })).toBeInTheDocument();
+
     const opener = screen.getByRole("button", { name: "打开管理员菜单" });
     const workspace = screen.getByRole("main").parentElement;
     await user.click(opener);
@@ -104,7 +113,7 @@ describe("响应式应用导航", () => {
     const closeButton = within(dialog).getByRole("button", {
       name: "关闭管理员菜单",
     });
-    const lastLink = within(dialog).getByRole("link", { name: "AI 模型" });
+    const lastLink = within(dialog).getByRole("link", { name: "AI 任务" });
     expect(dialog).toHaveAttribute("aria-modal", "true");
     expect(opener).toHaveAttribute("aria-controls", dialog.id);
     expect(workspace).toHaveAttribute("aria-hidden", "true");
@@ -113,6 +122,9 @@ describe("响应式应用导航", () => {
       "aria-current",
       "page",
     );
+    expect(
+      within(dialog).queryByRole("button", { name: "退出" }),
+    ).not.toBeInTheDocument();
 
     await user.tab({ shift: true });
     expect(lastLink).toHaveFocus();
