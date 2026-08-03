@@ -250,7 +250,17 @@ export class AiModelsService {
 
   async remove(id: string): Promise<{ success: true }> {
     await this.requireRow(id);
-    await this.prisma.aiModelConfig.delete({ where: { id } });
+    try {
+      await this.prisma.aiModelConfig.delete({ where: { id } });
+    } catch (error) {
+      if (isPrismaError(error, 'P2003')) {
+        throw new ConflictException({
+          code: 'AI_MODEL_IN_USE',
+          message: '该模型仍被 AI 任务引用，请先改绑或删除任务',
+        });
+      }
+      throw error;
+    }
     return { success: true };
   }
 

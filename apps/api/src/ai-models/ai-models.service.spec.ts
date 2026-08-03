@@ -19,6 +19,7 @@ function createService(options?: {
     where: { id: string };
     data: Record<string, unknown>;
   }) => Promise<unknown>;
+  deleteImpl?: (args: { where: { id: string } }) => Promise<unknown>;
 }) {
   const existing = options?.existing;
   const store = {
@@ -56,7 +57,9 @@ function createService(options?: {
         next.updatedAt = new Date('2026-08-03T01:00:00.000Z');
         return Promise.resolve(next);
       }),
-    delete: () => Promise.resolve(existing),
+    delete:
+      options?.deleteImpl ??
+      (() => Promise.resolve(existing)),
     findMany: () => Promise.resolve(existing ? [existing] : []),
     count: () => Promise.resolve(existing ? 1 : 0),
   };
@@ -203,6 +206,34 @@ describe('AiModelsService', () => {
     await expect(service.get('missing')).rejects.toBeInstanceOf(
       NotFoundException,
     );
+  });
+
+  it('模型被 AI 任务引用时删除返回 AI_MODEL_IN_USE', async () => {
+    const existing = {
+      id: 'model-1',
+      name: 'gpt-test',
+      baseUrl: 'https://api.example.com/v1',
+      apiKeyCiphertext: 'x',
+      apiKeyLast4: 'abcd',
+      isEnabled: true,
+      updatedBy: 'admin-1',
+      createdAt: new Date('2026-08-03T00:00:00.000Z'),
+      updatedAt: new Date('2026-08-03T00:00:00.000Z'),
+    };
+    const service = createService({
+      existing,
+      deleteImpl: async () => {
+        const error = new Error('fk') as Error & { code: string };
+        error.code = 'P2003';
+        throw error;
+      },
+    });
+    await expect(service.remove('model-1')).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    await expect(service.remove('model-1')).rejects.toMatchObject({
+      response: { code: 'AI_MODEL_IN_USE' },
+    });
   });
 
   it('非法 baseUrl 抛出 VALIDATION_FAILED', async () => {

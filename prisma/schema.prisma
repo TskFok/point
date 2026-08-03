@@ -33,6 +33,17 @@ enum OrderStatus {
   CANCELLED
 }
 
+enum AiTaskRunTrigger {
+  CRON
+  MANUAL
+}
+
+enum AiTaskRunStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
 model User {
   id                 String             @id @default(cuid())
   username           String             @unique
@@ -51,6 +62,8 @@ model User {
   orders             Order[]            @relation("OrderOwner")
   ordersUpdated      Order[]            @relation("OrderUpdater")
   aiModelConfigs     AiModelConfig[]    @relation("AiModelConfigUpdater")
+  aiTasksCreated     AiTask[]           @relation("AiTaskCreator")
+  aiTasksUpdated     AiTask[]           @relation("AiTaskUpdater")
 }
 
 model RefreshToken {
@@ -213,7 +226,49 @@ model AiModelConfig {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   updater          User     @relation("AiModelConfigUpdater", fields: [updatedBy], references: [id], onDelete: Restrict)
+  aiTasks          AiTask[]
 
   @@index([updatedAt, id])
   @@index([isEnabled])
+}
+
+model AiTask {
+  id              String       @id @default(cuid())
+  name            String       @unique
+  aiModelConfigId String
+  questionCount   Int
+  optionCount     Int
+  basePoints      Int
+  cronExpression  String
+  isEnabled       Boolean      @default(true)
+  lastWord        String?
+  createdBy       String
+  updatedBy       String
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  aiModelConfig   AiModelConfig @relation(fields: [aiModelConfigId], references: [id], onDelete: Restrict)
+  creator         User         @relation("AiTaskCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  updater         User         @relation("AiTaskUpdater", fields: [updatedBy], references: [id], onDelete: Restrict)
+  runs            AiTaskRun[]
+
+  @@index([updatedAt, id])
+  @@index([isEnabled])
+  @@index([aiModelConfigId])
+}
+
+model AiTaskRun {
+  id               String           @id @default(cuid())
+  aiTaskId         String
+  trigger          AiTaskRunTrigger
+  status           AiTaskRunStatus
+  startedAt        DateTime         @default(now())
+  finishedAt       DateTime?
+  questionsCreated Int              @default(0)
+  lastWordBefore   String?
+  lastWordAfter    String?
+  errorMessage     String?
+  aiTask           AiTask           @relation(fields: [aiTaskId], references: [id], onDelete: Cascade)
+
+  @@index([aiTaskId, startedAt])
+  @@index([status])
 }
