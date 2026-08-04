@@ -122,6 +122,7 @@ describe("管理员商品表单", () => {
 
     const onPendingChange = jest.fn();
     const initialProduct = {
+      createdAt: "2026-08-04T00:00:00.000Z",
       id: "product-1",
       name: "英语笔记本",
       description: "适合记录生词",
@@ -129,6 +130,7 @@ describe("管理员商品表单", () => {
       stock: 8,
       pointsCost: 120,
       isActive: true,
+      updatedAt: "2026-08-04T00:00:00.000Z",
     };
     const view = render(
       <ProductForm

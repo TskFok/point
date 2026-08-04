@@ -2681,15 +2681,6 @@ svg {
   object-fit: cover;
 }
 
-.admin-editor-panel {
-  display: grid;
-  gap: 1rem;
-  border: 1px solid rgb(103 80 199 / 32%);
-  border-radius: 1.25rem;
-  padding: 1rem;
-  background: linear-gradient(145deg, #faf8ff, #fff);
-}
-
 .admin-product-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
