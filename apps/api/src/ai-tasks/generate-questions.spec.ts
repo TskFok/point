@@ -91,15 +91,27 @@ describe('generate-questions parse', () => {
     }
   });
 
-  it('拒绝词表之外的 word', () => {
-    const result = parseGeneratedQuestionsJson(sample, 2, [
-      { id: '99', word: 'zebra', pos: 'noun' },
+  it('AI word 与期望不一致时强制对齐并记录 mismatch', () => {
+    const raw = JSON.stringify([
+      {
+        word: 'wrong',
+        stem: 'They decided to abandon the plan. What does "abandon" mean?',
+        explanation: '放弃',
+        options: [
+          { label: 'A', content: '放弃', isCorrect: true },
+          { label: 'B', content: '获得', isCorrect: false },
+        ],
+      },
     ]);
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.message).toMatch(/不在本批词表/);
+    const result = parseGeneratedQuestionsJson(raw, 2, abandonWords);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.questions[0]?.word).toBe('abandon');
+      expect(result.wordMismatchNotes.join(' ')).toMatch(/wrong/);
+    }
   });
 
-  it('拒绝同批重复的 word', () => {
+  it('按顺序对齐时同批重复返回也接受（word 强制为本批对应词）', () => {
     const item = {
       word: 'abandon',
       stem: 'They decided to abandon the plan. What does "abandon" mean?',
@@ -109,13 +121,23 @@ describe('generate-questions parse', () => {
         { label: 'B', content: '获得', isCorrect: false },
       ],
     };
+    const words: DictionaryWord[] = [
+      { id: '1', word: 'abandon', pos: 'verb' },
+      { id: '2', word: 'abandon', pos: 'noun' },
+    ];
     const result = parseGeneratedQuestionsJson(
       JSON.stringify([item, item]),
       2,
-      abandonWords,
+      words,
     );
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.message).toMatch(/不在本批词表|已出过/);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.questions).toHaveLength(2);
+      expect(result.questions.map((q) => q.word)).toEqual([
+        'abandon',
+        'abandon',
+      ]);
+    }
   });
 
   it('prompt 包含词表、词性与数量', () => {
@@ -155,7 +177,7 @@ describe('generate-questions parse', () => {
     expect(p).toMatch(/是动词/);
   });
 
-  it('validateOneGeneratedQuestion 接受词表内 word', () => {
+  it('validateOneGeneratedQuestion 按期望词对齐并接受结构合法题目', () => {
     const result = validateOneGeneratedQuestion(
       {
         word: 'able',
@@ -167,27 +189,35 @@ describe('generate-questions parse', () => {
         ],
       },
       2,
-      new Set(['able', 'abandon']),
+      'able',
     );
     expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.question.word).toBe('able');
+      expect(result.wordMismatch).toBe(false);
+    }
   });
 
-  it('validate 拒绝词表外 word', () => {
+  it('validate 强制使用期望词，AI 回传不同则标记 mismatch', () => {
     const result = validateOneGeneratedQuestion(
       {
         word: 'kindle',
-        stem: 'Please kindle the fire carefully. What does "kindle" mean?',
-        explanation: '他们小心地点燃了火。「kindle」是动词，表示点燃、激起。',
+        stem: 'I looked up the word in a dictionary. What does "dictionary" mean?',
+        explanation: '我在词典里查了这个词。「dictionary」是名词，表示词典。',
         options: [
-          { label: 'A', content: '点燃', isCorrect: true },
-          { label: 'B', content: '熄灭', isCorrect: false },
+          { label: 'A', content: '词典', isCorrect: true },
+          { label: 'B', content: '小说', isCorrect: false },
         ],
       },
       2,
-      new Set(['advocate', 'affect']),
+      'Dictionary',
     );
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.message).toMatch(/不在本批词表/);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.question.word).toBe('dictionary');
+      expect(result.wordMismatch).toBe(true);
+      expect(result.returnedWord).toBe('kindle');
+    }
   });
 
   it('prompt 要求完整例句包含 word 且禁止挖空', () => {
@@ -233,13 +263,13 @@ describe('generate-questions parse', () => {
         ],
       },
       2,
-      null,
+      'abhor',
     );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.message).toMatch(/挖空|blank|___/i);
   });
 
-  it('拒绝 stem 未包含 word', () => {
+  it('拒绝 stem 未包含期望词', () => {
     const result = validateOneGeneratedQuestion(
       {
         word: 'abhor',
@@ -251,13 +281,13 @@ describe('generate-questions parse', () => {
         ],
       },
       2,
-      null,
+      'abhor',
     );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.message).toMatch(/未包含|不包含|word/i);
   });
 
-  it('接受含完整 word 的例句题干', () => {
+  it('接受含完整期望词的例句题干', () => {
     const result = validateOneGeneratedQuestion(
       {
         word: 'abhor',
@@ -269,12 +299,12 @@ describe('generate-questions parse', () => {
         ],
       },
       2,
-      null,
+      'abhor',
     );
     expect(result.ok).toBe(true);
   });
 
-  it('接受含连字符等非纯字母 word（不再强制 WORD_PATTERN）', () => {
+  it('接受含连字符等非纯字母期望词', () => {
     const result = validateOneGeneratedQuestion(
       {
         word: 'self-aware',
@@ -287,7 +317,7 @@ describe('generate-questions parse', () => {
         ],
       },
       2,
-      new Set(['self-aware']),
+      'self-aware',
     );
     expect(result.ok).toBe(true);
   });

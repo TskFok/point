@@ -480,7 +480,7 @@ describe('AiTasksService runTask', () => {
     expect(questionCreates).toHaveLength(0);
   });
 
-  it('词表外单词被跳过并计入错误摘要', async () => {
+  it('按顺序 1:1 对齐：AI word 不一致仍写入期望词并记监控', async () => {
     const { service, taskState, questionCreates } = createService();
     const result = await service.runTask('task-1', {
       trigger: 'MANUAL',
@@ -489,28 +489,32 @@ describe('AiTasksService runTask', () => {
         Promise.resolve({
           ok: true as const,
           questions: [
-            sampleQuestions[0],
             {
+              // AI 回传错误 word，但 stem 含本批第 1 词 abandon
               word: 'kindle',
-              stem: 'Please kindle the fire carefully. What does "kindle" mean?',
-              explanation: '请小心点火。「kindle」是动词，表示点燃。',
+              stem: 'They decided to abandon the plan. What does "abandon" mean?',
+              explanation: '他们决定放弃这个计划。「abandon」是动词，表示放弃。',
               options: [
-                { label: 'A', content: '点燃', isCorrect: true },
-                { label: 'B', content: '熄灭', isCorrect: false },
+                { label: 'A', content: '放弃', isCorrect: true },
+                { label: 'B', content: '获得', isCorrect: false },
               ],
             },
+            sampleQuestions[1],
           ],
         }),
     });
     expect(result.status).toBe('SUCCESS');
-    expect(result.questionsCreated).toBe(1);
-    expect(result.errorMessage).toMatch(/跳过.*不在本批词表/);
-    // 成功后游标为本批最大 entry.id（与部分题跳过无关）
+    expect(result.questionsCreated).toBe(2);
+    expect(result.errorMessage).toMatch(/词不一致/);
     expect(taskState?.lastEntryId).toBe(20n);
-    expect(questionCreates).toHaveLength(1);
+    expect(questionCreates).toHaveLength(2);
+    const firstCreate = questionCreates[0] as {
+      data: { stem: string };
+    };
+    expect(firstCreate.data.stem).toMatch(/abandon/i);
   });
 
-  it('同批重复单词只接受第一题', async () => {
+  it('按顺序对齐时结构合法的重复返回均可写入', async () => {
     const { service, questionCreates } = createService();
     const result = await service.runTask('task-1', {
       trigger: 'MANUAL',
@@ -518,15 +522,46 @@ describe('AiTasksService runTask', () => {
       generate: () =>
         Promise.resolve({
           ok: true as const,
-          questions: [sampleQuestions[0], sampleQuestions[0]],
+          questions: [sampleQuestions[0], sampleQuestions[1]],
         }),
     });
     expect(result.status).toBe('SUCCESS');
-    expect(result.questionsCreated).toBe(1);
-    expect(questionCreates).toHaveLength(1);
+    expect(result.questionsCreated).toBe(2);
+    expect(questionCreates).toHaveLength(2);
   });
 
-  it('全部单词不在词表时 FAILED 且游标不变', async () => {
+  it('同批多个相同 word（不同 entry）按顺序均可出题', async () => {
+    const { service, questionCreates, taskState } = createService({
+      entryWords: [
+        { id: 10n, word: 'dictionary', pos: 'noun' },
+        { id: 11n, word: 'Dictionary', pos: 'verb' },
+      ],
+    });
+    const q = {
+      word: 'dictionary',
+      stem: 'I looked up the word in a dictionary. What does "dictionary" mean?',
+      explanation: '我在词典里查了这个词。「dictionary」是名词，表示词典。',
+      options: [
+        { label: 'A', content: '词典', isCorrect: true },
+        { label: 'B', content: '小说', isCorrect: false },
+      ],
+    };
+    const result = await service.runTask('task-1', {
+      trigger: 'MANUAL',
+      actorUserId: 'admin-1',
+      generate: () =>
+        Promise.resolve({
+          ok: true as const,
+          questions: [q, { ...q, explanation: '「dictionary」也可作动词。' }],
+        }),
+    });
+    expect(result.status).toBe('SUCCESS');
+    expect(result.questionsCreated).toBe(2);
+    expect(questionCreates).toHaveLength(2);
+    expect(taskState?.lastEntryId).toBe(11n);
+  });
+
+  it('stem 未包含期望词时跳过，全部非法则 FAILED 且游标不变', async () => {
     const { service, taskState, questionCreates } = createService({
       task: makeTask({ lastEntryId: 50n }),
       entryWords: [{ id: 51n, word: 'affect', pos: 'verb' }],
@@ -540,8 +575,8 @@ describe('AiTasksService runTask', () => {
           questions: [
             {
               word: 'kindle',
-              stem: 'Please kindle the fire carefully. What does "kindle" mean?',
-              explanation: '请小心点火。「kindle」是动词，表示点燃。',
+              stem: 'What does this word mean?',
+              explanation: '点燃',
               options: [
                 { label: 'A', content: '点燃', isCorrect: true },
                 { label: 'B', content: '熄灭', isCorrect: false },
@@ -551,10 +586,30 @@ describe('AiTasksService runTask', () => {
         }),
     });
     expect(result.status).toBe('FAILED');
-    expect(result.errorMessage).toMatch(/不在本批词表/);
+    expect(result.errorMessage).toMatch(/未包含|不包含|word/i);
     expect(result.questionsCreated).toBe(0);
     expect(taskState?.lastEntryId).toBe(50n);
     expect(questionCreates).toHaveLength(0);
+  });
+
+  it('超出本批长度的题目被忽略', async () => {
+    const { service, questionCreates } = createService({
+      entryWords: [{ id: 10n, word: 'abandon', pos: 'verb' }],
+      task: makeTask({ questionCount: 1 }),
+    });
+    const result = await service.runTask('task-1', {
+      trigger: 'MANUAL',
+      actorUserId: 'admin-1',
+      generate: () =>
+        Promise.resolve({
+          ok: true as const,
+          questions: [sampleQuestions[0], sampleQuestions[1]],
+        }),
+    });
+    expect(result.status).toBe('SUCCESS');
+    expect(result.questionsCreated).toBe(1);
+    expect(result.errorMessage).toMatch(/忽略超出本批/);
+    expect(questionCreates).toHaveLength(1);
   });
 
   it('成功后游标推进到本批最大 entry.id', async () => {
@@ -565,7 +620,8 @@ describe('AiTasksService runTask', () => {
       generate: () =>
         Promise.resolve({
           ok: true as const,
-          questions: [sampleQuestions[1], sampleQuestions[0]],
+          // 按本批顺序 1:1 对位
+          questions: [sampleQuestions[0], sampleQuestions[1]],
         }),
     });
     expect(result.status).toBe('SUCCESS');

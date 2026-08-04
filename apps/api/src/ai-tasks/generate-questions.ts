@@ -29,7 +29,12 @@ export type GenerateQuestionsInput = {
 };
 
 export type GenerateQuestionsResult =
-  | { ok: true; questions: GeneratedQuestion[]; responseBody?: string }
+  | {
+      ok: true;
+      questions: GeneratedQuestion[];
+      responseBody?: string;
+      wordMismatchNotes?: string[];
+    }
   | { ok: false; message: string; responseBody?: string };
 
 const DEFAULT_TIMEOUT_MS = 60_000;
@@ -133,61 +138,65 @@ function stemIncludesWord(stem: string, word: string): boolean {
 }
 
 /**
- * 校验一道生成的题目。
- * @param allowedWords 本批允许出题的词集合（调用方应在接受一题后删除对应词，
- *   使同批重复的 word 被拒绝）；传 null 时不做词表校验。
+ * 校验一道生成的题目结构，并与期望词（本批 entry.word）1:1 对齐。
+ * - 入库 word 强制为 expectedWord（trim+小写）
+ * - stem 必须包含 expectedWord
+ * - AI 回传 word 不一致时 wordMismatch=true（不因此失败）
  */
 export function validateOneGeneratedQuestion(
   value: unknown,
   optionCount: number,
-  allowedWords: ReadonlySet<string> | null,
-): { ok: true; question: GeneratedQuestion } | { ok: false; message: string } {
+  expectedWord: string,
+):
+  | {
+      ok: true;
+      question: GeneratedQuestion;
+      wordMismatch: boolean;
+      returnedWord: string | null;
+    }
+  | { ok: false; message: string } {
   if (!isRecord(value)) {
     return { ok: false, message: '题目不是对象' };
   }
-  const word = normalizeWord(value.word);
-  if (!word) {
-    return { ok: false, message: '缺少 word' };
+  const expected = normalizeWord(expectedWord);
+  if (!expected) {
+    return { ok: false, message: '期望 word 无效' };
   }
-  if (allowedWords && !allowedWords.has(word)) {
-    return {
-      ok: false,
-      message: `word "${word}" 不在本批词表中（或已出过）`,
-    };
-  }
+  const returnedWord = normalizeWord(value.word);
+  const wordMismatch = returnedWord !== expected;
   if (typeof value.stem !== 'string' || !value.stem.trim()) {
-    return { ok: false, message: `题目 ${word} 缺少 stem` };
+    return { ok: false, message: `题目 ${expected} 缺少 stem` };
   }
   const stem = value.stem.trim();
   if (stemHasBlankPlaceholder(stem)) {
-    return { ok: false, message: `题目 ${word} stem 禁止挖空占位` };
+    return { ok: false, message: `题目 ${expected} stem 禁止挖空占位` };
   }
-  if (!stemIncludesWord(stem, word)) {
-    return { ok: false, message: `题目 ${word} stem 未包含目标词` };
+  if (!stemIncludesWord(stem, expected)) {
+    return { ok: false, message: `题目 ${expected} stem 未包含目标词` };
   }
   if (typeof value.explanation !== 'string' || !value.explanation.trim()) {
-    return { ok: false, message: `题目 ${word} 缺少 explanation` };
+    return { ok: false, message: `题目 ${expected} 缺少 explanation` };
   }
   if (!Array.isArray(value.options) || value.options.length !== optionCount) {
     return {
       ok: false,
-      message: `题目 ${word} 选项数量必须为 ${optionCount}`,
+      message: `题目 ${expected} 选项数量必须为 ${optionCount}`,
     };
   }
   const options: GeneratedQuestionOption[] = [];
   let correctCount = 0;
   for (const option of value.options) {
     if (!isRecord(option)) {
-      return { ok: false, message: `题目 ${word} 选项格式错误` };
+      return { ok: false, message: `题目 ${expected} 选项格式错误` };
     }
     if (typeof option.label !== 'string' || !option.label.trim()) {
-      return { ok: false, message: `题目 ${word} 选项缺少 label` };
+      return { ok: false, message: `题目 ${expected} 选项缺少 label` };
     }
     if (typeof option.content !== 'string' || !option.content.trim()) {
-      return { ok: false, message: `题目 ${word} 选项缺少 content` };
+      return { ok: false, message: `题目 ${expected} 选项缺少 content` };
     }
     if (typeof option.isCorrect !== 'boolean') {
-      return { ok: false, message: `题目 ${word} 选项缺少 isCorrect` };
+      return { ok: false, message: `题目 ${expected} 选项缺少 isCorrect` };
     }
     if (option.isCorrect) {
       correctCount += 1;
@@ -199,17 +208,61 @@ export function validateOneGeneratedQuestion(
     });
   }
   if (correctCount !== 1) {
-    return { ok: false, message: `题目 ${word} 必须恰好一个正确选项` };
+    return { ok: false, message: `题目 ${expected} 必须恰好一个正确选项` };
   }
   return {
     ok: true,
     question: {
-      word,
+      word: expected,
       stem,
       explanation: value.explanation.trim(),
       options,
     },
+    wordMismatch,
+    returnedWord,
   };
+}
+
+/** 按本批词表顺序 1:1 对齐并做结构校验；多出的题忽略，结构失败则跳过该题 */
+export function alignGeneratedQuestions(
+  items: unknown[],
+  optionCount: number,
+  words: DictionaryWord[],
+): {
+  accepted: GeneratedQuestion[];
+  skipMessages: string[];
+  wordMismatchNotes: string[];
+} {
+  const accepted: GeneratedQuestion[] = [];
+  const skipMessages: string[] = [];
+  const wordMismatchNotes: string[] = [];
+  const paired = Math.min(items.length, words.length);
+  for (let i = 0; i < paired; i += 1) {
+    const expected = words[i]!;
+    const validated = validateOneGeneratedQuestion(
+      items[i],
+      optionCount,
+      expected.word,
+    );
+    if (!validated.ok) {
+      skipMessages.push(
+        `第 ${i + 1} 题（${expected.word}）：${validated.message}`,
+      );
+      continue;
+    }
+    if (validated.wordMismatch) {
+      wordMismatchNotes.push(
+        `${expected.word}: AI返回"${validated.returnedWord ?? '∅'}"`,
+      );
+    }
+    accepted.push(validated.question);
+  }
+  if (items.length > words.length) {
+    skipMessages.push(
+      `忽略超出本批的 ${items.length - words.length} 题`,
+    );
+  }
+  return { accepted, skipMessages, wordMismatchNotes };
 }
 
 export function parseGeneratedQuestionsJson(
@@ -217,29 +270,44 @@ export function parseGeneratedQuestionsJson(
   optionCount: number,
   words: DictionaryWord[],
   rng: () => number = Math.random,
-): { ok: true; questions: GeneratedQuestion[] } | { ok: false; message: string } {
+):
+  | {
+      ok: true;
+      questions: GeneratedQuestion[];
+      wordMismatchNotes: string[];
+    }
+  | { ok: false; message: string } {
   const array = extractJsonArray(raw);
   if (!array) {
     return { ok: false, message: withDetail('AI 返回不是 JSON 数组', raw) };
   }
+  if (words.length === 0) {
+    return { ok: false, message: '本批词表为空' };
+  }
   const questions: GeneratedQuestion[] = [];
-  const remainingWords = new Set(words.map((item) => item.word));
-  for (const item of array) {
+  const wordMismatchNotes: string[] = [];
+  const paired = Math.min(array.length, words.length);
+  for (let i = 0; i < paired; i += 1) {
+    const expected = words[i]!;
     const validated = validateOneGeneratedQuestion(
-      item,
+      array[i],
       optionCount,
-      remainingWords,
+      expected.word,
     );
     if (!validated.ok) {
       return validated;
     }
-    remainingWords.delete(validated.question.word);
+    if (validated.wordMismatch) {
+      wordMismatchNotes.push(
+        `${expected.word}: AI返回"${validated.returnedWord ?? '∅'}"`,
+      );
+    }
     questions.push({
       ...validated.question,
       options: shuffleQuestionOptions(validated.question.options, rng),
     });
   }
-  return { ok: true, questions };
+  return { ok: true, questions, wordMismatchNotes };
 }
 
 function normalizeBaseUrl(baseUrl: string): string {

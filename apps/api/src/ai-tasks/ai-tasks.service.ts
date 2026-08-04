@@ -25,10 +25,9 @@ import { type ListAiTasksDto } from './dto/list-ai-tasks.dto';
 import { type UpdateAiTaskDto } from './dto/update-ai-task.dto';
 import {
   generateQuestionsWithChatCompletions,
-  validateOneGeneratedQuestion,
+  alignGeneratedQuestions,
   type DictionaryWord,
   type GenerateQuestionsResult,
-  type GeneratedQuestion,
 } from './generate-questions';
 
 const INTERRUPTED_RUN_MESSAGE = '服务中断，执行未完成';
@@ -644,22 +643,16 @@ export class AiTasksService implements OnModuleInit {
         });
       }
 
-      const accepted: GeneratedQuestion[] = [];
-      const skipMessages: string[] = [];
-      // 词表内且未被本批用过的 word 才接受；接受后从集合移除以拒绝重复
-      const remainingWords = new Set(words.map((item) => item.word));
-      for (const item of generated.questions) {
-        const validated = validateOneGeneratedQuestion(
-          item,
+      const { accepted, skipMessages, wordMismatchNotes } =
+        alignGeneratedQuestions(
+          generated.questions,
           task.optionCount,
-          remainingWords,
+          words,
         );
-        if (!validated.ok) {
-          skipMessages.push(validated.message);
-          continue;
+      for (const note of generated.wordMismatchNotes ?? []) {
+        if (!wordMismatchNotes.includes(note)) {
+          wordMismatchNotes.push(note);
         }
-        remainingWords.delete(validated.question.word);
-        accepted.push(validated.question);
       }
 
       if (accepted.length === 0) {
@@ -702,14 +695,22 @@ export class AiTasksService implements OnModuleInit {
         const id = BigInt(item.id);
         return id > max ? id : max;
       }, BigInt(words[0]!.id));
+      const summaryParts: string[] = [];
+      if (skipMessages.length > 0) {
+        summaryParts.push(
+          `跳过 ${skipMessages.length} 题：${skipMessages.slice(0, 3).join('；')}`,
+        );
+      }
+      if (wordMismatchNotes.length > 0) {
+        summaryParts.push(
+          `词不一致 ${wordMismatchNotes.length} 处：${wordMismatchNotes.slice(0, 3).join('；')}`,
+        );
+      }
       return await finishAfterGenerate('SUCCESS', {
         questionsCreated: accepted.length,
         lastEntryIdAfter,
         nextLastEntryId: lastEntryIdAfter,
-        errorMessage:
-          skipMessages.length > 0
-            ? `跳过 ${skipMessages.length} 题：${skipMessages.slice(0, 3).join('；')}`
-            : null,
+        errorMessage: summaryParts.length > 0 ? summaryParts.join('。') : null,
       });
     } catch (error) {
       try {
