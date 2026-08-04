@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import AdminDashboardPage from "@/app/(admin)/admin/page";
@@ -444,6 +444,9 @@ describe("管理员运营页面", () => {
     expect(screen.getByText("120 积分")).toBeVisible();
 
     await user.click(screen.getByRole("button", { name: "添加商品" }));
+    expect(
+      screen.getByRole("dialog", { name: "添加新商品" }),
+    ).toBeVisible();
     expect(screen.getByRole("heading", { name: "添加新商品" })).toBeVisible();
     expect(screen.getByLabelText("商品名称")).toBeVisible();
   });
@@ -471,13 +474,24 @@ describe("管理员运营页面", () => {
 
     const editButtons = screen.getAllByRole("button", { name: "编辑商品" });
     await user.click(editButtons[0]);
-    await user.clear(screen.getByLabelText("商品名称"));
-    await user.type(screen.getByLabelText("商品名称"), "A 的未保存内容");
+    const dialog = screen.getByRole("dialog", {
+      name: `编辑 ${product.name}`,
+    });
+    await user.clear(within(dialog).getByLabelText("商品名称"));
+    await user.type(
+      within(dialog).getByLabelText("商品名称"),
+      "A 的未保存内容",
+    );
 
     await user.click(editButtons[1]);
 
-    expect(screen.getByLabelText("商品名称")).toHaveValue("英语帆布袋");
-    expect(screen.getByLabelText("库存数量")).toHaveValue(3);
+    const switchedDialog = screen.getByRole("dialog", {
+      name: `编辑 ${secondProduct.name}`,
+    });
+    expect(within(switchedDialog).getByLabelText("商品名称")).toHaveValue(
+      "英语帆布袋",
+    );
+    expect(within(switchedDialog).getByLabelText("库存数量")).toHaveValue(3);
   });
 
   it("商品第二页最后一条保存后按当前筛选重载并回到有效末页", async () => {

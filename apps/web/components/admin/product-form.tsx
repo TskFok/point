@@ -30,6 +30,7 @@ type ProductFormProps = {
   api?: ProductApi;
   initialProduct?: Product;
   mode: "create" | "edit";
+  onPendingChange?: (pending: boolean) => void;
   onSaved?: (product: Product) => void;
   productId?: string;
 };
@@ -81,6 +82,7 @@ export function ProductForm({
   api = browserApiClient,
   initialProduct,
   mode,
+  onPendingChange,
   onSaved,
   productId,
 }: ProductFormProps) {
@@ -107,6 +109,11 @@ export function ProductForm({
     [image],
   );
   const pending = phase !== "idle";
+
+  useEffect(() => {
+    onPendingChange?.(pending);
+    return () => onPendingChange?.(false);
+  }, [onPendingChange, pending]);
 
   useEffect(
     () => () => {
