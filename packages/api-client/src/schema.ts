@@ -782,7 +782,8 @@ export interface components {
             cronExpression: string;
             id: string;
             isEnabled: boolean;
-            lastWord?: string | null;
+            /** @description entry.id 游标 */
+            lastEntryId?: string | null;
             latestRun?: components["schemas"]["AiTaskLatestRunDto"] | null;
             name: string;
             /** Format: int32 */
@@ -815,8 +816,8 @@ export interface components {
             /** Format: date-time */
             finishedAt?: string | null;
             id: string;
-            lastWordAfter?: string | null;
-            lastWordBefore?: string | null;
+            lastEntryIdAfter?: string | null;
+            lastEntryIdBefore?: string | null;
             /** Format: int32 */
             questionsCreated: number;
             /** Format: date-time */

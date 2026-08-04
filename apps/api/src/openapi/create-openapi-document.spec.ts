@@ -429,7 +429,7 @@ describe('OpenAPI 契约', () => {
     const aiTaskRun = document.components?.schemas
       ?.AiTaskRunDto as SchemaObject;
 
-    expect(aiTask.properties?.lastWord).toMatchObject({
+    expect(aiTask.properties?.lastEntryId).toMatchObject({
       type: 'string',
       nullable: true,
     });
@@ -443,11 +443,11 @@ describe('OpenAPI 契约', () => {
       format: 'date-time',
       nullable: true,
     });
-    expect(aiTaskRun.properties?.lastWordBefore).toMatchObject({
+    expect(aiTaskRun.properties?.lastEntryIdBefore).toMatchObject({
       type: 'string',
       nullable: true,
     });
-    expect(aiTaskRun.properties?.lastWordAfter).toMatchObject({
+    expect(aiTaskRun.properties?.lastEntryIdAfter).toMatchObject({
       type: 'string',
       nullable: true,
     });

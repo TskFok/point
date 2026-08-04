@@ -321,7 +321,8 @@
           "isEnabled": {
             "type": "boolean"
           },
-          "lastWord": {
+          "lastEntryId": {
+            "description": "entry.id 游标",
             "nullable": true,
             "type": "string"
           },
@@ -448,11 +449,11 @@
           "id": {
             "type": "string"
           },
-          "lastWordAfter": {
+          "lastEntryIdAfter": {
             "nullable": true,
             "type": "string"
           },
-          "lastWordBefore": {
+          "lastEntryIdBefore": {
             "nullable": true,
             "type": "string"
           },

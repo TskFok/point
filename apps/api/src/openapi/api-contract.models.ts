@@ -762,8 +762,12 @@ export class AiTaskDto {
   @ApiProperty()
   isEnabled!: boolean;
 
-  @ApiPropertyOptional({ type: String, nullable: true })
-  lastWord!: string | null;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'entry.id 游标',
+  })
+  lastEntryId!: string | null;
 
   @ApiProperty({ format: 'date-time' })
   createdAt!: string;
@@ -852,10 +856,10 @@ export class AiTaskRunDto {
   questionsCreated!: number;
 
   @ApiPropertyOptional({ type: String, nullable: true })
-  lastWordBefore!: string | null;
+  lastEntryIdBefore!: string | null;
 
   @ApiPropertyOptional({ type: String, nullable: true })
-  lastWordAfter!: string | null;
+  lastEntryIdAfter!: string | null;
 
   @ApiPropertyOptional({ type: String, nullable: true })
   errorMessage!: string | null;
