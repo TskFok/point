@@ -12,6 +12,57 @@ function createApi() {
 }
 
 describe("管理员 AI 模型表单", () => {
+  it("保存期间通过 onPendingChange 上报 pending，完成后恢复 false", async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    let resolveCreate!: (value: {
+      id: string;
+      name: string;
+      baseUrl: string;
+      apiKeyMasked: string;
+      isEnabled: boolean;
+      createdAt: string;
+      updatedAt: string;
+    }) => void;
+    api.createAdminAiModel.mockReturnValue(
+      new Promise((resolve) => {
+        resolveCreate = resolve;
+      }),
+    );
+    const onPendingChange = jest.fn();
+    render(
+      <AiModelForm
+        api={api}
+        mode="create"
+        onPendingChange={onPendingChange}
+      />,
+    );
+    await user.type(screen.getByLabelText("模型名称"), "gpt-test");
+    await user.type(
+      screen.getByLabelText("调用地址"),
+      "https://api.example.com/v1",
+    );
+    await user.type(screen.getByLabelText("API Key"), "test-value");
+
+    await user.click(screen.getByRole("button", { name: "保存配置" }));
+
+    await waitFor(() => {
+      expect(onPendingChange).toHaveBeenLastCalledWith(true);
+    });
+    resolveCreate({
+      id: "model-1",
+      name: "gpt-test",
+      baseUrl: "https://api.example.com/v1",
+      apiKeyMasked: "••••",
+      isEnabled: true,
+      createdAt: "2026-08-03T00:00:00.000Z",
+      updatedAt: "2026-08-03T00:00:00.000Z",
+    });
+    await waitFor(() => {
+      expect(onPendingChange).toHaveBeenLastCalledWith(false);
+    });
+  });
+
   it("操作区使用 admin-form__actions 并包含保存、测试、取消", () => {
     const { container } = render(
       <AiModelForm api={createApi()} mode="create" onCancel={() => undefined} />,

@@ -1,7 +1,7 @@
 "use client";
 
 import type { ApiClient, ApiComponents } from "@point-quest/api-client";
-import { Card } from "@point-quest/ui";
+import { Button, Card } from "@point-quest/ui";
 import {
   Boxes,
   CircleGauge,
@@ -10,9 +10,11 @@ import {
   LoaderCircle,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AsyncError } from "@/components/feedback/async-error";
+import { ADMIN_QUESTIONS_OPEN_CREATE_KEY } from "@/lib/admin/questions-ui";
 import { browserApiClient } from "@/lib/api/browser-client";
 import { getApiErrorMessage } from "@/lib/api/error-message";
 
@@ -59,6 +61,7 @@ export default function AdminDashboardPage({
 }: {
   api?: DashboardApi;
 } = {}) {
+  const router = useRouter();
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -134,12 +137,14 @@ export default function AdminDashboardPage({
           <h2>继续维护学习体验</h2>
         </div>
         <div className="admin-quick-actions__links">
-          <Link
-            className="pq-button pq-button--primary"
-            href="/admin/questions/new"
+          <Button
+            onClick={() => {
+              sessionStorage.setItem(ADMIN_QUESTIONS_OPEN_CREATE_KEY, "1");
+              router.push("/admin/questions");
+            }}
           >
             添加英语题目
-          </Link>
+          </Button>
           <Link
             className="pq-button pq-button--secondary"
             href="/admin/products"

@@ -13,7 +13,6 @@ import {
   Pencil,
   Plus,
   Search,
-  X,
 } from "lucide-react";
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -23,6 +22,7 @@ import { Pagination } from "@/components/data/pagination";
 import { StatusFilter } from "@/components/data/status-filter";
 import { EmptyState } from "@/components/empty-state";
 import { AsyncError } from "@/components/feedback/async-error";
+import { FormDialog } from "@/components/ui/form-dialog";
 import { browserApiClient } from "@/lib/api/browser-client";
 import { getApiErrorMessage } from "@/lib/api/error-message";
 import { productImageUrl } from "@/lib/product-image";
@@ -82,6 +82,7 @@ export default function AdminProductsPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Product | "create" | null>(null);
+  const [formPending, setFormPending] = useState(false);
   const automaticLoadKey = useRef<string | null>(null);
   const latestRequest = useRef(0);
   const mounted = useRef(true);
@@ -136,6 +137,7 @@ export default function AdminProductsPage({
   }, [appliedFilters, load, page]);
 
   function handleSaved() {
+    setFormPending(false);
     setEditing(null);
     void load();
   }
@@ -155,30 +157,30 @@ export default function AdminProductsPage({
       </div>
 
       {editing ? (
-        <section className="admin-editor-panel" aria-label="商品编辑区">
-          <div className="admin-section-heading">
-            <div>
-              <p className="page-kicker">
-                {editing === "create" ? "新奖励" : "商品维护"}
-              </p>
-              <h2>
-                {editing === "create" ? "添加新商品" : `编辑 ${editing.name}`}
-              </h2>
-            </div>
-            <Button onClick={() => setEditing(null)} variant="secondary">
-              <X aria-hidden="true" />
-              关闭表单
-            </Button>
-          </div>
+        <FormDialog
+          description={
+            editing === "create"
+              ? "维护商品图片、库存、积分价格和上架状态。"
+              : `编辑 ${editing.name}`
+          }
+          onClose={() => {
+            if (!formPending) setEditing(null);
+          }}
+          pending={formPending}
+          title={
+            editing === "create" ? "添加新商品" : `编辑 ${editing.name}`
+          }
+        >
           <ProductForm
             api={api}
             initialProduct={editing === "create" ? undefined : editing}
             key={editing === "create" ? "create" : editing.id}
             mode={editing === "create" ? "create" : "edit"}
+            onPendingChange={setFormPending}
             onSaved={handleSaved}
             productId={editing === "create" ? undefined : editing.id}
           />
-        </section>
+        </FormDialog>
       ) : null}
 
       <Card className="admin-filter-card">

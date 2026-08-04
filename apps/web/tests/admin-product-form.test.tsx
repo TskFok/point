@@ -1,5 +1,5 @@
 import { ApiNetworkError } from "@point-quest/api-client";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { ProductForm } from "@/components/admin/product-form";
@@ -62,6 +62,95 @@ describe("管理员商品表单", () => {
 
     expect(screen.getByRole("alert")).toHaveTextContent(message);
     expect(api.uploadAdminProductImage).not.toHaveBeenCalled();
+  });
+
+  it("提交与上传期间通过 onPendingChange 上报 pending，完成后恢复 false", async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    let resolveUpload!: (value: { key: string; url: string }) => void;
+    let resolveCreate!: (value: { id: string }) => void;
+    const uploadPromise = new Promise<{ key: string; url: string }>(
+      (resolve) => {
+        resolveUpload = resolve;
+      },
+    );
+    const createPromise = new Promise<{ id: string }>((resolve) => {
+      resolveCreate = resolve;
+    });
+    api.uploadAdminProductImage.mockReturnValue(uploadPromise);
+    api.createAdminProduct.mockReturnValue(createPromise);
+
+    const onPendingChange = jest.fn();
+    render(
+      <ProductForm api={api} mode="create" onPendingChange={onPendingChange} />,
+    );
+    await fillProduct(user);
+    await user.upload(
+      screen.getByLabelText("商品图片"),
+      new File(["image"], "reward.png", { type: "image/png" }),
+    );
+
+    await user.click(screen.getByRole("button", { name: "保存商品" }));
+
+    await waitFor(() => {
+      expect(onPendingChange).toHaveBeenLastCalledWith(true);
+    });
+
+    resolveUpload({
+      key: "products/550e8400-e29b-41d4-a716-446655440000.png",
+      url: "/uploads/products/550e8400-e29b-41d4-a716-446655440000.png",
+    });
+    await waitFor(() => {
+      expect(onPendingChange).toHaveBeenLastCalledWith(true);
+    });
+
+    resolveCreate({ id: "product-1" });
+    await waitFor(() => {
+      expect(onPendingChange).toHaveBeenLastCalledWith(false);
+    });
+    expect(await screen.findByText("商品已保存")).toBeVisible();
+  });
+
+  it("卸载时在 pending 期间通过 onPendingChange 重置为 false", async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    let resolveUpdate!: (value: { id: string }) => void;
+    const updatePromise = new Promise<{ id: string }>((resolve) => {
+      resolveUpdate = resolve;
+    });
+    api.updateAdminProduct.mockReturnValue(updatePromise);
+
+    const onPendingChange = jest.fn();
+    const initialProduct = {
+      createdAt: "2026-08-04T00:00:00.000Z",
+      id: "product-1",
+      name: "英语笔记本",
+      description: "适合记录生词",
+      imageKey: "products/existing.png",
+      stock: 8,
+      pointsCost: 120,
+      isActive: true,
+      updatedAt: "2026-08-04T00:00:00.000Z",
+    };
+    const view = render(
+      <ProductForm
+        api={api}
+        initialProduct={initialProduct}
+        mode="edit"
+        onPendingChange={onPendingChange}
+        productId="product-1"
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "保存商品" }));
+    await waitFor(() => {
+      expect(onPendingChange).toHaveBeenLastCalledWith(true);
+    });
+
+    onPendingChange.mockClear();
+    view.unmount();
+    expect(onPendingChange).toHaveBeenCalledWith(false);
+    resolveUpdate({ id: "product-1" });
   });
 
   it("上传失败保留商品字段并可原样重试", async () => {

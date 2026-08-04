@@ -1609,6 +1609,39 @@ svg {
   backdrop-filter: blur(3px);
 }
 
+.form-dialog {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: min(100%, 48rem);
+  max-height: calc(100vh - 2rem);
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: clamp(1.25rem, 4vw, 2rem);
+  padding-top: 2.75rem;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-float);
+}
+
+.form-dialog__header h2 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.form-dialog__header p {
+  margin: 0.35rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.92rem;
+}
+
+.form-dialog__body {
+  overflow: auto;
+  margin-top: 1rem;
+  padding-right: 0.25rem;
+}
+
 .redeem-dialog {
   position: relative;
   z-index: 1;
@@ -2646,15 +2679,6 @@ svg {
   height: 6rem;
   border-radius: 0.65rem;
   object-fit: cover;
-}
-
-.admin-editor-panel {
-  display: grid;
-  gap: 1rem;
-  border: 1px solid rgb(103 80 199 / 32%);
-  border-radius: 1.25rem;
-  padding: 1rem;
-  background: linear-gradient(145deg, #faf8ff, #fff);
 }
 
 .admin-product-grid {

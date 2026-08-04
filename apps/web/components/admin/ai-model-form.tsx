@@ -3,7 +3,7 @@
 import type { ApiClient, ApiComponents } from "@point-quest/api-client";
 import { Button, Card } from "@point-quest/ui";
 import { CheckCircle2, LoaderCircle, Save, Wifi } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { browserApiClient } from "@/lib/api/browser-client";
 import { getApiErrorMessage } from "@/lib/api/error-message";
@@ -23,6 +23,7 @@ type AiModelFormProps = {
   initialModel?: AiModel;
   mode: "create" | "edit";
   onCancel?: () => void;
+  onPendingChange?: (pending: boolean) => void;
   onSaved?: (model: AiModel) => void;
 };
 
@@ -40,6 +41,7 @@ export function AiModelForm({
   initialModel,
   mode,
   onCancel,
+  onPendingChange,
   onSaved,
 }: AiModelFormProps) {
   const [name, setName] = useState(initialModel?.name ?? "");
@@ -52,6 +54,12 @@ export function AiModelForm({
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [saved, setSaved] = useState(false);
+  const pending = saving || testing;
+
+  useEffect(() => {
+    onPendingChange?.(pending);
+    return () => onPendingChange?.(false);
+  }, [onPendingChange, pending]);
 
   function validate(): string[] {
     const next: string[] = [];

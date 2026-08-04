@@ -1,10 +1,16 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import AdminDashboardPage from "@/app/(admin)/admin/page";
 import AdminPointsPage from "@/app/(admin)/admin/points/page";
 import AdminProductsPage from "@/app/(admin)/admin/products/page";
 import AdminQuestionsPage from "@/app/(admin)/admin/questions/page";
+
+const mockPush = jest.fn();
+
+jest.mock("next/navigation", () => ({
+  useRouter: () => ({ push: mockPush }),
+}));
 
 const meta = {
   page: 1,
@@ -65,6 +71,8 @@ const product = {
 
 describe("管理员运营页面", () => {
   beforeEach(() => {
+    mockPush.mockClear();
+    sessionStorage.clear();
     window.history.replaceState(null, "", "/admin");
   });
 
@@ -87,9 +95,34 @@ describe("管理员运营页面", () => {
     expect(screen.getByText("今日答题")).toBeVisible();
   });
 
-  it("题库搜索、状态与分页写入 URL 并保留到编辑链接", async () => {
+  it("概览快捷入口标记并跳转到题库创建弹窗", async () => {
+    const user = userEvent.setup();
+    render(
+      <AdminDashboardPage
+        api={{
+          getAdminDashboard: jest.fn().mockResolvedValue({
+            activeProductCount: 6,
+            activeQuestionCount: 12,
+            pendingOrderCount: 5,
+            todayAnswerCount: 34,
+          }),
+        }}
+      />,
+    );
+
+    await user.click(
+      await screen.findByRole("button", { name: "添加英语题目" }),
+    );
+
+    expect(sessionStorage.getItem("admin-questions-open-create")).toBe("1");
+    expect(mockPush).toHaveBeenCalledWith("/admin/questions");
+  });
+
+  it("题库搜索、状态与分页写入 URL 并使用按钮编辑", async () => {
     const user = userEvent.setup();
     const api = {
+      createAdminQuestion: jest.fn(),
+      getAdminQuestion: jest.fn(),
       listAdminQuestions: jest.fn().mockResolvedValue({
         data: [question],
         meta,
@@ -114,15 +147,35 @@ describe("管理员运营页面", () => {
     );
     expect(window.location.search).toContain("search=singular");
     expect(window.location.search).toContain("isActive=true");
-    expect(screen.getByRole("link", { name: "编辑题目" })).toHaveAttribute(
-      "href",
-      expect.stringContaining("returnTo="),
-    );
+    expect(screen.getByRole("button", { name: "编辑题目" })).toBeVisible();
+  });
+
+  it("读取 sessionStorage 后自动打开新建题目弹窗", async () => {
+    sessionStorage.setItem("admin-questions-open-create", "1");
+    const api = {
+      createAdminQuestion: jest.fn(),
+      getAdminQuestion: jest.fn(),
+      listAdminQuestions: jest.fn().mockResolvedValue({
+        data: [question],
+        meta,
+      }),
+      updateAdminQuestion: jest.fn(),
+    };
+    window.history.replaceState(null, "", "/admin/questions");
+
+    render(<AdminQuestionsPage api={api} />);
+
+    expect(
+      await screen.findByRole("dialog", { name: "添加英语选择题" }),
+    ).toBeVisible();
+    expect(sessionStorage.getItem("admin-questions-open-create")).toBeNull();
   });
 
   it("题库停用成功后同步文字与图标状态", async () => {
     const user = userEvent.setup();
     const api = {
+      createAdminQuestion: jest.fn(),
+      getAdminQuestion: jest.fn(),
       listAdminQuestions: jest
         .fn()
         .mockResolvedValueOnce({
@@ -159,6 +212,8 @@ describe("管理员运营页面", () => {
       stem: "Replacement question",
     };
     const api = {
+      createAdminQuestion: jest.fn(),
+      getAdminQuestion: jest.fn(),
       listAdminQuestions: jest
         .fn()
         .mockResolvedValueOnce({
@@ -203,6 +258,8 @@ describe("管理员运营页面", () => {
 
   it("题库中已有答题记录的停用题目不能重新启用", async () => {
     const api = {
+      createAdminQuestion: jest.fn(),
+      getAdminQuestion: jest.fn(),
       listAdminQuestions: jest.fn().mockResolvedValue({
         data: [{ ...question, hasAttempts: true, isActive: false }],
         meta,
@@ -219,45 +276,6 @@ describe("管理员运营页面", () => {
       screen.queryByRole("button", { name: "启用题目" }),
     ).not.toBeInTheDocument();
     expect(api.updateAdminQuestion).not.toHaveBeenCalled();
-  });
-
-  it("题库返回数据并完成渲染后才恢复并清除滚动位置", async () => {
-    const response = deferred<{
-      data: (typeof question)[];
-      meta: typeof meta;
-    }>();
-    const api = {
-      listAdminQuestions: jest.fn().mockReturnValue(response.promise),
-      updateAdminQuestion: jest.fn(),
-    };
-    const scrollTo = jest
-      .spyOn(window, "scrollTo")
-      .mockImplementation(() => undefined);
-    const requestFrame = jest
-      .spyOn(window, "requestAnimationFrame")
-      .mockImplementation((callback) => {
-        callback(0);
-        return 1;
-      });
-    window.history.replaceState(null, "", "/admin/questions");
-    sessionStorage.setItem("admin-questions-scroll", "480");
-
-    try {
-      render(<AdminQuestionsPage api={api} />);
-      await waitFor(() => expect(api.listAdminQuestions).toHaveBeenCalled());
-
-      expect(scrollTo).not.toHaveBeenCalled();
-      expect(sessionStorage.getItem("admin-questions-scroll")).toBe("480");
-
-      response.resolve({ data: [question], meta });
-      await screen.findByText(question.stem);
-      await waitFor(() => expect(scrollTo).toHaveBeenCalledWith(0, 480));
-      expect(sessionStorage.getItem("admin-questions-scroll")).toBeNull();
-    } finally {
-      requestFrame.mockRestore();
-      scrollTo.mockRestore();
-      sessionStorage.removeItem("admin-questions-scroll");
-    }
   });
 
   it("倍率限制为 1–10 整数并刷新配置历史", async () => {
@@ -444,6 +462,9 @@ describe("管理员运营页面", () => {
     expect(screen.getByText("120 积分")).toBeVisible();
 
     await user.click(screen.getByRole("button", { name: "添加商品" }));
+    expect(
+      screen.getByRole("dialog", { name: "添加新商品" }),
+    ).toBeVisible();
     expect(screen.getByRole("heading", { name: "添加新商品" })).toBeVisible();
     expect(screen.getByLabelText("商品名称")).toBeVisible();
   });
@@ -471,13 +492,24 @@ describe("管理员运营页面", () => {
 
     const editButtons = screen.getAllByRole("button", { name: "编辑商品" });
     await user.click(editButtons[0]);
-    await user.clear(screen.getByLabelText("商品名称"));
-    await user.type(screen.getByLabelText("商品名称"), "A 的未保存内容");
+    const dialog = screen.getByRole("dialog", {
+      name: `编辑 ${product.name}`,
+    });
+    await user.clear(within(dialog).getByLabelText("商品名称"));
+    await user.type(
+      within(dialog).getByLabelText("商品名称"),
+      "A 的未保存内容",
+    );
 
     await user.click(editButtons[1]);
 
-    expect(screen.getByLabelText("商品名称")).toHaveValue("英语帆布袋");
-    expect(screen.getByLabelText("库存数量")).toHaveValue(3);
+    const switchedDialog = screen.getByRole("dialog", {
+      name: `编辑 ${secondProduct.name}`,
+    });
+    expect(within(switchedDialog).getByLabelText("商品名称")).toHaveValue(
+      "英语帆布袋",
+    );
+    expect(within(switchedDialog).getByLabelText("库存数量")).toHaveValue(3);
   });
 
   it("商品第二页最后一条保存后按当前筛选重载并回到有效末页", async () => {

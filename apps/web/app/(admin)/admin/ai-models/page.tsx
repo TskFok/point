@@ -12,7 +12,6 @@ import {
   Plus,
   Trash2,
   Wifi,
-  X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -21,6 +20,7 @@ import { Pagination } from "@/components/data/pagination";
 import { StatusFilter } from "@/components/data/status-filter";
 import { EmptyState } from "@/components/empty-state";
 import { AsyncError } from "@/components/feedback/async-error";
+import { FormDialog } from "@/components/ui/form-dialog";
 import { browserApiClient } from "@/lib/api/browser-client";
 import { getApiErrorMessage } from "@/lib/api/error-message";
 
@@ -86,6 +86,7 @@ export default function AdminAiModelsPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<AiModel | "create" | null>(null);
+  const [formPending, setFormPending] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const automaticLoadKey = useRef<string | null>(null);
@@ -139,6 +140,7 @@ export default function AdminAiModelsPage({
   }, [appliedFilters, load, page]);
 
   function handleSaved() {
+    setFormPending(false);
     setEditing(null);
     setActionMessage("配置已保存");
     void load();
@@ -210,32 +212,22 @@ export default function AdminAiModelsPage({
       </div>
 
       {editing ? (
-        <section className="admin-editor-panel" aria-label="AI 模型编辑区">
-          <div className="admin-section-heading">
-            <div>
-              <p className="page-kicker">
-                {editing === "create" ? "新配置" : "配置维护"}
-              </p>
-              <h2>
-                {editing === "create"
-                  ? "添加 AI 模型"
-                  : `编辑 ${editing.name}`}
-              </h2>
-            </div>
-            <Button onClick={() => setEditing(null)} variant="secondary">
-              <X aria-hidden="true" />
-              关闭表单
-            </Button>
-          </div>
+        <FormDialog
+          onClose={() => {
+            if (!formPending) setEditing(null);
+          }}
+          pending={formPending}
+          title={editing === "create" ? "新配置" : `编辑 ${editing.name}`}
+        >
           <AiModelForm
             api={api}
             initialModel={editing === "create" ? undefined : editing}
             key={editing === "create" ? "create" : editing.id}
             mode={editing === "create" ? "create" : "edit"}
-            onCancel={() => setEditing(null)}
+            onPendingChange={setFormPending}
             onSaved={handleSaved}
           />
-        </section>
+        </FormDialog>
       ) : null}
 
       <Card className="admin-filter-card">

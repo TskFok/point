@@ -3,7 +3,7 @@
 import type { ApiClient, ApiComponents } from "@point-quest/api-client";
 import { Button, Card } from "@point-quest/ui";
 import { CheckCircle2, LoaderCircle, Save } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { browserApiClient } from "@/lib/api/browser-client";
 import { getApiErrorMessage } from "@/lib/api/error-message";
@@ -26,6 +26,7 @@ type AiTaskFormProps = {
   mode: "create" | "edit";
   models: AiTaskModelOption[];
   onCancel?: () => void;
+  onPendingChange?: (pending: boolean) => void;
   onSaved?: (task: AiTask) => void;
 };
 
@@ -35,6 +36,7 @@ export function AiTaskForm({
   mode,
   models,
   onCancel,
+  onPendingChange,
   onSaved,
 }: AiTaskFormProps) {
   const [name, setName] = useState(initialTask?.name ?? "");
@@ -58,6 +60,11 @@ export function AiTaskForm({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    onPendingChange?.(saving);
+    return () => onPendingChange?.(false);
+  }, [onPendingChange, saving]);
 
   function validate(): string[] {
     const next: string[] = [];

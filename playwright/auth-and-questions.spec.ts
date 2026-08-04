@@ -11,7 +11,11 @@ test("管理员添加题目，学员首次答对获得倍率积分", async ({
   adminPage,
   studentPage,
 }) => {
-  await adminPage.goto("/admin/questions/new");
+  await adminPage.goto("/admin/questions");
+  await adminPage.getByRole("button", { name: "添加题目" }).click();
+  await expect(
+    adminPage.getByRole("dialog", { name: "添加英语选择题" }),
+  ).toBeVisible();
   await adminPage.getByLabel("题干").fill(question.stem);
   await adminPage.getByLabel("题目解析").fill(question.explanation);
   await adminPage.getByLabel("基础积分").fill("10");
