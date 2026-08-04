@@ -23,8 +23,8 @@ export type GenerateQuestionsInput = {
 };
 
 export type GenerateQuestionsResult =
-  | { ok: true; questions: GeneratedQuestion[] }
-  | { ok: false; message: string };
+  | { ok: true; questions: GeneratedQuestion[]; responseBody?: string }
+  | { ok: false; message: string; responseBody?: string };
 
 const DEFAULT_TIMEOUT_MS = 60_000;
 
@@ -321,6 +321,25 @@ export function summarizeApiErrorBody(raw: string): string {
   return truncateErrorDetail(trimmed);
 }
 
+/** 组装「响应不是 JSON」时的可读明细：解析错误 + 响应体 + Content-Type。 */
+export function summarizeNonJsonResponse(
+  rawBody: string,
+  parseError: unknown,
+  contentType?: string | null,
+): string {
+  const parts: string[] = [];
+  if (parseError instanceof Error && parseError.message.trim()) {
+    parts.push(truncateErrorDetail(parseError.message.trim()));
+  }
+  const body = summarizeApiErrorBody(rawBody);
+  parts.push(body || '响应体为空');
+  const ct = contentType?.trim();
+  if (ct) {
+    parts.push(`Content-Type: ${ct}`);
+  }
+  return parts.join('；');
+}
+
 function summarizeUnknown(value: unknown): string {
   if (typeof value === 'string') {
     return truncateErrorDetail(value);
@@ -381,8 +400,10 @@ export async function generateQuestionsWithChatCompletions(
   }
 
   let rawBody = '';
+  let responseBody: string | undefined;
   try {
     rawBody = await response.text();
+    responseBody = rawBody;
   } catch {
     rawBody = '';
   }
@@ -394,22 +415,32 @@ export async function generateQuestionsWithChatCompletions(
         `AI 调用失败 HTTP ${response.status}`,
         summarizeApiErrorBody(rawBody),
       ),
+      ...(responseBody !== undefined ? { responseBody } : {}),
     };
   }
 
   let payload: unknown;
   try {
     payload = JSON.parse(rawBody) as unknown;
-  } catch {
+  } catch (parseError) {
+    const contentType =
+      typeof response.headers?.get === 'function'
+        ? response.headers.get('content-type')
+        : null;
     return {
       ok: false,
-      message: withDetail('AI 响应不是 JSON', summarizeApiErrorBody(rawBody)),
+      message: withDetail(
+        'AI 响应不是 JSON',
+        summarizeNonJsonResponse(rawBody, parseError, contentType),
+      ),
+      ...(responseBody !== undefined ? { responseBody } : {}),
     };
   }
   if (!isRecord(payload) || !Array.isArray(payload.choices)) {
     return {
       ok: false,
       message: withDetail('AI 响应缺少 choices', summarizeUnknown(payload)),
+      ...(responseBody !== undefined ? { responseBody } : {}),
     };
   }
   const first = payload.choices[0];
@@ -417,6 +448,7 @@ export async function generateQuestionsWithChatCompletions(
     return {
       ok: false,
       message: withDetail('AI 响应缺少 message', summarizeUnknown(payload)),
+      ...(responseBody !== undefined ? { responseBody } : {}),
     };
   }
   const content = first.message.content;
@@ -429,11 +461,16 @@ export async function generateQuestionsWithChatCompletions(
           ? JSON.stringify(content)
           : summarizeUnknown(content),
       ),
+      ...(responseBody !== undefined ? { responseBody } : {}),
     };
   }
-  return parseGeneratedQuestionsJson(
+  const parsed = parseGeneratedQuestionsJson(
     content,
     input.optionCount,
     input.lastWord,
   );
+  return {
+    ...parsed,
+    ...(responseBody !== undefined ? { responseBody } : {}),
+  };
 }

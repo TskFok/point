@@ -5,6 +5,7 @@ import {
   parseGeneratedQuestionsJson,
   shuffleQuestionOptions,
   summarizeApiErrorBody,
+  summarizeNonJsonResponse,
   truncateErrorDetail,
   validateOneGeneratedQuestion,
 } from './generate-questions';
@@ -23,6 +24,26 @@ describe('error detail helpers', () => {
         JSON.stringify({ error: { message: 'rate limited' } }),
       ),
     ).toBe('rate limited');
+  });
+
+  it('summarizeNonJsonResponse 空体时标明并附带 Content-Type', () => {
+    expect(
+      summarizeNonJsonResponse('  ', new SyntaxError('Unexpected end of JSON'), 'text/plain'),
+    ).toBe(
+      'Unexpected end of JSON；响应体为空；Content-Type: text/plain',
+    );
+  });
+
+  it('summarizeNonJsonResponse 附带 body 与解析错误', () => {
+    expect(
+      summarizeNonJsonResponse(
+        '<html>oops</html>',
+        new SyntaxError("Unexpected token '<'"),
+        'text/html',
+      ),
+    ).toBe(
+      "Unexpected token '<'；<html>oops</html>；Content-Type: text/html",
+    );
   });
 });
 
@@ -340,28 +361,28 @@ describe('shuffleQuestionOptions', () => {
 
 describe('generateQuestionsWithChatCompletions', () => {
   it('mock fetch 成功返回题目', async () => {
+    const rawBody = JSON.stringify({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify([
+              {
+                word: 'abandon',
+                stem: 'They decided to abandon the plan. What does "abandon" mean?',
+                explanation: '放弃',
+                options: [
+                  { label: 'A', content: '放弃', isCorrect: true },
+                  { label: 'B', content: '获得', isCorrect: false },
+                ],
+              },
+            ]),
+          },
+        },
+      ],
+    });
     const fetchImpl = jest.fn().mockResolvedValue({
       ok: true,
-      text: async () =>
-        JSON.stringify({
-          choices: [
-            {
-              message: {
-                content: JSON.stringify([
-                  {
-                    word: 'abandon',
-                    stem: 'They decided to abandon the plan. What does "abandon" mean?',
-                    explanation: '放弃',
-                    options: [
-                      { label: 'A', content: '放弃', isCorrect: true },
-                      { label: 'B', content: '获得', isCorrect: false },
-                    ],
-                  },
-                ]),
-              },
-            },
-          ],
-        }),
+      text: async () => rawBody,
     });
     const result = await generateQuestionsWithChatCompletions({
       baseUrl: 'https://api.example.com/v1/',
@@ -373,6 +394,9 @@ describe('generateQuestionsWithChatCompletions', () => {
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
     expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.responseBody).toBe(rawBody);
+    }
     expect(fetchImpl).toHaveBeenCalledWith(
       'https://api.example.com/v1/chat/completions',
       expect.objectContaining({
@@ -427,11 +451,11 @@ describe('generateQuestionsWithChatCompletions', () => {
   });
 
   it('HTTP 非 2xx 返回失败并附带 API error.message', async () => {
+    const rawBody = JSON.stringify({ error: { message: 'Invalid API key' } });
     const fetchImpl = jest.fn().mockResolvedValue({
       ok: false,
       status: 401,
-      text: async () =>
-        JSON.stringify({ error: { message: 'Invalid API key' } }),
+      text: async () => rawBody,
     });
     const result = await generateQuestionsWithChatCompletions({
       baseUrl: 'https://api.example.com/v1',
@@ -445,14 +469,16 @@ describe('generateQuestionsWithChatCompletions', () => {
     expect(result).toEqual({
       ok: false,
       message: 'AI 调用失败 HTTP 401：Invalid API key',
+      responseBody: rawBody,
     });
   });
 
   it('HTTP 非 2xx 无结构化 message 时附带原始 body 摘要', async () => {
+    const rawBody = 'service unavailable';
     const fetchImpl = jest.fn().mockResolvedValue({
       ok: false,
       status: 503,
-      text: async () => 'service unavailable',
+      text: async () => rawBody,
     });
     const result = await generateQuestionsWithChatCompletions({
       baseUrl: 'https://api.example.com/v1',
@@ -466,6 +492,7 @@ describe('generateQuestionsWithChatCompletions', () => {
     expect(result).toEqual({
       ok: false,
       message: 'AI 调用失败 HTTP 503：service unavailable',
+      responseBody: rawBody,
     });
   });
 
@@ -487,6 +514,7 @@ describe('generateQuestionsWithChatCompletions', () => {
       message:
         'AI 调用超时：The operation was aborted due to timeout',
     });
+    expect('responseBody' in result).toBe(false);
   });
 
   it('网络失败时附带底层 Error.message', async () => {
@@ -506,12 +534,15 @@ describe('generateQuestionsWithChatCompletions', () => {
       ok: false,
       message: 'AI 调用网络失败：fetch failed',
     });
+    expect('responseBody' in result).toBe(false);
   });
 
-  it('响应非 JSON 时附带原始文本摘要', async () => {
+  it('响应非 JSON 时附带解析错误与原始文本摘要', async () => {
+    const rawBody = '<html>bad gateway</html>';
     const fetchImpl = jest.fn().mockResolvedValue({
       ok: true,
-      text: async () => '<html>bad gateway</html>',
+      headers: { get: () => 'text/html' },
+      text: async () => rawBody,
     });
     const result = await generateQuestionsWithChatCompletions({
       baseUrl: 'https://api.example.com/v1',
@@ -522,16 +553,46 @@ describe('generateQuestionsWithChatCompletions', () => {
       optionCount: 2,
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
-    expect(result).toEqual({
-      ok: false,
-      message: 'AI 响应不是 JSON：<html>bad gateway</html>',
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).toContain('AI 响应不是 JSON');
+      expect(result.message).toContain('<html>bad gateway</html>');
+      expect(result.message).toMatch(/Unexpected token|is not valid JSON/i);
+      expect(result.message).toContain('Content-Type: text/html');
+      expect(result.responseBody).toBe(rawBody);
+    }
+  });
+
+  it('响应体为空时标明空体并附带 Content-Type', async () => {
+    const rawBody = '   ';
+    const fetchImpl = jest.fn().mockResolvedValue({
+      ok: true,
+      headers: { get: () => 'text/plain' },
+      text: async () => rawBody,
     });
+    const result = await generateQuestionsWithChatCompletions({
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'test-key',
+      modelName: 'gpt-test',
+      lastWord: null,
+      questionCount: 1,
+      optionCount: 2,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).toContain('AI 响应不是 JSON');
+      expect(result.message).toContain('响应体为空');
+      expect(result.message).toContain('Content-Type: text/plain');
+      expect(result.responseBody).toBe(rawBody);
+    }
   });
 
   it('响应缺少 choices 时附带 payload 摘要', async () => {
+    const rawBody = JSON.stringify({ error: 'no choices' });
     const fetchImpl = jest.fn().mockResolvedValue({
       ok: true,
-      text: async () => JSON.stringify({ error: 'no choices' }),
+      text: async () => rawBody,
     });
     const result = await generateQuestionsWithChatCompletions({
       baseUrl: 'https://api.example.com/v1',
@@ -546,14 +607,17 @@ describe('generateQuestionsWithChatCompletions', () => {
     if (!result.ok) {
       expect(result.message).toContain('AI 响应缺少 choices');
       expect(result.message).toContain('no choices');
+      expect(result.responseBody).toBe(rawBody);
     }
   });
 
   it('响应内容为空时附带摘要', async () => {
+    const rawBody = JSON.stringify({
+      choices: [{ message: { content: '   ' } }],
+    });
     const fetchImpl = jest.fn().mockResolvedValue({
       ok: true,
-      text: async () =>
-        JSON.stringify({ choices: [{ message: { content: '   ' } }] }),
+      text: async () => rawBody,
     });
     const result = await generateQuestionsWithChatCompletions({
       baseUrl: 'https://api.example.com/v1',
@@ -567,6 +631,7 @@ describe('generateQuestionsWithChatCompletions', () => {
     expect(result).toEqual({
       ok: false,
       message: 'AI 响应内容为空："   "',
+      responseBody: rawBody,
     });
   });
 
