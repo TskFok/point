@@ -74,6 +74,27 @@ describe('generate-questions parse', () => {
     if (result.ok) expect(result.questions[0]?.word).toBe('abandon');
   });
 
+  it('非 JSON 数组时附带返回内容', () => {
+    const raw = '{"error":"I cannot generate questions"}';
+    const result = parseGeneratedQuestionsJson(raw, 2, null);
+    expect(result).toEqual({
+      ok: false,
+      message: `AI 返回不是 JSON 数组：${raw}`,
+    });
+  });
+
+  it('无法提取数组时附带返回内容并截断过长文本', () => {
+    const raw = `Sorry, here is prose. ${'x'.repeat(520)}`;
+    const result = parseGeneratedQuestionsJson(raw, 2, null);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message.startsWith('AI 返回不是 JSON 数组：')).toBe(true);
+      expect(result.message).toContain('Sorry, here is prose.');
+      expect(result.message.endsWith('…')).toBe(true);
+      expect(result.message.length).toBe('AI 返回不是 JSON 数组：'.length + 501);
+    }
+  });
+
   it('拒绝 word 未大于 lastWord', () => {
     const result = parseGeneratedQuestionsJson(sample, 2, 'zebra');
     expect(result.ok).toBe(false);

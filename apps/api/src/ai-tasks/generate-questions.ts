@@ -250,7 +250,7 @@ export function parseGeneratedQuestionsJson(
 ): { ok: true; questions: GeneratedQuestion[] } | { ok: false; message: string } {
   const array = extractJsonArray(raw);
   if (!array) {
-    return { ok: false, message: 'AI 返回不是 JSON 数组' };
+    return { ok: false, message: withDetail('AI 返回不是 JSON 数组', raw) };
   }
   const questions: GeneratedQuestion[] = [];
   let minWordExclusive = lastWordBefore?.trim().toLowerCase() || null;

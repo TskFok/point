@@ -29,6 +29,7 @@ AI 任务执行失败时，管理端 `errorMessage`（toast / 执行记录）展
 | 网络失败 | `AI 调用网络失败：{error.message}`（无则仅前缀） |
 | 响应非 JSON | `AI 响应不是 JSON：{原始文本摘要}` |
 | 缺 choices / message / content 空 | 现有前缀 + `：{payload/content 摘要}` |
+| content 不是 JSON 数组 | `AI 返回不是 JSON 数组：{原始文本摘要}` |
 
 ## 测试
 
