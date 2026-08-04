@@ -276,6 +276,60 @@ function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.replace(/\/+$/, '');
 }
 
+const ERROR_DETAIL_MAX_LEN = 500;
+
+export function truncateErrorDetail(
+  value: string,
+  maxLen: number = ERROR_DETAIL_MAX_LEN,
+): string {
+  if (value.length <= maxLen) {
+    return value;
+  }
+  return `${value.slice(0, maxLen)}…`;
+}
+
+function withDetail(prefix: string, detail: string | null | undefined): string {
+  const trimmed = detail?.trim() ?? '';
+  if (!trimmed) {
+    return prefix;
+  }
+  return `${prefix}：${truncateErrorDetail(trimmed)}`;
+}
+
+/** 从 API 原始 body 提取可读错误摘要（优先 error.message / message）。 */
+export function summarizeApiErrorBody(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return '';
+  }
+  try {
+    const parsed: unknown = JSON.parse(trimmed);
+    if (isRecord(parsed)) {
+      const nested = parsed.error;
+      if (isRecord(nested) && typeof nested.message === 'string') {
+        return nested.message.trim();
+      }
+      if (typeof parsed.message === 'string') {
+        return parsed.message.trim();
+      }
+    }
+  } catch {
+    // 非 JSON：原样截断
+  }
+  return truncateErrorDetail(trimmed);
+}
+
+function summarizeUnknown(value: unknown): string {
+  if (typeof value === 'string') {
+    return truncateErrorDetail(value);
+  }
+  try {
+    return truncateErrorDetail(JSON.stringify(value));
+  } catch {
+    return '';
+  }
+}
+
 export async function generateQuestionsWithChatCompletions(
   input: GenerateQuestionsInput,
 ): Promise<GenerateQuestionsResult> {
@@ -313,34 +367,67 @@ export async function generateQuestionsWithChatCompletions(
       signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (error) {
-    const message =
+    const detail =
+      error instanceof Error && error.message.trim()
+        ? error.message
+        : null;
+    const prefix =
       error instanceof Error && error.name === 'TimeoutError'
         ? 'AI 调用超时'
         : 'AI 调用网络失败';
-    return { ok: false, message };
+    return { ok: false, message: withDetail(prefix, detail) };
   }
+
+  let rawBody = '';
+  try {
+    rawBody = await response.text();
+  } catch {
+    rawBody = '';
+  }
+
   if (!response.ok) {
     return {
       ok: false,
-      message: `AI 调用失败 HTTP ${response.status}`,
+      message: withDetail(
+        `AI 调用失败 HTTP ${response.status}`,
+        summarizeApiErrorBody(rawBody),
+      ),
     };
   }
+
   let payload: unknown;
   try {
-    payload = await response.json();
+    payload = JSON.parse(rawBody) as unknown;
   } catch {
-    return { ok: false, message: 'AI 响应不是 JSON' };
+    return {
+      ok: false,
+      message: withDetail('AI 响应不是 JSON', summarizeApiErrorBody(rawBody)),
+    };
   }
   if (!isRecord(payload) || !Array.isArray(payload.choices)) {
-    return { ok: false, message: 'AI 响应缺少 choices' };
+    return {
+      ok: false,
+      message: withDetail('AI 响应缺少 choices', summarizeUnknown(payload)),
+    };
   }
   const first = payload.choices[0];
   if (!isRecord(first) || !isRecord(first.message)) {
-    return { ok: false, message: 'AI 响应缺少 message' };
+    return {
+      ok: false,
+      message: withDetail('AI 响应缺少 message', summarizeUnknown(payload)),
+    };
   }
   const content = first.message.content;
   if (typeof content !== 'string' || !content.trim()) {
-    return { ok: false, message: 'AI 响应内容为空' };
+    return {
+      ok: false,
+      message: withDetail(
+        'AI 响应内容为空',
+        typeof content === 'string'
+          ? JSON.stringify(content)
+          : summarizeUnknown(content),
+      ),
+    };
   }
   return parseGeneratedQuestionsJson(
     content,

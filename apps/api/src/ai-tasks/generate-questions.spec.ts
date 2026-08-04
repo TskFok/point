@@ -4,8 +4,27 @@ import {
   isDenseWordProgression,
   parseGeneratedQuestionsJson,
   shuffleQuestionOptions,
+  summarizeApiErrorBody,
+  truncateErrorDetail,
   validateOneGeneratedQuestion,
 } from './generate-questions';
+
+describe('error detail helpers', () => {
+  it('truncateErrorDetail 超过上限时截断并加省略号', () => {
+    const long = 'a'.repeat(520);
+    const result = truncateErrorDetail(long, 500);
+    expect(result.length).toBe(501);
+    expect(result.endsWith('…')).toBe(true);
+  });
+
+  it('summarizeApiErrorBody 优先取 error.message', () => {
+    expect(
+      summarizeApiErrorBody(
+        JSON.stringify({ error: { message: 'rate limited' } }),
+      ),
+    ).toBe('rate limited');
+  });
+});
 
 describe('isDenseWordProgression', () => {
   it('同首字母且第2字母距离≤2 通过', () => {
@@ -291,25 +310,26 @@ describe('generateQuestionsWithChatCompletions', () => {
   it('mock fetch 成功返回题目', async () => {
     const fetchImpl = jest.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({
-        choices: [
-          {
-            message: {
-              content: JSON.stringify([
-                {
-                  word: 'abandon',
-                  stem: 'They decided to abandon the plan. What does "abandon" mean?',
-                  explanation: '放弃',
-                  options: [
-                    { label: 'A', content: '放弃', isCorrect: true },
-                    { label: 'B', content: '获得', isCorrect: false },
-                  ],
-                },
-              ]),
+      text: async () =>
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify([
+                  {
+                    word: 'abandon',
+                    stem: 'They decided to abandon the plan. What does "abandon" mean?',
+                    explanation: '放弃',
+                    options: [
+                      { label: 'A', content: '放弃', isCorrect: true },
+                      { label: 'B', content: '获得', isCorrect: false },
+                    ],
+                  },
+                ]),
+              },
             },
-          },
-        ],
-      }),
+          ],
+        }),
     });
     const result = await generateQuestionsWithChatCompletions({
       baseUrl: 'https://api.example.com/v1/',
@@ -332,11 +352,12 @@ describe('generateQuestionsWithChatCompletions', () => {
     );
   });
 
-  it('HTTP 非 2xx 返回失败', async () => {
+  it('HTTP 非 2xx 返回失败并附带 API error.message', async () => {
     const fetchImpl = jest.fn().mockResolvedValue({
       ok: false,
       status: 401,
-      json: async () => ({}),
+      text: async () =>
+        JSON.stringify({ error: { message: 'Invalid API key' } }),
     });
     const result = await generateQuestionsWithChatCompletions({
       baseUrl: 'https://api.example.com/v1',
@@ -349,7 +370,151 @@ describe('generateQuestionsWithChatCompletions', () => {
     });
     expect(result).toEqual({
       ok: false,
-      message: 'AI 调用失败 HTTP 401',
+      message: 'AI 调用失败 HTTP 401：Invalid API key',
     });
+  });
+
+  it('HTTP 非 2xx 无结构化 message 时附带原始 body 摘要', async () => {
+    const fetchImpl = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      text: async () => 'service unavailable',
+    });
+    const result = await generateQuestionsWithChatCompletions({
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'test-key',
+      modelName: 'gpt-test',
+      lastWord: null,
+      questionCount: 1,
+      optionCount: 2,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(result).toEqual({
+      ok: false,
+      message: 'AI 调用失败 HTTP 503：service unavailable',
+    });
+  });
+
+  it('超时时附带底层 Error.message', async () => {
+    const timeoutError = new Error('The operation was aborted due to timeout');
+    timeoutError.name = 'TimeoutError';
+    const fetchImpl = jest.fn().mockRejectedValue(timeoutError);
+    const result = await generateQuestionsWithChatCompletions({
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'test-key',
+      modelName: 'gpt-test',
+      lastWord: null,
+      questionCount: 1,
+      optionCount: 2,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(result).toEqual({
+      ok: false,
+      message:
+        'AI 调用超时：The operation was aborted due to timeout',
+    });
+  });
+
+  it('网络失败时附带底层 Error.message', async () => {
+    const fetchImpl = jest
+      .fn()
+      .mockRejectedValue(new Error('fetch failed'));
+    const result = await generateQuestionsWithChatCompletions({
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'test-key',
+      modelName: 'gpt-test',
+      lastWord: null,
+      questionCount: 1,
+      optionCount: 2,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(result).toEqual({
+      ok: false,
+      message: 'AI 调用网络失败：fetch failed',
+    });
+  });
+
+  it('响应非 JSON 时附带原始文本摘要', async () => {
+    const fetchImpl = jest.fn().mockResolvedValue({
+      ok: true,
+      text: async () => '<html>bad gateway</html>',
+    });
+    const result = await generateQuestionsWithChatCompletions({
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'test-key',
+      modelName: 'gpt-test',
+      lastWord: null,
+      questionCount: 1,
+      optionCount: 2,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(result).toEqual({
+      ok: false,
+      message: 'AI 响应不是 JSON：<html>bad gateway</html>',
+    });
+  });
+
+  it('响应缺少 choices 时附带 payload 摘要', async () => {
+    const fetchImpl = jest.fn().mockResolvedValue({
+      ok: true,
+      text: async () => JSON.stringify({ error: 'no choices' }),
+    });
+    const result = await generateQuestionsWithChatCompletions({
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'test-key',
+      modelName: 'gpt-test',
+      lastWord: null,
+      questionCount: 1,
+      optionCount: 2,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).toContain('AI 响应缺少 choices');
+      expect(result.message).toContain('no choices');
+    }
+  });
+
+  it('响应内容为空时附带摘要', async () => {
+    const fetchImpl = jest.fn().mockResolvedValue({
+      ok: true,
+      text: async () =>
+        JSON.stringify({ choices: [{ message: { content: '   ' } }] }),
+    });
+    const result = await generateQuestionsWithChatCompletions({
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'test-key',
+      modelName: 'gpt-test',
+      lastWord: null,
+      questionCount: 1,
+      optionCount: 2,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(result).toEqual({
+      ok: false,
+      message: 'AI 响应内容为空："   "',
+    });
+  });
+
+  it('失败信息不包含 apiKey', async () => {
+    const fetchImpl = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      text: async () =>
+        JSON.stringify({ error: { message: 'unauthorized' } }),
+    });
+    const result = await generateQuestionsWithChatCompletions({
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'sk-secret-should-not-leak',
+      modelName: 'gpt-test',
+      lastWord: null,
+      questionCount: 1,
+      optionCount: 2,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).not.toContain('sk-secret-should-not-leak');
+    }
   });
 });
