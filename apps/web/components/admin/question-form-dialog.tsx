@@ -80,7 +80,7 @@ export function QuestionFormDialog({
     <FormDialog
       description="维护题干、答案、解析和基础积分。"
       onClose={onClose}
-      pending={formPending || loading}
+      pending={formPending}
       title={title}
     >
       {loading ? (

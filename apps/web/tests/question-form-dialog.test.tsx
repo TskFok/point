@@ -1,4 +1,5 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 import { QuestionFormDialog } from "@/components/admin/question-form-dialog";
 
@@ -149,5 +150,37 @@ describe("QuestionFormDialog", () => {
       question1Request.resolve(question);
     });
     expect(screen.getByLabelText("题干")).toHaveValue(question2.stem);
+  });
+
+  it("编辑模式加载中仍可关闭弹窗", async () => {
+    const request = deferred<typeof question>();
+    const onClose = jest.fn();
+    const getAdminQuestion = jest.fn().mockReturnValue(request.promise);
+    render(
+      <QuestionFormDialog
+        api={{
+          createAdminQuestion: jest.fn(),
+          getAdminQuestion,
+          updateAdminQuestion: jest.fn(),
+        }}
+        mode="edit"
+        onClose={onClose}
+        onSaved={jest.fn()}
+        questionId="question-1"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(getAdminQuestion).toHaveBeenCalledWith("question-1");
+    });
+    expect(await screen.findByText(/正在加载题目/)).toBeVisible();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "关闭" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    onClose.mockClear();
+    await user.keyboard("{Escape}");
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
