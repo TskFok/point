@@ -1,5 +1,7 @@
 # AI 任务：entry 词库取词与按词性出题
 
+> **已部分取代（2026-08-04）**：游标改为 `entry.id` 升序、去掉 word 形态限制与按 word 聚合；见 `2026-08-04-ai-task-entry-id-cursor-design.md`。按词性出题的 prompt 约定仍有效。
+
 ## 背景
 
 数据库新增英文词库数据表（`raw_entry` / `entry` / `sense` / `word_form` / `pronunciation`，由外部导入流程建表与灌数据）。此前 AI 任务由模型自行沿 `lastWord` 游标「密推进」选词，词是否真实、覆盖是否完整均不可控。
