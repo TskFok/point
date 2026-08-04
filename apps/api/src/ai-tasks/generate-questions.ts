@@ -81,7 +81,9 @@ export function buildGeneratePrompt(input: {
     `Each question must have exactly ${input.optionCount} options.`,
     'Stem must be a complete English example sentence that MUST INCLUDE the target word itself (case-insensitive word boundary).',
     'Do NOT use blanks, underscores (___), ellipsis placeholders, or [blank] in the stem.',
-    'End the stem by naming the word to test, e.g. What does "abhor" mean?',
+    'End the stem by naming the word to test, e.g. What does \\"abhor\\" mean?',
+    'In JSON string values, every double quote MUST be escaped as \\". Never write raw " inside a string (invalid JSON).',
+    'Example stem JSON fragment: "stem":"What does \\"abhor\\" mean?"',
     'Option contents must be Chinese meanings.',
     'Explanation must be Chinese and MUST include: (1) a full Chinese translation of the entire stem sentence, and (2) a brief meaning note for the target word.',
     'Example explanation: 他们决定放弃这个计划。「abandon」表示放弃、抛弃。',
@@ -356,7 +358,7 @@ export async function generateQuestionsWithChatCompletions(
           {
             role: 'system',
             content:
-              'You generate English vocabulary multiple-choice questions. Reply with JSON array only. No markdown.',
+              'You generate English vocabulary multiple-choice questions. Reply with JSON array only. No markdown. Escape every double quote inside JSON string values as \\".',
           },
           { role: 'user', content: prompt },
         ],

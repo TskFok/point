@@ -214,6 +214,17 @@ describe('generate-questions parse', () => {
     expect(p).toMatch(/放弃|abandon|词义|meaning/i);
   });
 
+  it('prompt 要求 JSON 字符串内双引号必须转义', () => {
+    const p = buildGeneratePrompt({
+      lastWord: null,
+      questionCount: 1,
+      optionCount: 4,
+    });
+    expect(p).toMatch(/escape/i);
+    expect(p).toContain('What does \\"abhor\\" mean?');
+    expect(p).toContain('\\"');
+  });
+
   it('拒绝 stem 含挖空占位', () => {
     const result = validateOneGeneratedQuestion(
       {
@@ -371,6 +382,48 @@ describe('generateQuestionsWithChatCompletions', () => {
         }),
       }),
     );
+  });
+
+  it('system prompt 要求 JSON 字符串内双引号必须转义', async () => {
+    const fetchImpl = jest.fn().mockResolvedValue({
+      ok: true,
+      text: async () =>
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify([
+                  {
+                    word: 'abandon',
+                    stem: 'They decided to abandon the plan. What does "abandon" mean?',
+                    explanation: '放弃',
+                    options: [
+                      { label: 'A', content: '放弃', isCorrect: true },
+                      { label: 'B', content: '获得', isCorrect: false },
+                    ],
+                  },
+                ]),
+              },
+            },
+          ],
+        }),
+    });
+    await generateQuestionsWithChatCompletions({
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'test-key',
+      modelName: 'gpt-test',
+      lastWord: null,
+      questionCount: 1,
+      optionCount: 2,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    const init = fetchImpl.mock.calls[0]?.[1] as { body: string };
+    const body = JSON.parse(init.body) as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    const system = body.messages.find((m) => m.role === 'system')?.content ?? '';
+    expect(system).toMatch(/escape/i);
+    expect(system).toContain('\\"');
   });
 
   it('HTTP 非 2xx 返回失败并附带 API error.message', async () => {
