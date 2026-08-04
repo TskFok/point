@@ -57,12 +57,18 @@ function createService(options?: {
   }) => Promise<unknown>;
   existingRuns?: Record<string, unknown>[];
   questionCreates?: unknown[];
+  /** 模拟 entry 表取词结果（$queryRaw 返回行） */
+  entryWords?: Array<{ word: string; pos_list: string[] }>;
 }) {
   const model = options?.model === undefined ? makeModel() : options.model;
   const task = options?.task === undefined ? makeTask() : options.task;
   const taskState = task ? { ...task } : null;
   const runs: Record<string, unknown>[] = [...(options?.existingRuns ?? [])];
   const questionCreates = options?.questionCreates ?? [];
+  const entryWords = options?.entryWords ?? [
+    { word: 'abandon', pos_list: ['verb'] },
+    { word: 'ability', pos_list: ['noun'] },
+  ];
 
   const prisma = {
     aiModelConfig: {
@@ -277,6 +283,7 @@ function createService(options?: {
         return Promise.resolve({ id: `q-${questionCreates.length}` });
       },
     },
+    $queryRaw: () => Promise.resolve(entryWords),
     $transaction: async (ops: unknown) => {
       if (Array.isArray(ops)) {
         return Promise.all(ops);
@@ -292,7 +299,6 @@ function createService(options?: {
     service: new AiTasksService(prisma as never),
     taskState,
     questionCreates,
-    runs,
     runs,
   };
 }
@@ -428,42 +434,139 @@ describe('AiTasksService runTask', () => {
     expect(taskState?.lastWord).toBe('cat');
   });
 
-  it('密度跨度过大时 FAILED 且游标不变', async () => {
+  it('generate 收到来自 entry 表的词表与词性', async () => {
+    const { service } = createService({
+      entryWords: [
+        { word: 'affect', pos_list: ['verb', 'noun'] },
+        { word: 'afford', pos_list: ['verb'] },
+      ],
+    });
+    const generate = jest.fn().mockResolvedValue({
+      ok: false,
+      message: 'stop here',
+    });
+    await service.runTask('task-1', {
+      trigger: 'MANUAL',
+      actorUserId: 'admin-1',
+      generate,
+    });
+    expect(generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        words: [
+          { word: 'affect', pos: ['verb', 'noun'] },
+          { word: 'afford', pos: ['verb'] },
+        ],
+        optionCount: 2,
+      }),
+    );
+  });
+
+  it('词库无更多单词时 FAILED 且游标不变', async () => {
     const { service, taskState, questionCreates } = createService({
-      task: makeTask({ lastWord: 'advocate' }),
+      task: makeTask({ lastWord: 'zyzzyva' }),
+      entryWords: [],
     });
     const result = await service.runTask('task-1', {
       trigger: 'MANUAL',
       actorUserId: 'admin-1',
-      generate: async () => ({
-        ok: true,
-        questions: [
-          {
-            word: 'affect',
-            stem: 'The news will affect the market soon. What does "affect" mean?',
-            explanation: '这条新闻很快会影响市场。「affect」表示影响。',
-            options: [
-              { label: 'A', content: '影响', isCorrect: true },
-              { label: 'B', content: '忽略', isCorrect: false },
-            ],
-          },
-          {
-            word: 'kindle',
-            stem: 'Please kindle the fire carefully. What does "kindle" mean?',
-            explanation: '点燃火。「kindle」表示点燃。',
-            options: [
-              { label: 'A', content: '点燃', isCorrect: true },
-              { label: 'B', content: '熄灭', isCorrect: false },
-            ],
-          },
-        ],
-      }),
+      generate: () => Promise.resolve({ ok: true, questions: sampleQuestions }),
     });
     expect(result.status).toBe('FAILED');
-    expect(result.errorMessage).toMatch(/跨度过大|密推进/);
+    expect(result.errorMessage).toMatch(/词库/);
+    expect(taskState?.lastWord).toBe('zyzzyva');
+    expect(questionCreates).toHaveLength(0);
+  });
+
+  it('词表外单词被跳过并计入错误摘要', async () => {
+    const { service, taskState, questionCreates } = createService();
+    const result = await service.runTask('task-1', {
+      trigger: 'MANUAL',
+      actorUserId: 'admin-1',
+      generate: () =>
+        Promise.resolve({
+          ok: true as const,
+          questions: [
+            sampleQuestions[0],
+            {
+              word: 'kindle',
+              stem: 'Please kindle the fire carefully. What does "kindle" mean?',
+              explanation: '请小心点火。「kindle」是动词，表示点燃。',
+              options: [
+                { label: 'A', content: '点燃', isCorrect: true },
+                { label: 'B', content: '熄灭', isCorrect: false },
+              ],
+            },
+          ],
+        }),
+    });
+    expect(result.status).toBe('SUCCESS');
+    expect(result.questionsCreated).toBe(1);
+    expect(result.errorMessage).toMatch(/跳过.*不在本批词表/);
+    expect(taskState?.lastWord).toBe('abandon');
+    expect(questionCreates).toHaveLength(1);
+  });
+
+  it('同批重复单词只接受第一题', async () => {
+    const { service, questionCreates } = createService();
+    const result = await service.runTask('task-1', {
+      trigger: 'MANUAL',
+      actorUserId: 'admin-1',
+      generate: () =>
+        Promise.resolve({
+          ok: true as const,
+          questions: [sampleQuestions[0], sampleQuestions[0]],
+        }),
+    });
+    expect(result.status).toBe('SUCCESS');
+    expect(result.questionsCreated).toBe(1);
+    expect(questionCreates).toHaveLength(1);
+  });
+
+  it('全部单词不在词表时 FAILED 且游标不变', async () => {
+    const { service, taskState, questionCreates } = createService({
+      task: makeTask({ lastWord: 'advocate' }),
+      entryWords: [{ word: 'affect', pos_list: ['verb'] }],
+    });
+    const result = await service.runTask('task-1', {
+      trigger: 'MANUAL',
+      actorUserId: 'admin-1',
+      generate: () =>
+        Promise.resolve({
+          ok: true as const,
+          questions: [
+            {
+              word: 'kindle',
+              stem: 'Please kindle the fire carefully. What does "kindle" mean?',
+              explanation: '请小心点火。「kindle」是动词，表示点燃。',
+              options: [
+                { label: 'A', content: '点燃', isCorrect: true },
+                { label: 'B', content: '熄灭', isCorrect: false },
+              ],
+            },
+          ],
+        }),
+    });
+    expect(result.status).toBe('FAILED');
+    expect(result.errorMessage).toMatch(/不在本批词表/);
     expect(result.questionsCreated).toBe(0);
     expect(taskState?.lastWord).toBe('advocate');
     expect(questionCreates).toHaveLength(0);
+  });
+
+  it('游标推进到本轮已接受的最大 word（与返回顺序无关）', async () => {
+    const { service, taskState } = createService();
+    const result = await service.runTask('task-1', {
+      trigger: 'MANUAL',
+      actorUserId: 'admin-1',
+      generate: () =>
+        Promise.resolve({
+          ok: true as const,
+          questions: [sampleQuestions[1], sampleQuestions[0]],
+        }),
+    });
+    expect(result.status).toBe('SUCCESS');
+    expect(result.lastWordAfter).toBe('ability');
+    expect(taskState?.lastWord).toBe('ability');
   });
 
   it('模型停用时 FAILED', async () => {

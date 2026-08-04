@@ -1,14 +1,16 @@
 import {
   buildGeneratePrompt,
   generateQuestionsWithChatCompletions,
-  isDenseWordProgression,
   parseGeneratedQuestionsJson,
   shuffleQuestionOptions,
   summarizeApiErrorBody,
   summarizeNonJsonResponse,
   truncateErrorDetail,
   validateOneGeneratedQuestion,
+  type DictionaryWord,
 } from './generate-questions';
+
+const abandonWords: DictionaryWord[] = [{ word: 'abandon', pos: ['verb'] }];
 
 describe('error detail helpers', () => {
   it('truncateErrorDetail 超过上限时截断并加省略号', () => {
@@ -47,35 +49,6 @@ describe('error detail helpers', () => {
   });
 });
 
-describe('isDenseWordProgression', () => {
-  it('同首字母且第2字母距离≤2 通过', () => {
-    expect(isDenseWordProgression('advocate', 'adze')).toBe(true);
-    expect(isDenseWordProgression('advocate', 'affect')).toBe(true);
-  });
-
-  it('同首字母第2字母距离过大拒绝', () => {
-    expect(isDenseWordProgression('advocate', 'airport')).toBe(false);
-  });
-
-  it('跨多个首字母拒绝', () => {
-    expect(isDenseWordProgression('advocate', 'kindle')).toBe(false);
-  });
-
-  it('换至下一字母且第2字母为 a–c 通过', () => {
-    expect(isDenseWordProgression('azure', 'baby')).toBe(true);
-  });
-
-  it('换字母但非下一字母或第2字母不在 a–c 拒绝', () => {
-    expect(isDenseWordProgression('azure', 'kindle')).toBe(false);
-    expect(isDenseWordProgression('azure', 'brown')).toBe(false);
-  });
-
-  it('非纯字母或过短拒绝', () => {
-    expect(isDenseWordProgression('a', 'ab')).toBe(false);
-    expect(isDenseWordProgression('well-known', 'wellness')).toBe(false);
-  });
-});
-
 describe('generate-questions parse', () => {
   const sample = JSON.stringify([
     {
@@ -90,14 +63,14 @@ describe('generate-questions parse', () => {
   ]);
 
   it('解析合法 JSON', () => {
-    const result = parseGeneratedQuestionsJson(sample, 2, null);
+    const result = parseGeneratedQuestionsJson(sample, 2, abandonWords);
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.questions[0]?.word).toBe('abandon');
   });
 
   it('非 JSON 数组时附带返回内容', () => {
     const raw = '{"error":"I cannot generate questions"}';
-    const result = parseGeneratedQuestionsJson(raw, 2, null);
+    const result = parseGeneratedQuestionsJson(raw, 2, abandonWords);
     expect(result).toEqual({
       ok: false,
       message: `AI 返回不是 JSON 数组：${raw}`,
@@ -106,7 +79,7 @@ describe('generate-questions parse', () => {
 
   it('无法提取数组时附带返回内容并截断过长文本', () => {
     const raw = `Sorry, here is prose. ${'x'.repeat(520)}`;
-    const result = parseGeneratedQuestionsJson(raw, 2, null);
+    const result = parseGeneratedQuestionsJson(raw, 2, abandonWords);
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.message.startsWith('AI 返回不是 JSON 数组：')).toBe(true);
@@ -116,35 +89,71 @@ describe('generate-questions parse', () => {
     }
   });
 
-  it('拒绝 word 未大于 lastWord', () => {
-    const result = parseGeneratedQuestionsJson(sample, 2, 'zebra');
+  it('拒绝词表之外的 word', () => {
+    const result = parseGeneratedQuestionsJson(sample, 2, [
+      { word: 'zebra', pos: ['noun'] },
+    ]);
     expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toMatch(/不在本批词表/);
   });
 
-  it('prompt 包含游标与数量', () => {
+  it('拒绝同批重复的 word', () => {
+    const item = {
+      word: 'abandon',
+      stem: 'They decided to abandon the plan. What does "abandon" mean?',
+      explanation: '放弃',
+      options: [
+        { label: 'A', content: '放弃', isCorrect: true },
+        { label: 'B', content: '获得', isCorrect: false },
+      ],
+    };
+    const result = parseGeneratedQuestionsJson(
+      JSON.stringify([item, item]),
+      2,
+      abandonWords,
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toMatch(/不在本批词表|已出过/);
+  });
+
+  it('prompt 包含词表、词性与数量', () => {
     const p = buildGeneratePrompt({
-      lastWord: 'cat',
-      questionCount: 3,
+      words: [
+        { word: 'cat', pos: ['noun'] },
+        { word: 'catch', pos: ['verb', 'noun'] },
+        { word: 'cater', pos: ['verb'] },
+      ],
       optionCount: 4,
     });
-    expect(p).toMatch(/cat/);
-    expect(p).toMatch(/3/);
-    expect(p).toMatch(/4/);
+    expect(p).toMatch(/"cat" \(noun\)/);
+    expect(p).toMatch(/"catch" \(verb\/noun\)/);
+    expect(p).toMatch(/"cater" \(verb\)/);
+    expect(p).toMatch(/exactly 3/);
+    expect(p).toMatch(/4 options/);
   });
 
-  it('prompt 强调 word 须严格大于游标且不得相等', () => {
+  it('prompt 要求仅使用给定词表且不得增删重复', () => {
     const p = buildGeneratePrompt({
-      lastWord: 'annual',
-      questionCount: 2,
+      words: abandonWords,
       optionCount: 4,
     });
     const lower = p.toLowerCase();
-    expect(lower).toMatch(/strictly after/);
-    expect(lower).toMatch(/never equal|must not (?:be )?equal|not equal/);
-    expect(p).toMatch(/annual/);
+    expect(lower).toMatch(/only the words/);
+    expect(lower).toMatch(/never invent|never replace|never skip/);
   });
 
-  it('validateOneGeneratedQuestion 接受递增 word', () => {
+  it('prompt 要求按给定词性出题且解析说明词性', () => {
+    const p = buildGeneratePrompt({
+      words: abandonWords,
+      optionCount: 4,
+    });
+    const lower = p.toLowerCase();
+    expect(lower).toMatch(/part of speech/);
+    expect(p).toMatch(/名词|动词|形容词/);
+    expect(p).toMatch(/是动词/);
+  });
+
+  it('validateOneGeneratedQuestion 接受词表内 word', () => {
     const result = validateOneGeneratedQuestion(
       {
         word: 'able',
@@ -156,78 +165,32 @@ describe('generate-questions parse', () => {
         ],
       },
       2,
-      'abandon',
+      new Set(['able', 'abandon']),
     );
     expect(result.ok).toBe(true);
   });
 
-  it('validate 拒绝跨度过大的 word', () => {
+  it('validate 拒绝词表外 word', () => {
     const result = validateOneGeneratedQuestion(
       {
         word: 'kindle',
         stem: 'Please kindle the fire carefully. What does "kindle" mean?',
-        explanation: '他们小心地点燃了火。「kindle」表示点燃、激起。',
+        explanation: '他们小心地点燃了火。「kindle」是动词，表示点燃、激起。',
         options: [
           { label: 'A', content: '点燃', isCorrect: true },
           { label: 'B', content: '熄灭', isCorrect: false },
         ],
       },
       2,
-      'advocate',
+      new Set(['advocate', 'affect']),
     );
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.message).toMatch(/跨度过大|密推进/);
-  });
-
-  it('validate 接受密推进 word', () => {
-    const result = validateOneGeneratedQuestion(
-      {
-        word: 'affect',
-        stem: 'The news will affect the market soon. What does "affect" mean?',
-        explanation: '这条新闻很快会影响市场。「affect」表示影响。',
-        options: [
-          { label: 'A', content: '影响', isCorrect: true },
-          { label: 'B', content: '忽略', isCorrect: false },
-        ],
-      },
-      2,
-      'advocate',
-    );
-    expect(result.ok).toBe(true);
-  });
-
-  it('prompt 要求密推进与跨度约束', () => {
-    const p = buildGeneratePrompt({
-      lastWord: 'advocate',
-      questionCount: 3,
-      optionCount: 4,
-    });
-    const lower = p.toLowerCase();
-    expect(lower).toMatch(/dense|close|adjacent|紧|密/);
-    expect(lower).toMatch(/second letter|第.?2/);
-    expect(p).toMatch(/kindle|跨|jump/i);
-  });
-
-  it('parse 遇跨度过大整批失败', () => {
-    const raw = JSON.stringify([
-      {
-        word: 'kindle',
-        stem: 'Please kindle the fire carefully. What does "kindle" mean?',
-        explanation: '点燃火。「kindle」表示点燃。',
-        options: [
-          { label: 'A', content: '点燃', isCorrect: true },
-          { label: 'B', content: '熄灭', isCorrect: false },
-        ],
-      },
-    ]);
-    const result = parseGeneratedQuestionsJson(raw, 2, 'advocate');
-    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toMatch(/不在本批词表/);
   });
 
   it('prompt 要求完整例句包含 word 且禁止挖空', () => {
     const p = buildGeneratePrompt({
-      lastWord: null,
-      questionCount: 1,
+      words: abandonWords,
       optionCount: 4,
     });
     expect(p.toLowerCase()).toMatch(/must include/);
@@ -237,8 +200,7 @@ describe('generate-questions parse', () => {
 
   it('prompt 要求 explanation 含整句译文与词义说明', () => {
     const p = buildGeneratePrompt({
-      lastWord: null,
-      questionCount: 1,
+      words: abandonWords,
       optionCount: 4,
     });
     const lower = p.toLowerCase();
@@ -249,8 +211,7 @@ describe('generate-questions parse', () => {
 
   it('prompt 要求 JSON 字符串内双引号必须转义', () => {
     const p = buildGeneratePrompt({
-      lastWord: null,
-      questionCount: 1,
+      words: abandonWords,
       optionCount: 4,
     });
     expect(p).toMatch(/escape/i);
@@ -352,7 +313,7 @@ describe('shuffleQuestionOptions', () => {
     const result = parseGeneratedQuestionsJson(
       raw,
       4,
-      null,
+      abandonWords,
       () => values[i++] ?? 0,
     );
     expect(result.ok).toBe(true);
@@ -400,8 +361,7 @@ describe('generateQuestionsWithChatCompletions', () => {
       baseUrl: 'https://api.example.com/v1/',
       apiKey: 'test-key',
       modelName: 'gpt-test',
-      lastWord: null,
-      questionCount: 1,
+      words: abandonWords,
       optionCount: 2,
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
@@ -448,8 +408,7 @@ describe('generateQuestionsWithChatCompletions', () => {
       baseUrl: 'https://api.example.com/v1',
       apiKey: 'test-key',
       modelName: 'gpt-test',
-      lastWord: null,
-      questionCount: 1,
+      words: abandonWords,
       optionCount: 2,
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
@@ -473,8 +432,7 @@ describe('generateQuestionsWithChatCompletions', () => {
       baseUrl: 'https://api.example.com/v1',
       apiKey: 'test-key',
       modelName: 'gpt-test',
-      lastWord: null,
-      questionCount: 1,
+      words: abandonWords,
       optionCount: 2,
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
@@ -496,8 +454,7 @@ describe('generateQuestionsWithChatCompletions', () => {
       baseUrl: 'https://api.example.com/v1',
       apiKey: 'test-key',
       modelName: 'gpt-test',
-      lastWord: null,
-      questionCount: 1,
+      words: abandonWords,
       optionCount: 2,
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
@@ -516,8 +473,7 @@ describe('generateQuestionsWithChatCompletions', () => {
       baseUrl: 'https://api.example.com/v1',
       apiKey: 'test-key',
       modelName: 'gpt-test',
-      lastWord: null,
-      questionCount: 1,
+      words: abandonWords,
       optionCount: 2,
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
@@ -537,8 +493,7 @@ describe('generateQuestionsWithChatCompletions', () => {
       baseUrl: 'https://api.example.com/v1',
       apiKey: 'test-key',
       modelName: 'gpt-test',
-      lastWord: null,
-      questionCount: 1,
+      words: abandonWords,
       optionCount: 2,
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
@@ -560,8 +515,7 @@ describe('generateQuestionsWithChatCompletions', () => {
       baseUrl: 'https://api.example.com/v1',
       apiKey: 'test-key',
       modelName: 'gpt-test',
-      lastWord: null,
-      questionCount: 1,
+      words: abandonWords,
       optionCount: 2,
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
@@ -586,8 +540,7 @@ describe('generateQuestionsWithChatCompletions', () => {
       baseUrl: 'https://api.example.com/v1',
       apiKey: 'test-key',
       modelName: 'gpt-test',
-      lastWord: null,
-      questionCount: 1,
+      words: abandonWords,
       optionCount: 2,
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
@@ -610,8 +563,7 @@ describe('generateQuestionsWithChatCompletions', () => {
       baseUrl: 'https://api.example.com/v1',
       apiKey: 'test-key',
       modelName: 'gpt-test',
-      lastWord: null,
-      questionCount: 1,
+      words: abandonWords,
       optionCount: 2,
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
@@ -635,8 +587,7 @@ describe('generateQuestionsWithChatCompletions', () => {
       baseUrl: 'https://api.example.com/v1',
       apiKey: 'test-key',
       modelName: 'gpt-test',
-      lastWord: null,
-      questionCount: 1,
+      words: abandonWords,
       optionCount: 2,
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
@@ -658,8 +609,7 @@ describe('generateQuestionsWithChatCompletions', () => {
       baseUrl: 'https://api.example.com/v1',
       apiKey: 'sk-secret-should-not-leak',
       modelName: 'gpt-test',
-      lastWord: null,
-      questionCount: 1,
+      words: abandonWords,
       optionCount: 2,
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });

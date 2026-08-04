@@ -26,6 +26,7 @@ import { type UpdateAiTaskDto } from './dto/update-ai-task.dto';
 import {
   generateQuestionsWithChatCompletions,
   validateOneGeneratedQuestion,
+  type DictionaryWord,
   type GenerateQuestionsResult,
   type GeneratedQuestion,
 } from './generate-questions';
@@ -597,14 +598,23 @@ export class AiTasksService implements OnModuleInit {
         });
       }
 
+      const words = await this.listNextEntryWords(
+        task.lastWord,
+        task.questionCount,
+      );
+      if (words.length === 0) {
+        return await finish('FAILED', {
+          errorMessage: '词库中没有更多可出题的单词（entry 表游标已到末尾）',
+        });
+      }
+
       const generate =
         options.generate ?? generateQuestionsWithChatCompletions;
       const generated = await generate({
         baseUrl: task.aiModelConfig.baseUrl,
         apiKey,
         modelName: task.aiModelConfig.name,
-        lastWord: task.lastWord,
-        questionCount: task.questionCount,
+        words,
         optionCount: task.optionCount,
       });
 
@@ -636,24 +646,20 @@ export class AiTasksService implements OnModuleInit {
 
       const accepted: GeneratedQuestion[] = [];
       const skipMessages: string[] = [];
-      let minWordExclusive = task.lastWord?.trim().toLowerCase() || null;
+      // 词表内且未被本批用过的 word 才接受；接受后从集合移除以拒绝重复
+      const remainingWords = new Set(words.map((item) => item.word));
       for (const item of generated.questions) {
         const validated = validateOneGeneratedQuestion(
           item,
           task.optionCount,
-          minWordExclusive,
+          remainingWords,
         );
         if (!validated.ok) {
-          if (/跨度过大|密推进/.test(validated.message)) {
-            return await finishAfterGenerate('FAILED', {
-              errorMessage: validated.message,
-            });
-          }
           skipMessages.push(validated.message);
           continue;
         }
+        remainingWords.delete(validated.question.word);
         accepted.push(validated.question);
-        minWordExclusive = validated.question.word;
       }
 
       if (accepted.length === 0) {
@@ -691,7 +697,12 @@ export class AiTasksService implements OnModuleInit {
         });
       }
 
-      const lastWordAfter = accepted[accepted.length - 1]!.word;
+      // 游标推进到本轮已接受的最大 word（词来自 entry 表且均 > 原游标），
+      // 下轮从游标之后取词，保证不重复出题
+      const lastWordAfter = accepted.reduce(
+        (max, question) => (question.word > max ? question.word : max),
+        accepted[0]!.word,
+      );
       return await finishAfterGenerate('SUCCESS', {
         questionsCreated: accepted.length,
         lastWordAfter,
@@ -734,6 +745,32 @@ export class AiTasksService implements OnModuleInit {
         });
       }
     }
+  }
+
+  /**
+   * 从英文词库 entry 表取游标之后的下一批单词（按字母序、去重、聚合词性）。
+   * 游标（word > lastWord）保证跨轮不重复出题；COLLATE "C" 使排序与
+   * JS 字符串比较一致（词已限定为纯小写字母）。
+   */
+  async listNextEntryWords(
+    lastWord: string | null,
+    count: number,
+  ): Promise<DictionaryWord[]> {
+    const cursor = lastWord?.trim().toLowerCase() || null;
+    const rows = await this.prisma.$queryRaw<
+      Array<{ word: string; pos_list: string[] }>
+    >`
+      SELECT e.word, ARRAY_AGG(DISTINCT e.pos) AS pos_list
+      FROM entry e
+      WHERE e.lang_code = 'en'
+        AND e.pos IS NOT NULL
+        AND e.word ~ '^[a-z]{2,}$'
+        AND (${cursor}::text IS NULL OR e.word COLLATE "C" > ${cursor})
+      GROUP BY e.word
+      ORDER BY e.word COLLATE "C"
+      LIMIT ${count}
+    `;
+    return rows.map((row) => ({ word: row.word, pos: row.pos_list }));
   }
 
   private async requireTask(id: string): Promise<AiTask> {

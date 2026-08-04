@@ -11,12 +11,17 @@ export type GeneratedQuestion = {
   options: GeneratedQuestionOption[];
 };
 
+/** 来自英文词库 entry 表的待出题单词（pos 为该词全部去重词性） */
+export type DictionaryWord = {
+  word: string;
+  pos: string[];
+};
+
 export type GenerateQuestionsInput = {
   baseUrl: string;
   apiKey: string;
   modelName: string;
-  lastWord: string | null;
-  questionCount: number;
+  words: DictionaryWord[];
   optionCount: number;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
@@ -28,66 +33,36 @@ export type GenerateQuestionsResult =
 
 const DEFAULT_TIMEOUT_MS = 60_000;
 
-export const MAX_SECOND_LETTER_DELTA = 2;
-
 const WORD_PATTERN = /^[a-z]+$/;
-const NEXT_LETTER_SECOND_MAX = 'c'; // a–c
-
-export function isDenseWordProgression(prev: string, next: string): boolean {
-  if (!WORD_PATTERN.test(prev) || !WORD_PATTERN.test(next)) {
-    return false;
-  }
-  if (prev.length < 2 || next.length < 2) {
-    return false;
-  }
-  const p0 = prev[0]!;
-  const n0 = next[0]!;
-  const p1 = prev[1]!;
-  const n1 = next[1]!;
-
-  if (n0 === p0) {
-    return (
-      Math.abs(n1.charCodeAt(0) - p1.charCodeAt(0)) <= MAX_SECOND_LETTER_DELTA
-    );
-  }
-
-  if (n0.charCodeAt(0) === p0.charCodeAt(0) + 1) {
-    return n1 >= 'a' && n1 <= NEXT_LETTER_SECOND_MAX;
-  }
-
-  return false;
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 export function buildGeneratePrompt(input: {
-  lastWord: string | null;
-  questionCount: number;
+  words: DictionaryWord[];
   optionCount: number;
 }): string {
-  const cursor =
-    input.lastWord && input.lastWord.trim()
-      ? `after the word "${input.lastWord.trim().toLowerCase()}" (exclusive)`
-      : 'from the beginning of the English dictionary (letter a)';
+  const wordList = input.words
+    .map(
+      (item, index) =>
+        `${index + 1}. "${item.word}" (${item.pos.join('/') || 'unknown'})`,
+    )
+    .join('; ');
   return [
-    `Generate exactly ${input.questionCount} multiple-choice vocabulary questions.`,
-    `Words must be in strict English alphabetical order ${cursor}.`,
-    'Each word must be strictly after the cursor (and after the previous word in the batch); never equal to the cursor or any earlier word.',
-    'Choose the next words densely after the cursor: prefer near-consecutive common dictionary words.',
-    'Adjacent words usually share the same first letter, and their second letters must differ by at most 2 (e.g. advocate→adze/affect OK; advocate→airport or advocate→kindle NOT OK).',
-    'Only when finishing a letter, advance to the immediate next letter with second letter a–c (e.g. azure→baby OK; azure→brown/kindle NOT OK).',
-    'Do not jump far ahead in the alphabet.',
+    `Generate exactly ${input.words.length} multiple-choice vocabulary questions, one per word listed below, in the same order.`,
+    `Words with their part of speech: ${wordList}.`,
+    'Use ONLY the words listed above. Never invent, replace, skip or repeat words.',
+    'Each question must test the word as the given part of speech; the example sentence must use the word as that part of speech (if several are listed, pick the most common one).',
     `Each question must have exactly ${input.optionCount} options.`,
     'Stem must be a complete English example sentence that MUST INCLUDE the target word itself (case-insensitive word boundary).',
     'Do NOT use blanks, underscores (___), ellipsis placeholders, or [blank] in the stem.',
     'End the stem by naming the word to test, e.g. What does \\"abhor\\" mean?',
     'In JSON string values, every double quote MUST be escaped as \\". Never write raw " inside a string (invalid JSON).',
     'Example stem JSON fragment: "stem":"What does \\"abhor\\" mean?"',
-    'Option contents must be Chinese meanings.',
-    'Explanation must be Chinese and MUST include: (1) a full Chinese translation of the entire stem sentence, and (2) a brief meaning note for the target word.',
-    'Example explanation: 他们决定放弃这个计划。「abandon」表示放弃、抛弃。',
+    'Option contents must be Chinese meanings matching the tested part of speech.',
+    'Explanation must be Chinese and MUST include: (1) a full Chinese translation of the entire stem sentence, (2) the part of speech in Chinese (如 名词/动词/形容词), and (3) a brief meaning note for the target word.',
+    'Example explanation: 他们决定放弃这个计划。「abandon」是动词，表示放弃、抛弃。',
     'Exactly one option isCorrect=true per question (the Chinese meaning of the target word).',
     'Option order does not matter; labels will be reassigned.',
     'Return ONLY a JSON array. Each item: { "word", "stem", "explanation", "options": [{ "label", "content", "isCorrect" }] }.',
@@ -158,10 +133,15 @@ function stemIncludesWord(stem: string, word: string): boolean {
   return wordInStem.test(stem);
 }
 
+/**
+ * 校验一道生成的题目。
+ * @param allowedWords 本批允许出题的词集合（调用方应在接受一题后删除对应词，
+ *   使同批重复的 word 被拒绝）；传 null 时不做词表校验。
+ */
 export function validateOneGeneratedQuestion(
   value: unknown,
   optionCount: number,
-  minWordExclusive: string | null,
+  allowedWords: ReadonlySet<string> | null,
 ): { ok: true; question: GeneratedQuestion } | { ok: false; message: string } {
   if (!isRecord(value)) {
     return { ok: false, message: '题目不是对象' };
@@ -173,19 +153,10 @@ export function validateOneGeneratedQuestion(
   if (!WORD_PATTERN.test(word)) {
     return { ok: false, message: `word "${word}" 须为纯小写字母` };
   }
-  if (
-    minWordExclusive &&
-    word.localeCompare(minWordExclusive, 'en') <= 0
-  ) {
+  if (allowedWords && !allowedWords.has(word)) {
     return {
       ok: false,
-      message: `word "${word}" 未大于游标 "${minWordExclusive}"`,
-    };
-  }
-  if (minWordExclusive && !isDenseWordProgression(minWordExclusive, word)) {
-    return {
-      ok: false,
-      message: `word "${word}" 相对游标 "${minWordExclusive}" 跨度过大（须密推进）`,
+      message: `word "${word}" 不在本批词表中（或已出过）`,
     };
   }
   if (typeof value.stem !== 'string' || !value.stem.trim()) {
@@ -248,7 +219,7 @@ export function validateOneGeneratedQuestion(
 export function parseGeneratedQuestionsJson(
   raw: string,
   optionCount: number,
-  lastWordBefore: string | null,
+  words: DictionaryWord[],
   rng: () => number = Math.random,
 ): { ok: true; questions: GeneratedQuestion[] } | { ok: false; message: string } {
   const array = extractJsonArray(raw);
@@ -256,21 +227,21 @@ export function parseGeneratedQuestionsJson(
     return { ok: false, message: withDetail('AI 返回不是 JSON 数组', raw) };
   }
   const questions: GeneratedQuestion[] = [];
-  let minWordExclusive = lastWordBefore?.trim().toLowerCase() || null;
+  const remainingWords = new Set(words.map((item) => item.word));
   for (const item of array) {
     const validated = validateOneGeneratedQuestion(
       item,
       optionCount,
-      minWordExclusive,
+      remainingWords,
     );
     if (!validated.ok) {
       return validated;
     }
+    remainingWords.delete(validated.question.word);
     questions.push({
       ...validated.question,
       options: shuffleQuestionOptions(validated.question.options, rng),
     });
-    minWordExclusive = validated.question.word;
   }
   return { ok: true, questions };
 }
@@ -359,8 +330,7 @@ export async function generateQuestionsWithChatCompletions(
   const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const url = `${normalizeBaseUrl(input.baseUrl)}/chat/completions`;
   const prompt = buildGeneratePrompt({
-    lastWord: input.lastWord,
-    questionCount: input.questionCount,
+    words: input.words,
     optionCount: input.optionCount,
   });
   let response: Response;
@@ -468,7 +438,7 @@ export async function generateQuestionsWithChatCompletions(
   const parsed = parseGeneratedQuestionsJson(
     content,
     input.optionCount,
-    input.lastWord,
+    input.words,
   );
   return {
     ...parsed,
