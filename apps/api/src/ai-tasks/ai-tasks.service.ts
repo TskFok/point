@@ -17,6 +17,7 @@ import {
   resolveEncryptionKey,
 } from '../ai-models/secret-crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { isAiTaskStoreResponseBodyEnabled } from './ai-response-body-config';
 import { assertCronExpression } from './cron-expression';
 import { type CreateAiTaskDto } from './dto/create-ai-task.dto';
 import { type ListAiTaskRunsDto } from './dto/list-ai-task-runs.dto';
@@ -542,6 +543,7 @@ export class AiTasksService implements OnModuleInit {
         lastWordAfter?: string | null;
         errorMessage?: string | null;
         nextLastWord?: string | null;
+        aiResponseBody?: string | null;
       },
     ): Promise<AiTaskRunView> => {
       const finished = await this.prisma.$transaction(async (tx) => {
@@ -565,6 +567,10 @@ export class AiTasksService implements OnModuleInit {
               fields.errorMessage === undefined
                 ? undefined
                 : fields.errorMessage,
+            aiResponseBody:
+              fields.aiResponseBody === undefined
+                ? undefined
+                : fields.aiResponseBody,
           },
         });
       });
@@ -602,8 +608,28 @@ export class AiTasksService implements OnModuleInit {
         optionCount: task.optionCount,
       });
 
+      const aiResponseBody =
+        isAiTaskStoreResponseBodyEnabled() &&
+        typeof generated.responseBody === 'string'
+          ? generated.responseBody
+          : undefined;
+
+      const finishAfterGenerate = (
+        status: 'SUCCESS' | 'FAILED',
+        fields: {
+          questionsCreated?: number;
+          lastWordAfter?: string | null;
+          errorMessage?: string | null;
+          nextLastWord?: string | null;
+        },
+      ) =>
+        finish(status, {
+          ...fields,
+          ...(aiResponseBody !== undefined ? { aiResponseBody } : {}),
+        });
+
       if (!generated.ok) {
-        return await finish('FAILED', {
+        return await finishAfterGenerate('FAILED', {
           errorMessage: generated.message,
         });
       }
@@ -619,7 +645,7 @@ export class AiTasksService implements OnModuleInit {
         );
         if (!validated.ok) {
           if (/跨度过大|密推进/.test(validated.message)) {
-            return await finish('FAILED', {
+            return await finishAfterGenerate('FAILED', {
               errorMessage: validated.message,
             });
           }
@@ -631,7 +657,7 @@ export class AiTasksService implements OnModuleInit {
       }
 
       if (accepted.length === 0) {
-        return await finish('FAILED', {
+        return await finishAfterGenerate('FAILED', {
           errorMessage: skipMessages[0] ?? '未生成任何有效题目',
         });
       }
@@ -660,13 +686,13 @@ export class AiTasksService implements OnModuleInit {
           }
         });
       } catch {
-        return await finish('FAILED', {
+        return await finishAfterGenerate('FAILED', {
           errorMessage: '写入题库失败',
         });
       }
 
       const lastWordAfter = accepted[accepted.length - 1]!.word;
-      return await finish('SUCCESS', {
+      return await finishAfterGenerate('SUCCESS', {
         questionsCreated: accepted.length,
         lastWordAfter,
         nextLastWord: lastWordAfter,

@@ -181,6 +181,7 @@ function createService(options?: {
             questionsCreated: 0,
             lastWordAfter: null,
             errorMessage: null,
+            aiResponseBody: null,
             ...data,
           };
           runs.push(run);
@@ -222,6 +223,7 @@ function createService(options?: {
           lastWordBefore: null,
           lastWordAfter: null,
           errorMessage: null,
+          aiResponseBody: null,
         };
         if (!runs.includes(run)) {
           runs.push(run);
@@ -508,6 +510,7 @@ describe('AiTasksService runTask', () => {
           lastWordBefore: null,
           lastWordAfter: null,
           errorMessage: null,
+          aiResponseBody: null,
         },
         {
           id: 'done-run',
@@ -520,6 +523,7 @@ describe('AiTasksService runTask', () => {
           lastWordBefore: null,
           lastWordAfter: 'ability',
           errorMessage: null,
+          aiResponseBody: null,
         },
       ],
     });
@@ -552,6 +556,7 @@ describe('AiTasksService runTask', () => {
           lastWordBefore: null,
           lastWordAfter: null,
           errorMessage: null,
+          aiResponseBody: null,
         },
       ],
       runCreateImpl: async ({ data }) => {
@@ -568,6 +573,7 @@ describe('AiTasksService runTask', () => {
           questionsCreated: 0,
           lastWordAfter: null,
           errorMessage: null,
+          aiResponseBody: null,
           ...data,
         };
       },
@@ -638,6 +644,7 @@ describe('AiTasksService runTask', () => {
           lastWordBefore: null,
           lastWordAfter: null,
           errorMessage: null,
+          aiResponseBody: null,
         },
       ],
     });
@@ -652,5 +659,76 @@ describe('AiTasksService runTask', () => {
     expect(runs.find((run) => run.id === 'stale-run')).toMatchObject({
       status: 'FAILED',
     });
+  });
+
+  it('开关关闭时不写入 aiResponseBody', async () => {
+    const previous = process.env.AI_TASK_STORE_RESPONSE_BODY;
+    process.env.AI_TASK_STORE_RESPONSE_BODY = 'false';
+    try {
+      const { service, runs } = createService();
+      await service.runTask('task-1', {
+        trigger: 'MANUAL',
+        actorUserId: 'admin-1',
+        generate: async () => ({
+          ok: true,
+          questions: sampleQuestions,
+          responseBody: '{"choices":[]}',
+        }),
+      });
+      expect(runs[0]?.aiResponseBody ?? null).toBeNull();
+    } finally {
+      if (previous === undefined) {
+        delete process.env.AI_TASK_STORE_RESPONSE_BODY;
+      } else {
+        process.env.AI_TASK_STORE_RESPONSE_BODY = previous;
+      }
+    }
+  });
+
+  it('开关开启时写入完整 responseBody', async () => {
+    const previous = process.env.AI_TASK_STORE_RESPONSE_BODY;
+    process.env.AI_TASK_STORE_RESPONSE_BODY = 'true';
+    try {
+      const { service, runs } = createService();
+      const body =
+        '{"id":"chatcmpl-1","choices":[{"message":{"content":"[]"}}]}';
+      await service.runTask('task-1', {
+        trigger: 'MANUAL',
+        actorUserId: 'admin-1',
+        generate: async () => ({
+          ok: true,
+          questions: sampleQuestions,
+          responseBody: body,
+        }),
+      });
+      expect(runs[0]?.aiResponseBody).toBe(body);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.AI_TASK_STORE_RESPONSE_BODY;
+      } else {
+        process.env.AI_TASK_STORE_RESPONSE_BODY = previous;
+      }
+    }
+  });
+
+  it('开关开启但无 responseBody 时保持 null', async () => {
+    const previous = process.env.AI_TASK_STORE_RESPONSE_BODY;
+    process.env.AI_TASK_STORE_RESPONSE_BODY = '1';
+    try {
+      const { service, runs } = createService();
+      await service.runTask('task-1', {
+        trigger: 'MANUAL',
+        actorUserId: 'admin-1',
+        generate: async () => ({ ok: false, message: 'AI 调用超时' }),
+      });
+      expect(runs[0]?.status).toBe('FAILED');
+      expect(runs[0]?.aiResponseBody ?? null).toBeNull();
+    } finally {
+      if (previous === undefined) {
+        delete process.env.AI_TASK_STORE_RESPONSE_BODY;
+      } else {
+        process.env.AI_TASK_STORE_RESPONSE_BODY = previous;
+      }
+    }
   });
 });
