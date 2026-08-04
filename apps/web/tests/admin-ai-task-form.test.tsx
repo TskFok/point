@@ -4,6 +4,62 @@ import userEvent from "@testing-library/user-event";
 import { AiTaskForm } from "@/components/admin/ai-task-form";
 
 describe("AiTaskForm", () => {
+  it("保存期间通过 onPendingChange 上报 pending，完成后恢复 false", async () => {
+    const user = userEvent.setup();
+    let resolveCreate!: (value: {
+      id: string;
+      name: string;
+      aiModelConfigId: string;
+      aiModelName: string;
+      questionCount: number;
+      optionCount: number;
+      basePoints: number;
+      cronExpression: string;
+      isEnabled: boolean;
+      lastWord: null;
+      createdAt: string;
+      updatedAt: string;
+    }) => void;
+    const createAdminAiTask = jest.fn().mockReturnValue(
+      new Promise((resolve) => {
+        resolveCreate = resolve;
+      }),
+    );
+    const onPendingChange = jest.fn();
+    render(
+      <AiTaskForm
+        api={{ createAdminAiTask, updateAdminAiTask: jest.fn() }}
+        mode="create"
+        models={[{ id: "m1", name: "gpt-test" }]}
+        onPendingChange={onPendingChange}
+      />,
+    );
+    await user.type(screen.getByLabelText("任务名称"), "每日词汇");
+
+    await user.click(screen.getByRole("button", { name: "保存" }));
+
+    await waitFor(() => {
+      expect(onPendingChange).toHaveBeenLastCalledWith(true);
+    });
+    resolveCreate({
+      id: "task-1",
+      name: "每日词汇",
+      aiModelConfigId: "m1",
+      aiModelName: "gpt-test",
+      questionCount: 5,
+      optionCount: 4,
+      basePoints: 10,
+      cronExpression: "0 8 * * *",
+      isEnabled: true,
+      lastWord: null,
+      createdAt: "2026-08-03T00:00:00.000Z",
+      updatedAt: "2026-08-03T00:00:00.000Z",
+    });
+    await waitFor(() => {
+      expect(onPendingChange).toHaveBeenLastCalledWith(false);
+    });
+  });
+
   it("提交包含模型、数量、crontab、启用", async () => {
     const user = userEvent.setup();
     const createAdminAiTask = jest.fn().mockResolvedValue({

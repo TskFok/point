@@ -90,6 +90,18 @@ function createApi(overrides: Record<string, unknown> = {}) {
 }
 
 describe("管理员 AI 任务页", () => {
+  it("点击新建任务打开表单弹窗", async () => {
+    const user = userEvent.setup();
+    render(<AdminAiTasksPage api={createApi()} />);
+
+    await screen.findByText("每日词汇");
+    await user.click(screen.getByRole("button", { name: "新建任务" }));
+
+    expect(
+      await screen.findByRole("dialog", { name: "新建 AI 任务" }),
+    ).toBeVisible();
+  });
+
   it("列表展示任务与游标", async () => {
     render(<AdminAiTasksPage api={createApi()} />);
 

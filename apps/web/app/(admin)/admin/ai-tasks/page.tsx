@@ -21,6 +21,7 @@ import { Pagination } from "@/components/data/pagination";
 import { StatusFilter } from "@/components/data/status-filter";
 import { EmptyState } from "@/components/empty-state";
 import { AsyncError } from "@/components/feedback/async-error";
+import { FormDialog } from "@/components/ui/form-dialog";
 import { browserApiClient } from "@/lib/api/browser-client";
 import { getApiErrorMessage } from "@/lib/api/error-message";
 
@@ -88,6 +89,7 @@ export default function AdminAiTasksPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<AiTask | "create" | null>(null);
+  const [formPending, setFormPending] = useState(false);
   const [runsFor, setRunsFor] = useState<AiTask | null>(null);
   const [runs, setRuns] = useState<AiTaskRun[]>([]);
   const [runsLoading, setRunsLoading] = useState(false);
@@ -181,6 +183,7 @@ export default function AdminAiTasksPage({
   }
 
   function handleSaved() {
+    setFormPending(false);
     setEditing(null);
     setActionMessage("任务已保存");
     void load();
@@ -294,21 +297,17 @@ export default function AdminAiTasksPage({
       ) : null}
 
       {editing ? (
-        <div className="admin-drawer">
-          <div className="admin-drawer__header">
-            <h2>{editing === "create" ? "新建 AI 任务" : "编辑 AI 任务"}</h2>
-            <Button
-              onClick={() => setEditing(null)}
-              type="button"
-              variant="secondary"
-            >
-              <X aria-hidden="true" />
-              关闭
-            </Button>
-          </div>
+        <FormDialog
+          onClose={() => {
+            if (!formPending) setEditing(null);
+          }}
+          pending={formPending}
+          title={editing === "create" ? "新建 AI 任务" : "编辑 AI 任务"}
+        >
           <AiTaskForm
             api={api}
             initialTask={editing === "create" ? undefined : editing}
+            key={editing === "create" ? "create" : editing.id}
             mode={editing === "create" ? "create" : "edit"}
             models={
               editing === "create"
@@ -325,10 +324,10 @@ export default function AdminAiTasksPage({
                         ]),
                   ]
             }
-            onCancel={() => setEditing(null)}
+            onPendingChange={setFormPending}
             onSaved={handleSaved}
           />
-        </div>
+        </FormDialog>
       ) : null}
 
       {runsFor ? (

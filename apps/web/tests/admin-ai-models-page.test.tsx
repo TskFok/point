@@ -39,6 +39,18 @@ function createApi(overrides: Record<string, unknown> = {}) {
 }
 
 describe("管理员 AI 模型页", () => {
+  it("点击添加模型打开表单弹窗", async () => {
+    const user = userEvent.setup();
+    render(<AdminAiModelsPage api={createApi()} />);
+
+    await screen.findByText("gpt-test");
+    await user.click(screen.getByRole("button", { name: "添加模型" }));
+
+    expect(
+      await screen.findByRole("dialog", { name: "新配置" }),
+    ).toBeVisible();
+  });
+
   it("列表展示脱敏 API Key", async () => {
     render(<AdminAiModelsPage api={createApi()} />);
 
