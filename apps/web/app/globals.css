@@ -2522,6 +2522,15 @@ svg {
   color: var(--color-text-muted);
 }
 
+.admin-table__error {
+  max-width: 28rem;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
 .admin-status {
   display: inline-flex;
   align-items: center;

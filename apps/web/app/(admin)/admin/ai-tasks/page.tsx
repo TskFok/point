@@ -374,7 +374,9 @@ export default function AdminAiTasksPage({
                       <td>
                         {run.lastWordBefore ?? "∅"} → {run.lastWordAfter ?? "∅"}
                       </td>
-                      <td>{run.errorMessage ?? "—"}</td>
+                      <td className="admin-table__error">
+                        {run.errorMessage ?? "—"}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
