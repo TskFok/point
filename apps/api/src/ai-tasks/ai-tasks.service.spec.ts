@@ -162,6 +162,18 @@ function createService(options?: {
       create:
         options?.runCreateImpl ??
         (({ data }: { data: Record<string, unknown> }) => {
+          const aiTaskId = String(data.aiTaskId);
+          if (
+            data.status === 'RUNNING' &&
+            runs.some(
+              (item) =>
+                item.aiTaskId === aiTaskId && item.status === 'RUNNING',
+            )
+          ) {
+            const error = new Error('unique') as Error & { code: string };
+            error.code = 'P2002';
+            return Promise.reject(error);
+          }
           const run = {
             id: `run-${runs.length + 1}`,
             startedAt: new Date('2026-08-03T02:00:00.000Z'),
@@ -174,6 +186,25 @@ function createService(options?: {
           runs.push(run);
           return Promise.resolve(run);
         }),
+      findFirst: ({
+        where,
+      }: {
+        where: { aiTaskId?: string; status?: string };
+      }) => {
+        const found = runs.find((item) => {
+          if (
+            where.aiTaskId !== undefined &&
+            item.aiTaskId !== where.aiTaskId
+          ) {
+            return false;
+          }
+          if (where.status !== undefined && item.status !== where.status) {
+            return false;
+          }
+          return true;
+        });
+        return Promise.resolve(found ?? null);
+      },
       update: ({
         where,
         data,
@@ -192,6 +223,9 @@ function createService(options?: {
           lastWordAfter: null,
           errorMessage: null,
         };
+        if (!runs.includes(run)) {
+          runs.push(run);
+        }
         Object.assign(run, data);
         return Promise.resolve(run);
       },
@@ -199,13 +233,33 @@ function createService(options?: {
         where,
         data,
       }: {
-        where: { status?: string };
+        where: {
+          id?: string;
+          status?: string;
+          aiTaskId?: string;
+          startedAt?: { lt?: Date };
+        };
         data: Record<string, unknown>;
       }) => {
         let count = 0;
         for (const run of runs) {
+          if (where.id !== undefined && run.id !== where.id) {
+            continue;
+          }
+          if (
+            where.aiTaskId !== undefined &&
+            run.aiTaskId !== where.aiTaskId
+          ) {
+            continue;
+          }
           if (where.status !== undefined && run.status !== where.status) {
             continue;
+          }
+          if (where.startedAt?.lt instanceof Date) {
+            const startedAt = run.startedAt;
+            if (!(startedAt instanceof Date) || !(startedAt < where.startedAt.lt)) {
+              continue;
+            }
           }
           Object.assign(run, data);
           count += 1;
@@ -491,7 +545,8 @@ describe('AiTasksService runTask', () => {
           aiTaskId: 'task-1',
           trigger: 'CRON',
           status: 'RUNNING',
-          startedAt: new Date('2026-08-03T01:00:00.000Z'),
+          // 未超时：不应被 releaseStaleRunningLocks 自动释放
+          startedAt: new Date(),
           finishedAt: null,
           questionsCreated: 0,
           lastWordBefore: null,
@@ -548,5 +603,54 @@ describe('AiTasksService runTask', () => {
     expect(result.status).toBe('FAILED');
     expect(result.errorMessage).toMatch(/unexpected boom|执行异常/);
     expect(runs[0]).toMatchObject({ status: 'FAILED' });
+  });
+
+  it('上次 FAILED 后再次执行不被 ALREADY_RUNNING 拦截', async () => {
+    const { service, runs } = createService();
+    const first = await service.runTask('task-1', {
+      trigger: 'CRON',
+      actorUserId: 'admin-1',
+      generate: async () => ({ ok: false, message: '模型超时' }),
+    });
+    expect(first.status).toBe('FAILED');
+    expect(runs.filter((run) => run.status === 'RUNNING')).toHaveLength(0);
+
+    const second = await service.runTask('task-1', {
+      trigger: 'CRON',
+      actorUserId: 'admin-1',
+      generate: async () => ({ ok: true, questions: sampleQuestions }),
+    });
+    expect(second.status).toBe('SUCCESS');
+    expect(runs.filter((run) => run.status === 'RUNNING')).toHaveLength(0);
+  });
+
+  it('存在陈旧 RUNNING 时自动释放后允许再次执行', async () => {
+    const { service, runs } = createService({
+      existingRuns: [
+        {
+          id: 'stale-run',
+          aiTaskId: 'task-1',
+          trigger: 'CRON',
+          status: 'RUNNING',
+          startedAt: new Date(Date.now() - 5 * 60 * 1000),
+          finishedAt: null,
+          questionsCreated: 0,
+          lastWordBefore: null,
+          lastWordAfter: null,
+          errorMessage: null,
+        },
+      ],
+    });
+
+    const result = await service.runTask('task-1', {
+      trigger: 'CRON',
+      actorUserId: 'admin-1',
+      generate: async () => ({ ok: true, questions: sampleQuestions }),
+    });
+
+    expect(result.status).toBe('SUCCESS');
+    expect(runs.find((run) => run.id === 'stale-run')).toMatchObject({
+      status: 'FAILED',
+    });
   });
 });

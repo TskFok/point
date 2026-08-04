@@ -30,6 +30,8 @@ import {
 } from './generate-questions';
 
 const INTERRUPTED_RUN_MESSAGE = '服务中断，执行未完成';
+/** AI 调用超时 60s；超过该阈值的 RUNNING 视为陈旧锁，可被后续调度释放 */
+const STALE_RUNNING_MS = 90_000;
 
 export type AiTaskLatestRunView = {
   id: string;
@@ -253,6 +255,63 @@ export class AiTasksService implements OnModuleInit {
     return result.count;
   }
 
+  /**
+   * 释放超时仍为 RUNNING 的抢锁记录（例如进程崩溃后未走 onModuleInit 恢复）。
+   * @returns 是否释放了至少一条
+   */
+  private async releaseStaleRunningLocks(taskId: string): Promise<boolean> {
+    const result = await this.prisma.aiTaskRun.updateMany({
+      where: {
+        aiTaskId: taskId,
+        status: 'RUNNING',
+        startedAt: { lt: new Date(Date.now() - STALE_RUNNING_MS) },
+      },
+      data: {
+        status: 'FAILED',
+        finishedAt: new Date(),
+        errorMessage: INTERRUPTED_RUN_MESSAGE,
+      },
+    });
+    if (result.count > 0) {
+      this.logger.warn(
+        `Released ${result.count} stale RUNNING run(s) for AI task ${taskId}`,
+      );
+    }
+    return result.count > 0;
+  }
+
+  private async createRunningRun(
+    taskId: string,
+    trigger: 'CRON' | 'MANUAL',
+    lastWordBefore: string | null,
+  ): Promise<AiTaskRun> {
+    const data = {
+      aiTaskId: taskId,
+      trigger,
+      status: 'RUNNING' as const,
+      lastWordBefore,
+    };
+    try {
+      return await this.prisma.aiTaskRun.create({ data });
+    } catch (error) {
+      if (!isPrismaError(error, 'P2002')) {
+        throw error;
+      }
+      const released = await this.releaseStaleRunningLocks(taskId);
+      if (!released) {
+        throw alreadyRunning();
+      }
+      try {
+        return await this.prisma.aiTaskRun.create({ data });
+      } catch (retryError) {
+        if (isPrismaError(retryError, 'P2002')) {
+          throw alreadyRunning();
+        }
+        throw retryError;
+      }
+    }
+  }
+
   private encryptionKey(): Buffer {
     try {
       return resolveEncryptionKey();
@@ -469,23 +528,13 @@ export class AiTasksService implements OnModuleInit {
       throw taskNotFound();
     }
 
-    let run: AiTaskRun;
-    try {
-      run = await this.prisma.aiTaskRun.create({
-        data: {
-          aiTaskId: taskId,
-          trigger: options.trigger,
-          status: 'RUNNING',
-          lastWordBefore: task.lastWord,
-        },
-      });
-    } catch (error) {
-      if (isPrismaError(error, 'P2002')) {
-        throw alreadyRunning();
-      }
-      throw error;
-    }
+    const run = await this.createRunningRun(
+      taskId,
+      options.trigger,
+      task.lastWord,
+    );
 
+    let settled = false;
     const finish = async (
       status: 'SUCCESS' | 'FAILED',
       fields: {
@@ -519,6 +568,7 @@ export class AiTasksService implements OnModuleInit {
           },
         });
       });
+      settled = true;
       return toRunView(finished);
     };
 
@@ -626,10 +676,37 @@ export class AiTasksService implements OnModuleInit {
             : null,
       });
     } catch (error) {
-      return finish('FAILED', {
-        errorMessage:
-          error instanceof Error ? error.message : '执行异常',
-      });
+      try {
+        return await finish('FAILED', {
+          errorMessage:
+            error instanceof Error ? error.message : '执行异常',
+        });
+      } catch {
+        return {
+          id: run.id,
+          aiTaskId: taskId,
+          trigger: options.trigger,
+          status: 'FAILED',
+          startedAt: run.startedAt.toISOString(),
+          finishedAt: new Date().toISOString(),
+          questionsCreated: 0,
+          lastWordBefore: task.lastWord,
+          lastWordAfter: null,
+          errorMessage:
+            error instanceof Error ? error.message : '执行异常',
+        };
+      }
+    } finally {
+      if (!settled) {
+        await this.prisma.aiTaskRun.updateMany({
+          where: { id: run.id, status: 'RUNNING' },
+          data: {
+            status: 'FAILED',
+            finishedAt: new Date(),
+            errorMessage: INTERRUPTED_RUN_MESSAGE,
+          },
+        });
+      }
     }
   }
 
