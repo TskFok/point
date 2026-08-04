@@ -3,7 +3,7 @@
 import type { ApiClient, ApiComponents } from "@point-quest/api-client";
 import { Card } from "@point-quest/ui";
 import { LoaderCircle } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { QuestionForm } from "@/components/admin/question-form";
 import { AsyncError } from "@/components/feedback/async-error";
@@ -36,52 +36,62 @@ export function QuestionFormDialog({
   const [loading, setLoading] = useState(mode === "edit");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [formPending, setFormPending] = useState(false);
+  const requestIdRef = useRef(0);
 
   const load = useCallback(async () => {
     if (mode !== "edit") return;
+    const requestId = ++requestIdRef.current;
+    setQuestion(null);
+    setLoadError(null);
+    setLoading(true);
+    setFormPending(false);
     if (!questionId) {
-      await Promise.resolve();
+      if (requestId !== requestIdRef.current) return;
       setLoadError("缺少题目编号");
       setLoading(false);
       return;
     }
     try {
-      setQuestion(await api.getAdminQuestion(questionId));
+      const loadedQuestion = await api.getAdminQuestion(questionId);
+      if (requestId !== requestIdRef.current) return;
+      setQuestion(loadedQuestion);
     } catch (error) {
+      if (requestId !== requestIdRef.current) return;
       setLoadError(getApiErrorMessage(error));
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [api, mode, questionId]);
 
   useEffect(() => {
-    queueMicrotask(() => void load());
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) void load();
+    });
+    return () => {
+      cancelled = true;
+      requestIdRef.current += 1;
+    };
   }, [load]);
 
   const title = mode === "create" ? "添加英语选择题" : "编辑英语选择题";
-
-  if (loading) {
-    return (
-      <Card aria-live="polite" className="page-loading" role="status">
-        <LoaderCircle aria-hidden="true" className="spin" />
-        正在加载题目
-      </Card>
-    );
-  }
 
   return (
     <FormDialog
       description="维护题干、答案、解析和基础积分。"
       onClose={onClose}
-      pending={formPending}
+      pending={formPending || loading}
       title={title}
     >
-      {loadError ? (
+      {loading ? (
+        <Card aria-live="polite" className="page-loading" role="status">
+          <LoaderCircle aria-hidden="true" className="spin" />
+          正在加载题目
+        </Card>
+      ) : loadError ? (
         <AsyncError
           message={loadError}
           onRetry={() => {
-            setLoading(true);
-            setLoadError(null);
             void load();
           }}
         />
