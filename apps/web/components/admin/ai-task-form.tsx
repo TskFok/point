@@ -197,11 +197,11 @@ export function AiTaskForm({
           </label>
           {mode === "edit" ? (
             <label className="admin-field">
-              <span>当前游标 lastWord</span>
+              <span>当前游标 lastEntryId</span>
               <input
                 aria-label="当前游标"
                 readOnly
-                value={initialTask?.lastWord ?? "（空，从字母序最前开始）"}
+                value={initialTask?.lastEntryId ?? "（空，从最小 entry.id 开始）"}
               />
             </label>
           ) : null}

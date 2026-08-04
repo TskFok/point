@@ -16,7 +16,7 @@ describe("AiTaskForm", () => {
       basePoints: number;
       cronExpression: string;
       isEnabled: boolean;
-      lastWord: null;
+      lastEntryId: null;
       createdAt: string;
       updatedAt: string;
     }) => void;
@@ -51,7 +51,7 @@ describe("AiTaskForm", () => {
       basePoints: 10,
       cronExpression: "0 8 * * *",
       isEnabled: true,
-      lastWord: null,
+      lastEntryId: null,
       createdAt: "2026-08-03T00:00:00.000Z",
       updatedAt: "2026-08-03T00:00:00.000Z",
     });
@@ -72,7 +72,7 @@ describe("AiTaskForm", () => {
       basePoints: 10,
       cronExpression: "0 8 * * *",
       isEnabled: true,
-      lastWord: null,
+      lastEntryId: null,
       createdAt: "2026-08-03T00:00:00.000Z",
       updatedAt: "2026-08-03T00:00:00.000Z",
     });

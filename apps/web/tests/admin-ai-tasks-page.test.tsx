@@ -20,7 +20,7 @@ const task = {
   basePoints: 10,
   cronExpression: "0 8 * * *",
   isEnabled: true,
-  lastWord: "ability",
+  lastEntryId: "20",
   createdAt: "2026-08-03T00:00:00.000Z",
   updatedAt: "2026-08-03T01:00:00.000Z",
   latestRun: {
@@ -50,8 +50,8 @@ function createApi(overrides: Record<string, unknown> = {}) {
       startedAt: "2026-08-03T02:00:00.000Z",
       finishedAt: "2026-08-03T02:01:00.000Z",
       questionsCreated: 3,
-      lastWordBefore: "ability",
-      lastWordAfter: "about",
+      lastEntryIdBefore: "20",
+      lastEntryIdAfter: "30",
       errorMessage: null,
     }),
     listAdminAiTaskRuns: jest.fn().mockResolvedValue({
@@ -64,8 +64,8 @@ function createApi(overrides: Record<string, unknown> = {}) {
           startedAt: "2026-08-03T01:00:00.000Z",
           finishedAt: "2026-08-03T01:01:00.000Z",
           questionsCreated: 5,
-          lastWordBefore: null,
-          lastWordAfter: "ability",
+          lastEntryIdBefore: null,
+          lastEntryIdAfter: "20",
           errorMessage: null,
         },
       ],
@@ -110,7 +110,7 @@ describe("管理员 AI 任务页", () => {
     });
     expect(screen.getByText("gpt-test")).toBeInTheDocument();
     expect(screen.getByText("0 8 * * *")).toBeInTheDocument();
-    expect(screen.getByText("ability")).toBeInTheDocument();
+    expect(screen.getByText("20")).toBeInTheDocument();
   });
 
   it("操作列使用 admin-table__actions 布局", async () => {

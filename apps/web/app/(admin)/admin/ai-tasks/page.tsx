@@ -372,7 +372,7 @@ export default function AdminAiTasksPage({
                       </td>
                       <td>{run.questionsCreated}</td>
                       <td>
-                        {run.lastWordBefore ?? "∅"} → {run.lastWordAfter ?? "∅"}
+                        {run.lastEntryIdBefore ?? "∅"} → {run.lastEntryIdAfter ?? "∅"}
                       </td>
                       <td className="admin-table__error">
                         {run.errorMessage ?? "—"}
@@ -426,7 +426,7 @@ export default function AdminAiTasksPage({
                   <td>
                     <code>{task.cronExpression}</code>
                   </td>
-                  <td>{task.lastWord ?? "—"}</td>
+                  <td>{task.lastEntryId ?? "—"}</td>
                   <td>{task.isEnabled ? "已启用" : "未启用"}</td>
                   <td>
                     {task.latestRun
