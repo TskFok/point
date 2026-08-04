@@ -53,6 +53,28 @@ describe("FormDialog", () => {
     expect(await screen.findByRole("button", { name: "已关闭" })).toBeVisible();
   });
 
+  it("点击遮罩关闭", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    await screen.findByRole("dialog", { name: "测试表单" });
+    const backdrop = document.querySelector(".dialog-backdrop");
+    expect(backdrop).toBeTruthy();
+    await user.click(backdrop as Element);
+    expect(await screen.findByRole("button", { name: "已关闭" })).toBeVisible();
+  });
+
+  it("pending 时遮罩禁用且点击不关闭", async () => {
+    const user = userEvent.setup();
+    render(<Harness pending />);
+    const dialog = await screen.findByRole("dialog", { name: "测试表单" });
+    const backdrop = document.querySelector(".dialog-backdrop");
+    expect(backdrop).toBeTruthy();
+    expect(backdrop).toBeDisabled();
+    await user.click(backdrop as Element);
+    expect(dialog).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "测试表单" })).toBeVisible();
+  });
+
   it("pending 时 Escape 与关闭按钮不关闭", async () => {
     const user = userEvent.setup();
     render(<Harness pending />);
