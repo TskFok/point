@@ -132,6 +132,18 @@ describe('generate-questions parse', () => {
     expect(p).toMatch(/4/);
   });
 
+  it('prompt 强调 word 须严格大于游标且不得相等', () => {
+    const p = buildGeneratePrompt({
+      lastWord: 'annual',
+      questionCount: 2,
+      optionCount: 4,
+    });
+    const lower = p.toLowerCase();
+    expect(lower).toMatch(/strictly after/);
+    expect(lower).toMatch(/never equal|must not (?:be )?equal|not equal/);
+    expect(p).toMatch(/annual/);
+  });
+
   it('validateOneGeneratedQuestion 接受递增 word', () => {
     const result = validateOneGeneratedQuestion(
       {

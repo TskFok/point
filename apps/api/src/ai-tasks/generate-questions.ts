@@ -74,6 +74,7 @@ export function buildGeneratePrompt(input: {
   return [
     `Generate exactly ${input.questionCount} multiple-choice vocabulary questions.`,
     `Words must be in strict English alphabetical order ${cursor}.`,
+    'Each word must be strictly after the cursor (and after the previous word in the batch); never equal to the cursor or any earlier word.',
     'Choose the next words densely after the cursor: prefer near-consecutive common dictionary words.',
     'Adjacent words usually share the same first letter, and their second letters must differ by at most 2 (e.g. advocate→adze/affect OK; advocate→airport or advocate→kindle NOT OK).',
     'Only when finishing a letter, advance to the immediate next letter with second letter a–c (e.g. azure→baby OK; azure→brown/kindle NOT OK).',
