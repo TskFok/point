@@ -241,7 +241,7 @@ model AiTask {
   basePoints      Int
   cronExpression  String
   isEnabled       Boolean      @default(true)
-  lastWord        String?
+  lastEntryId     BigInt?
   createdBy       String
   updatedBy       String
   createdAt       DateTime     @default(now())
@@ -263,10 +263,10 @@ model AiTaskRun {
   status           AiTaskRunStatus
   startedAt        DateTime         @default(now())
   finishedAt       DateTime?
-  questionsCreated Int              @default(0)
-  lastWordBefore   String?
-  lastWordAfter    String?
-  errorMessage     String?
+  questionsCreated  Int              @default(0)
+  lastEntryIdBefore BigInt?
+  lastEntryIdAfter  BigInt?
+  errorMessage      String?
   aiResponseBody   String?          @db.Text
   aiTask           AiTask           @relation(fields: [aiTaskId], references: [id], onDelete: Cascade)
 
