@@ -267,6 +267,7 @@ model AiTaskRun {
   lastWordBefore   String?
   lastWordAfter    String?
   errorMessage     String?
+  aiResponseBody   String?          @db.Text
   aiTask           AiTask           @relation(fields: [aiTaskId], references: [id], onDelete: Cascade)
 
   @@index([aiTaskId, startedAt])
