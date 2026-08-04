@@ -306,6 +306,9 @@ export async function generateQuestionsWithChatCompletions(
           },
           { role: 'user', content: prompt },
         ],
+        thinking: {
+          type: 'disabled',
+        },
       }),
       signal: AbortSignal.timeout(timeoutMs),
     });
