@@ -1,5 +1,5 @@
 import { ApiClientError } from "@point-quest/api-client";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { QuestionForm } from "@/components/admin/question-form";
@@ -9,6 +9,14 @@ function createApi() {
     createAdminQuestion: jest.fn(),
     updateAdminQuestion: jest.fn(),
   };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve;
+  });
+  return { promise, resolve };
 }
 
 async function fillRequiredQuestion(user: ReturnType<typeof userEvent.setup>) {
@@ -220,6 +228,29 @@ describe("管理员题目表单", () => {
     expect(onSaved).toHaveBeenCalledWith(
       expect.objectContaining({ id: "question-1" }),
     );
+  });
+
+  it("保存期间通知父组件阻止关闭弹窗", async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    const response = deferred<{ id: string }>();
+    const onPendingChange = jest.fn();
+    api.createAdminQuestion.mockReturnValue(response.promise);
+    render(
+      <QuestionForm
+        api={api}
+        mode="create"
+        onPendingChange={onPendingChange}
+      />,
+    );
+    await fillRequiredQuestion(user);
+    await user.click(screen.getByLabelText("将选项 A 设为正确答案"));
+
+    await user.click(screen.getByRole("button", { name: "保存题目" }));
+
+    await waitFor(() => expect(onPendingChange).toHaveBeenLastCalledWith(true));
+    response.resolve({ id: "question-1" });
+    await waitFor(() => expect(onPendingChange).toHaveBeenLastCalledWith(false));
   });
 
   it("最多允许六个选项且始终保留至少两个", async () => {

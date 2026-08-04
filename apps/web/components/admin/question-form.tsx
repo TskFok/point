@@ -7,7 +7,7 @@ import {
 } from "@point-quest/api-client";
 import { Button, Card } from "@point-quest/ui";
 import { CheckCircle2, LoaderCircle, Plus, Save, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { browserApiClient } from "@/lib/api/browser-client";
 import { getApiErrorMessage } from "@/lib/api/error-message";
@@ -43,6 +43,7 @@ type QuestionFormProps = {
   api?: QuestionApi;
   initialQuestion?: AdminQuestion;
   mode: "create" | "edit";
+  onPendingChange?: (pending: boolean) => void;
   onSaved?: (question: AdminQuestion) => void;
   questionId?: string;
 };
@@ -103,6 +104,7 @@ export function QuestionForm({
   api = browserApiClient,
   initialQuestion,
   mode,
+  onPendingChange,
   onSaved,
   questionId,
 }: QuestionFormProps) {
@@ -135,6 +137,11 @@ export function QuestionForm({
     initialQuestion?.hasAttempts ?? false,
   );
   const readOnly = mode === "edit" && hasAttempts;
+
+  useEffect(() => {
+    onPendingChange?.(saving);
+    return () => onPendingChange?.(false);
+  }, [onPendingChange, saving]);
 
   function updateOption(
     key: number,

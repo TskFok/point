@@ -12,22 +12,26 @@ import {
   Plus,
   Search,
 } from "lucide-react";
-import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { QuestionFormDialog } from "@/components/admin/question-form-dialog";
 import { Pagination } from "@/components/data/pagination";
 import { StatusFilter } from "@/components/data/status-filter";
 import { EmptyState } from "@/components/empty-state";
 import { AsyncError } from "@/components/feedback/async-error";
 import { browserApiClient } from "@/lib/api/browser-client";
 import { getApiErrorMessage } from "@/lib/api/error-message";
+import { ADMIN_QUESTIONS_OPEN_CREATE_KEY } from "@/lib/admin/questions-ui";
 
 type Schemas = ApiComponents["schemas"];
 type Question = Schemas["AdminQuestionDto"];
 type PageMeta = Schemas["PageMetaDto"];
 type QuestionsApi = Pick<
   ApiClient,
-  "listAdminQuestions" | "updateAdminQuestion"
+  | "createAdminQuestion"
+  | "getAdminQuestion"
+  | "listAdminQuestions"
+  | "updateAdminQuestion"
 >;
 type Filters = { search: string; isActive: string };
 
@@ -60,14 +64,6 @@ function writeUrl(filters: Filters, page: number) {
   );
 }
 
-function returnToHref(questionId: string) {
-  const current =
-    typeof window === "undefined"
-      ? "/admin/questions"
-      : `${window.location.pathname}${window.location.search}`;
-  return `/admin/questions/${questionId}?returnTo=${encodeURIComponent(current)}`;
-}
-
 export default function AdminQuestionsPage({
   api = browserApiClient,
 }: {
@@ -83,38 +79,25 @@ export default function AdminQuestionsPage({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [mutatingId, setMutatingId] = useState<string | null>(null);
+  const [editing, setEditing] = useState<"create" | { id: string } | null>(
+    null,
+  );
   const automaticLoadKey = useRef<string | null>(null);
   const mounted = useRef(true);
   const latestRequest = useRef(0);
-  const pendingScrollPosition = useRef<number | null>(null);
 
   useEffect(() => {
     mounted.current = true;
-    const scrollPosition = sessionStorage.getItem("admin-questions-scroll");
-    if (scrollPosition) {
-      const parsedPosition = Number(scrollPosition);
-      if (Number.isFinite(parsedPosition) && parsedPosition >= 0) {
-        pendingScrollPosition.current = parsedPosition;
-      } else {
-        sessionStorage.removeItem("admin-questions-scroll");
-      }
+    if (sessionStorage.getItem(ADMIN_QUESTIONS_OPEN_CREATE_KEY) === "1") {
+      sessionStorage.removeItem(ADMIN_QUESTIONS_OPEN_CREATE_KEY);
+      queueMicrotask(() => {
+        if (mounted.current) setEditing("create");
+      });
     }
     return () => {
       mounted.current = false;
     };
   }, []);
-
-  useEffect(() => {
-    const scrollPosition = pendingScrollPosition.current;
-    if (loading || loadError || scrollPosition === null) return;
-    const frame = requestAnimationFrame(() => {
-      if (!mounted.current) return;
-      window.scrollTo(0, scrollPosition);
-      sessionStorage.removeItem("admin-questions-scroll");
-      pendingScrollPosition.current = null;
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [loadError, loading]);
 
   const load = useCallback(async () => {
     const requestId = latestRequest.current + 1;
@@ -182,24 +165,24 @@ export default function AdminQuestionsPage({
           <h1>题库管理</h1>
           <p>维护题干、答案、解析和基础积分，控制题目是否进入练习池。</p>
         </div>
-        <Link
-          className="pq-button pq-button--primary"
-          href={`/admin/questions/new?returnTo=${encodeURIComponent(
-            typeof window === "undefined"
-              ? "/admin/questions"
-              : `${window.location.pathname}${window.location.search}`,
-          )}`}
-          onClick={() =>
-            sessionStorage.setItem(
-              "admin-questions-scroll",
-              String(window.scrollY),
-            )
-          }
-        >
+        <Button onClick={() => setEditing("create")}>
           <Plus aria-hidden="true" />
           添加题目
-        </Link>
+        </Button>
       </div>
+
+      {editing ? (
+        <QuestionFormDialog
+          api={api}
+          mode={editing === "create" ? "create" : "edit"}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            void load();
+          }}
+          questionId={editing === "create" ? undefined : editing.id}
+        />
+      ) : null}
 
       <Card className="admin-filter-card">
         <form
@@ -261,12 +244,9 @@ export default function AdminQuestionsPage({
       ) : questions.length === 0 ? (
         <EmptyState
           action={
-            <Link
-              className="pq-button pq-button--primary"
-              href="/admin/questions/new"
-            >
+            <Button onClick={() => setEditing("create")}>
               添加第一道题目
-            </Link>
+            </Button>
           }
           description="调整筛选条件，或创建一道新的英语选择题。"
           icon={<LibraryBig />}
@@ -311,19 +291,13 @@ export default function AdminQuestionsPage({
                     </td>
                     <td data-label="操作">
                       <div className="admin-table__actions">
-                        <Link
-                          className="pq-button pq-button--secondary"
-                          href={returnToHref(question.id)}
-                          onClick={() =>
-                            sessionStorage.setItem(
-                              "admin-questions-scroll",
-                              String(window.scrollY),
-                            )
-                          }
+                        <Button
+                          onClick={() => setEditing({ id: question.id })}
+                          variant="secondary"
                         >
                           <Pencil aria-hidden="true" />
                           编辑题目
-                        </Link>
+                        </Button>
                         <Button
                           disabled={
                             mutatingId !== null ||
