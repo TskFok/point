@@ -265,7 +265,7 @@ export default function AdminAiTasksPage({
       </header>
 
       <Card className="admin-filter-card">
-        <div className="admin-filter-card__row">
+        <div className="admin-filter-grid">
           <StatusFilter
             label="启用状态"
             onChange={(isEnabled) =>

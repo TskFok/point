@@ -125,6 +125,23 @@ describe("管理员 AI 任务页", () => {
     expect(actions?.querySelectorAll("button")).toHaveLength(5);
   });
 
+  it("启用状态筛选使用 admin-filter-grid 约束选择框宽度", async () => {
+    const { container } = render(<AdminAiTasksPage api={createApi()} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("每日词汇")).toBeInTheDocument();
+    });
+
+    const filterGrid = container.querySelector(
+      ".admin-filter-card .admin-filter-grid",
+    );
+    expect(filterGrid).toBeTruthy();
+    expect(
+      filterGrid?.querySelector('select, [aria-label="启用状态"]'),
+    ).toBeTruthy();
+    expect(container.querySelector(".admin-filter-card__row")).toBeNull();
+  });
+
   it("立即执行调用 runAdminAiTask", async () => {
     const user = userEvent.setup();
     const api = createApi();
