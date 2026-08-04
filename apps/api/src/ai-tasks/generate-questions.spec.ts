@@ -10,7 +10,9 @@ import {
   type DictionaryWord,
 } from './generate-questions';
 
-const abandonWords: DictionaryWord[] = [{ word: 'abandon', pos: ['verb'] }];
+const abandonWords: DictionaryWord[] = [
+  { id: '1', word: 'abandon', pos: 'verb' },
+];
 
 describe('error detail helpers', () => {
   it('truncateErrorDetail 超过上限时截断并加省略号', () => {
@@ -91,7 +93,7 @@ describe('generate-questions parse', () => {
 
   it('拒绝词表之外的 word', () => {
     const result = parseGeneratedQuestionsJson(sample, 2, [
-      { word: 'zebra', pos: ['noun'] },
+      { id: '99', word: 'zebra', pos: 'noun' },
     ]);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.message).toMatch(/不在本批词表/);
@@ -119,14 +121,14 @@ describe('generate-questions parse', () => {
   it('prompt 包含词表、词性与数量', () => {
     const p = buildGeneratePrompt({
       words: [
-        { word: 'cat', pos: ['noun'] },
-        { word: 'catch', pos: ['verb', 'noun'] },
-        { word: 'cater', pos: ['verb'] },
+        { id: '1', word: 'cat', pos: 'noun' },
+        { id: '2', word: 'catch', pos: 'verb' },
+        { id: '3', word: 'cater', pos: 'verb' },
       ],
       optionCount: 4,
     });
     expect(p).toMatch(/"cat" \(noun\)/);
-    expect(p).toMatch(/"catch" \(verb\/noun\)/);
+    expect(p).toMatch(/"catch" \(verb\)/);
     expect(p).toMatch(/"cater" \(verb\)/);
     expect(p).toMatch(/exactly 3/);
     expect(p).toMatch(/4 options/);
@@ -268,6 +270,24 @@ describe('generate-questions parse', () => {
       },
       2,
       null,
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it('接受含连字符等非纯字母 word（不再强制 WORD_PATTERN）', () => {
+    const result = validateOneGeneratedQuestion(
+      {
+        word: 'self-aware',
+        stem: 'She became more self-aware after the talk. What does "self-aware" mean?',
+        explanation:
+          '她谈话后更有自我意识了。「self-aware」是形容词，表示有自我意识的。',
+        options: [
+          { label: 'A', content: '有自我意识的', isCorrect: true },
+          { label: 'B', content: '疏忽的', isCorrect: false },
+        ],
+      },
+      2,
+      new Set(['self-aware']),
     );
     expect(result.ok).toBe(true);
   });

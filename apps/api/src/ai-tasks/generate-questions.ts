@@ -11,10 +11,11 @@ export type GeneratedQuestion = {
   options: GeneratedQuestionOption[];
 };
 
-/** 来自英文词库 entry 表的待出题单词（pos 为该词全部去重词性） */
+/** 来自英文词库 entry 表的待出题词条（一行一题） */
 export type DictionaryWord = {
+  id: string;
   word: string;
-  pos: string[];
+  pos: string;
 };
 
 export type GenerateQuestionsInput = {
@@ -33,8 +34,6 @@ export type GenerateQuestionsResult =
 
 const DEFAULT_TIMEOUT_MS = 60_000;
 
-const WORD_PATTERN = /^[a-z]+$/;
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -46,7 +45,7 @@ export function buildGeneratePrompt(input: {
   const wordList = input.words
     .map(
       (item, index) =>
-        `${index + 1}. "${item.word}" (${item.pos.join('/') || 'unknown'})`,
+        `${index + 1}. "${item.word}" (${item.pos || 'unknown'})`,
     )
     .join('; ');
   return [
@@ -149,9 +148,6 @@ export function validateOneGeneratedQuestion(
   const word = normalizeWord(value.word);
   if (!word) {
     return { ok: false, message: '缺少 word' };
-  }
-  if (!WORD_PATTERN.test(word)) {
-    return { ok: false, message: `word "${word}" 须为纯小写字母` };
   }
   if (allowedWords && !allowedWords.has(word)) {
     return {
