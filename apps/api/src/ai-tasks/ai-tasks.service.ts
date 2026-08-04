@@ -54,7 +54,7 @@ export type AiTaskView = {
   basePoints: number;
   cronExpression: string;
   isEnabled: boolean;
-  lastWord: string | null;
+  lastEntryId: string | null;
   createdAt: string;
   updatedAt: string;
   latestRun?: AiTaskLatestRunView | null;
@@ -68,8 +68,8 @@ export type AiTaskRunView = {
   startedAt: string;
   finishedAt: string | null;
   questionsCreated: number;
-  lastWordBefore: string | null;
-  lastWordAfter: string | null;
+  lastEntryIdBefore: string | null;
+  lastEntryIdAfter: string | null;
   errorMessage: string | null;
 };
 
@@ -184,8 +184,8 @@ function toRunView(run: AiTaskRun): AiTaskRunView {
     startedAt: run.startedAt.toISOString(),
     finishedAt: run.finishedAt?.toISOString() ?? null,
     questionsCreated: run.questionsCreated,
-    lastWordBefore: run.lastWordBefore,
-    lastWordAfter: run.lastWordAfter,
+    lastEntryIdBefore: run.lastEntryIdBefore?.toString() ?? null,
+    lastEntryIdAfter: run.lastEntryIdAfter?.toString() ?? null,
     errorMessage: run.errorMessage,
   };
 }
@@ -202,7 +202,7 @@ function toTaskView(row: TaskWithModelAndLatestRun): AiTaskView {
     basePoints: row.basePoints,
     cronExpression: row.cronExpression,
     isEnabled: row.isEnabled,
-    lastWord: row.lastWord,
+    lastEntryId: row.lastEntryId?.toString() ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     latestRun: latest
@@ -285,13 +285,13 @@ export class AiTasksService implements OnModuleInit {
   private async createRunningRun(
     taskId: string,
     trigger: 'CRON' | 'MANUAL',
-    lastWordBefore: string | null,
+    lastEntryIdBefore: bigint | null,
   ): Promise<AiTaskRun> {
     const data = {
       aiTaskId: taskId,
       trigger,
       status: 'RUNNING' as const,
-      lastWordBefore,
+      lastEntryIdBefore,
     };
     try {
       return await this.prisma.aiTaskRun.create({ data });
@@ -533,7 +533,7 @@ export class AiTasksService implements OnModuleInit {
     const run = await this.createRunningRun(
       taskId,
       options.trigger,
-      task.lastWord,
+      task.lastEntryId,
     );
 
     let settled = false;
@@ -541,17 +541,17 @@ export class AiTasksService implements OnModuleInit {
       status: 'SUCCESS' | 'FAILED',
       fields: {
         questionsCreated?: number;
-        lastWordAfter?: string | null;
+        lastEntryIdAfter?: bigint | null;
         errorMessage?: string | null;
-        nextLastWord?: string | null;
+        nextLastEntryId?: bigint | null;
         aiResponseBody?: string | null;
       },
     ): Promise<AiTaskRunView> => {
       const finished = await this.prisma.$transaction(async (tx) => {
-        if (fields.nextLastWord !== undefined) {
+        if (fields.nextLastEntryId !== undefined) {
           await tx.aiTask.update({
             where: { id: taskId },
-            data: { lastWord: fields.nextLastWord },
+            data: { lastEntryId: fields.nextLastEntryId },
           });
         }
         return tx.aiTaskRun.update({
@@ -560,10 +560,10 @@ export class AiTasksService implements OnModuleInit {
             status,
             finishedAt: new Date(),
             questionsCreated: fields.questionsCreated ?? 0,
-            lastWordAfter:
-              fields.lastWordAfter === undefined
+            lastEntryIdAfter:
+              fields.lastEntryIdAfter === undefined
                 ? undefined
-                : fields.lastWordAfter,
+                : fields.lastEntryIdAfter,
             errorMessage:
               fields.errorMessage === undefined
                 ? undefined
@@ -599,12 +599,12 @@ export class AiTasksService implements OnModuleInit {
       }
 
       const words = await this.listNextEntryWords(
-        task.lastWord,
+        task.lastEntryId,
         task.questionCount,
       );
       if (words.length === 0) {
         return await finish('FAILED', {
-          errorMessage: '词库中没有更多可出题的单词（entry 表游标已到末尾）',
+          errorMessage: '词库中没有更多可出题的单词（entry 表 id 游标已到末尾）',
         });
       }
 
@@ -628,9 +628,9 @@ export class AiTasksService implements OnModuleInit {
         status: 'SUCCESS' | 'FAILED',
         fields: {
           questionsCreated?: number;
-          lastWordAfter?: string | null;
+          lastEntryIdAfter?: bigint | null;
           errorMessage?: string | null;
-          nextLastWord?: string | null;
+          nextLastEntryId?: bigint | null;
         },
       ) =>
         finish(status, {
@@ -697,16 +697,15 @@ export class AiTasksService implements OnModuleInit {
         });
       }
 
-      // 游标推进到本轮已接受的最大 word（词来自 entry 表且均 > 原游标），
-      // 下轮从游标之后取词，保证不重复出题
-      const lastWordAfter = accepted.reduce(
-        (max, question) => (question.word > max ? question.word : max),
-        accepted[0]!.word,
-      );
+      // 游标推进到本批已取出的最大 entry.id（与部分题跳过无关）
+      const lastEntryIdAfter = words.reduce((max, item) => {
+        const id = BigInt(item.id);
+        return id > max ? id : max;
+      }, BigInt(words[0]!.id));
       return await finishAfterGenerate('SUCCESS', {
         questionsCreated: accepted.length,
-        lastWordAfter,
-        nextLastWord: lastWordAfter,
+        lastEntryIdAfter,
+        nextLastEntryId: lastEntryIdAfter,
         errorMessage:
           skipMessages.length > 0
             ? `跳过 ${skipMessages.length} 题：${skipMessages.slice(0, 3).join('；')}`
@@ -727,8 +726,8 @@ export class AiTasksService implements OnModuleInit {
           startedAt: run.startedAt.toISOString(),
           finishedAt: new Date().toISOString(),
           questionsCreated: 0,
-          lastWordBefore: task.lastWord,
-          lastWordAfter: null,
+          lastEntryIdBefore: task.lastEntryId?.toString() ?? null,
+          lastEntryIdAfter: null,
           errorMessage:
             error instanceof Error ? error.message : '执行异常',
         };
@@ -748,29 +747,29 @@ export class AiTasksService implements OnModuleInit {
   }
 
   /**
-   * 从英文词库 entry 表取游标之后的下一批单词（按字母序、去重、聚合词性）。
-   * 游标（word > lastWord）保证跨轮不重复出题；COLLATE "C" 使排序与
-   * JS 字符串比较一致（词已限定为纯小写字母）。
+   * 从英文词库 entry 表取游标之后的下一批词条（按 id 升序）。
+   * 游标（id > lastEntryId）保证跨轮不重复扫描已取过的行。
    */
   async listNextEntryWords(
-    lastWord: string | null,
+    lastEntryId: bigint | null,
     count: number,
   ): Promise<DictionaryWord[]> {
-    const cursor = lastWord?.trim().toLowerCase() || null;
     const rows = await this.prisma.$queryRaw<
-      Array<{ word: string; pos_list: string[] }>
+      Array<{ id: bigint; word: string; pos: string }>
     >`
-      SELECT e.word, ARRAY_AGG(DISTINCT e.pos) AS pos_list
+      SELECT e.id, e.word, e.pos
       FROM entry e
       WHERE e.lang_code = 'en'
         AND e.pos IS NOT NULL
-        AND e.word ~ '^[a-z]{2,}$'
-        AND (${cursor}::text IS NULL OR e.word COLLATE "C" > ${cursor})
-      GROUP BY e.word
-      ORDER BY e.word COLLATE "C"
+        AND (${lastEntryId}::bigint IS NULL OR e.id > ${lastEntryId})
+      ORDER BY e.id ASC
       LIMIT ${count}
     `;
-    return rows.map((row) => ({ word: row.word, pos: row.pos_list }));
+    return rows.map((row) => ({
+      id: row.id.toString(),
+      word: row.word,
+      pos: row.pos,
+    }));
   }
 
   private async requireTask(id: string): Promise<AiTask> {

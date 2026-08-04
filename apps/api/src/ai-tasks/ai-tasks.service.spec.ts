@@ -40,7 +40,7 @@ function makeTask(overrides: Record<string, unknown> = {}) {
     basePoints: 10,
     cronExpression: '0 8 * * *',
     isEnabled: true,
-    lastWord: null as string | null,
+    lastEntryId: null as bigint | null,
     createdBy: 'admin-1',
     updatedBy: 'admin-1',
     createdAt: new Date('2026-08-03T00:00:00.000Z'),
@@ -58,7 +58,7 @@ function createService(options?: {
   existingRuns?: Record<string, unknown>[];
   questionCreates?: unknown[];
   /** 模拟 entry 表取词结果（$queryRaw 返回行） */
-  entryWords?: Array<{ word: string; pos_list: string[] }>;
+  entryWords?: Array<{ id: bigint; word: string; pos: string }>;
 }) {
   const model = options?.model === undefined ? makeModel() : options.model;
   const task = options?.task === undefined ? makeTask() : options.task;
@@ -66,8 +66,8 @@ function createService(options?: {
   const runs: Record<string, unknown>[] = [...(options?.existingRuns ?? [])];
   const questionCreates = options?.questionCreates ?? [];
   const entryWords = options?.entryWords ?? [
-    { word: 'abandon', pos_list: ['verb'] },
-    { word: 'ability', pos_list: ['noun'] },
+    { id: 10n, word: 'abandon', pos: 'verb' },
+    { id: 20n, word: 'ability', pos: 'noun' },
   ];
 
   const prisma = {
@@ -138,8 +138,11 @@ function createService(options?: {
         if (!taskState || taskState.id !== where.id) {
           return Promise.reject(new Error('missing'));
         }
-        if (typeof data.lastWord === 'string' || data.lastWord === null) {
-          taskState.lastWord = data.lastWord as string | null;
+        if (
+          typeof data.lastEntryId === 'bigint' ||
+          data.lastEntryId === null
+        ) {
+          taskState.lastEntryId = data.lastEntryId as bigint | null;
         }
         if (typeof data.name === 'string') taskState.name = data.name;
         if (typeof data.isEnabled === 'boolean') {
@@ -185,7 +188,7 @@ function createService(options?: {
             startedAt: new Date('2026-08-03T02:00:00.000Z'),
             finishedAt: null,
             questionsCreated: 0,
-            lastWordAfter: null,
+            lastEntryIdAfter: null,
             errorMessage: null,
             aiResponseBody: null,
             ...data,
@@ -226,8 +229,8 @@ function createService(options?: {
           status: 'RUNNING',
           startedAt: new Date('2026-08-03T02:00:00.000Z'),
           questionsCreated: 0,
-          lastWordBefore: null,
-          lastWordAfter: null,
+          lastEntryIdBefore: null,
+          lastEntryIdAfter: null,
           errorMessage: null,
           aiResponseBody: null,
         };
@@ -416,14 +419,14 @@ describe('AiTasksService runTask', () => {
     });
     expect(result.status).toBe('SUCCESS');
     expect(result.questionsCreated).toBe(2);
-    expect(result.lastWordAfter).toBe('ability');
-    expect(taskState?.lastWord).toBe('ability');
+    expect(result.lastEntryIdAfter).toBe('20');
+    expect(taskState?.lastEntryId).toBe(20n);
     expect(questionCreates).toHaveLength(2);
   });
 
   it('生成失败时游标不变', async () => {
     const { service, taskState } = createService({
-      task: makeTask({ lastWord: 'cat' }),
+      task: makeTask({ lastEntryId: 99n }),
     });
     const result = await service.runTask('task-1', {
       trigger: 'MANUAL',
@@ -431,14 +434,14 @@ describe('AiTasksService runTask', () => {
       generate: async () => ({ ok: false, message: 'AI 调用失败' }),
     });
     expect(result.status).toBe('FAILED');
-    expect(taskState?.lastWord).toBe('cat');
+    expect(taskState?.lastEntryId).toBe(99n);
   });
 
   it('generate 收到来自 entry 表的词表与词性', async () => {
     const { service } = createService({
       entryWords: [
-        { word: 'affect', pos_list: ['verb', 'noun'] },
-        { word: 'afford', pos_list: ['verb'] },
+        { id: 11n, word: 'affect', pos: 'verb' },
+        { id: 12n, word: 'afford', pos: 'verb' },
       ],
     });
     const generate = jest.fn().mockResolvedValue({
@@ -453,8 +456,8 @@ describe('AiTasksService runTask', () => {
     expect(generate).toHaveBeenCalledWith(
       expect.objectContaining({
         words: [
-          { word: 'affect', pos: ['verb', 'noun'] },
-          { word: 'afford', pos: ['verb'] },
+          { id: '11', word: 'affect', pos: 'verb' },
+          { id: '12', word: 'afford', pos: 'verb' },
         ],
         optionCount: 2,
       }),
@@ -463,7 +466,7 @@ describe('AiTasksService runTask', () => {
 
   it('词库无更多单词时 FAILED 且游标不变', async () => {
     const { service, taskState, questionCreates } = createService({
-      task: makeTask({ lastWord: 'zyzzyva' }),
+      task: makeTask({ lastEntryId: 999n }),
       entryWords: [],
     });
     const result = await service.runTask('task-1', {
@@ -472,8 +475,8 @@ describe('AiTasksService runTask', () => {
       generate: () => Promise.resolve({ ok: true, questions: sampleQuestions }),
     });
     expect(result.status).toBe('FAILED');
-    expect(result.errorMessage).toMatch(/词库/);
-    expect(taskState?.lastWord).toBe('zyzzyva');
+    expect(result.errorMessage).toMatch(/词库|entry/);
+    expect(taskState?.lastEntryId).toBe(999n);
     expect(questionCreates).toHaveLength(0);
   });
 
@@ -502,7 +505,8 @@ describe('AiTasksService runTask', () => {
     expect(result.status).toBe('SUCCESS');
     expect(result.questionsCreated).toBe(1);
     expect(result.errorMessage).toMatch(/跳过.*不在本批词表/);
-    expect(taskState?.lastWord).toBe('abandon');
+    // 成功后游标为本批最大 entry.id（与部分题跳过无关）
+    expect(taskState?.lastEntryId).toBe(20n);
     expect(questionCreates).toHaveLength(1);
   });
 
@@ -524,8 +528,8 @@ describe('AiTasksService runTask', () => {
 
   it('全部单词不在词表时 FAILED 且游标不变', async () => {
     const { service, taskState, questionCreates } = createService({
-      task: makeTask({ lastWord: 'advocate' }),
-      entryWords: [{ word: 'affect', pos_list: ['verb'] }],
+      task: makeTask({ lastEntryId: 50n }),
+      entryWords: [{ id: 51n, word: 'affect', pos: 'verb' }],
     });
     const result = await service.runTask('task-1', {
       trigger: 'MANUAL',
@@ -549,11 +553,11 @@ describe('AiTasksService runTask', () => {
     expect(result.status).toBe('FAILED');
     expect(result.errorMessage).toMatch(/不在本批词表/);
     expect(result.questionsCreated).toBe(0);
-    expect(taskState?.lastWord).toBe('advocate');
+    expect(taskState?.lastEntryId).toBe(50n);
     expect(questionCreates).toHaveLength(0);
   });
 
-  it('游标推进到本轮已接受的最大 word（与返回顺序无关）', async () => {
+  it('成功后游标推进到本批最大 entry.id', async () => {
     const { service, taskState } = createService();
     const result = await service.runTask('task-1', {
       trigger: 'MANUAL',
@@ -565,8 +569,8 @@ describe('AiTasksService runTask', () => {
         }),
     });
     expect(result.status).toBe('SUCCESS');
-    expect(result.lastWordAfter).toBe('ability');
-    expect(taskState?.lastWord).toBe('ability');
+    expect(result.lastEntryIdAfter).toBe('20');
+    expect(taskState?.lastEntryId).toBe(20n);
   });
 
   it('模型停用时 FAILED', async () => {
@@ -610,8 +614,8 @@ describe('AiTasksService runTask', () => {
           startedAt: new Date('2026-08-03T01:00:00.000Z'),
           finishedAt: null,
           questionsCreated: 0,
-          lastWordBefore: null,
-          lastWordAfter: null,
+          lastEntryIdBefore: null,
+          lastEntryIdAfter: null,
           errorMessage: null,
           aiResponseBody: null,
         },
@@ -623,8 +627,8 @@ describe('AiTasksService runTask', () => {
           startedAt: new Date('2026-08-03T00:00:00.000Z'),
           finishedAt: new Date('2026-08-03T00:01:00.000Z'),
           questionsCreated: 2,
-          lastWordBefore: null,
-          lastWordAfter: 'ability',
+          lastEntryIdBefore: null,
+          lastEntryIdAfter: '20',
           errorMessage: null,
           aiResponseBody: null,
         },
@@ -656,8 +660,8 @@ describe('AiTasksService runTask', () => {
           startedAt: new Date(),
           finishedAt: null,
           questionsCreated: 0,
-          lastWordBefore: null,
-          lastWordAfter: null,
+          lastEntryIdBefore: null,
+          lastEntryIdAfter: null,
           errorMessage: null,
           aiResponseBody: null,
         },
@@ -674,7 +678,7 @@ describe('AiTasksService runTask', () => {
           startedAt: new Date('2026-08-03T02:00:00.000Z'),
           finishedAt: null,
           questionsCreated: 0,
-          lastWordAfter: null,
+          lastEntryIdAfter: null,
           errorMessage: null,
           aiResponseBody: null,
           ...data,
@@ -744,8 +748,8 @@ describe('AiTasksService runTask', () => {
           startedAt: new Date(Date.now() - 5 * 60 * 1000),
           finishedAt: null,
           questionsCreated: 0,
-          lastWordBefore: null,
-          lastWordAfter: null,
+          lastEntryIdBefore: null,
+          lastEntryIdAfter: null,
           errorMessage: null,
           aiResponseBody: null,
         },
