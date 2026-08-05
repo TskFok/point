@@ -24,6 +24,8 @@ RUN --mount=type=cache,id=point-pnpm-store,target=/pnpm/store \
   pnpm install --frozen-lockfile
 
 FROM dependencies AS build
+ARG NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL=
+ENV NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL=$NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL
 COPY . .
 RUN pnpm db:generate
 RUN pnpm build

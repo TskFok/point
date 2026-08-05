@@ -14,7 +14,6 @@ import {
   Plus,
   Search,
 } from "lucide-react";
-import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ProductForm } from "@/components/admin/product-form";
@@ -22,10 +21,10 @@ import { Pagination } from "@/components/data/pagination";
 import { StatusFilter } from "@/components/data/status-filter";
 import { EmptyState } from "@/components/empty-state";
 import { AsyncError } from "@/components/feedback/async-error";
+import { ProductImage } from "@/components/media/product-image";
 import { FormDialog } from "@/components/ui/form-dialog";
 import { browserApiClient } from "@/lib/api/browser-client";
 import { getApiErrorMessage } from "@/lib/api/error-message";
-import { productImageUrl } from "@/lib/product-image";
 
 type Schemas = ApiComponents["schemas"];
 type Product = Schemas["ProductDto"];
@@ -249,11 +248,11 @@ export default function AdminProductsPage({
             {products.map((product) => (
               <Card className="admin-product-card" key={product.id}>
                 <div className="admin-product-card__image">
-                  <Image
+                  <ProductImage
                     alt={product.name}
                     height={360}
+                    imageKey={product.imageKey}
                     sizes="(max-width: 700px) 100vw, 33vw"
-                    src={productImageUrl(product.imageKey)}
                     width={480}
                   />
                   <span

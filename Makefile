@@ -6,6 +6,7 @@
 
 IMAGE_REGISTRY ?= registry.cn-hangzhou.aliyuncs.com/your-namespace
 IMAGE_TAG ?= v0.0.0
+NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL ?=
 
 TARGETS := migrate api web
 
@@ -21,9 +22,11 @@ help:
 	@echo "Variables (override on the command line):"
 	@echo "  IMAGE_REGISTRY=$(IMAGE_REGISTRY)"
 	@echo "  IMAGE_TAG=$(IMAGE_TAG)"
+	@echo "  NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL=$(NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL)"
 	@echo ""
 	@echo "Example:"
 	@echo "  make build-amd64 IMAGE_REGISTRY=registry.cn-hangzhou.aliyuncs.com/my-ns IMAGE_TAG=v1.0.0"
+	@echo "  make build-amd64 NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL=https://cdn.example.com"
 
 build:
 	@$(MAKE) _build-platform PLATFORM=
@@ -45,9 +48,11 @@ _build-platform:
 	  image="$(IMAGE_REGISTRY)/point-quest-$${target}:$(IMAGE_TAG)"; \
 	  echo "==> Building $${image}$(if $(PLATFORM), ($(PLATFORM)))"; \
 	  if [ -n "$(PLATFORM)" ]; then \
-	    docker buildx build --platform "$(PLATFORM)" --target "$${target}" -t "$${image}" --load .; \
+	    docker buildx build --platform "$(PLATFORM)" --target "$${target}" -t "$${image}" \
+	      --build-arg NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL="$(NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL)" --load .; \
 	  else \
-	    docker buildx build --target "$${target}" -t "$${image}" --load .; \
+	    docker buildx build --target "$${target}" -t "$${image}" \
+	      --build-arg NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL="$(NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL)" --load .; \
 	  fi; \
 	  echo "==> Pushing $${image}"; \
 	  docker push "$${image}"; \

@@ -43,6 +43,7 @@ chmod 600 .env
 - `WEB_ORIGIN`：精确的公网 HTTPS Origin，例如 `https://point.example.com`，不能包含路径或结尾斜杠。
 - `BOOTSTRAP_ADMIN_USERNAME` / `BOOTSTRAP_ADMIN_PASSWORD`：空库首次启动时，若库中尚无任何管理员，API 会用这两项创建默认管理员。模板默认值为 `admin` / `Admin123!x`。登录后应尽快修改密码；已有管理员时不会自动创建或覆盖。
 - `AI_CONFIG_ENCRYPTION_KEY`：32 字节随机密钥的 base64，用于加密管理端 AI 模型 API Key；不得继续使用模板占位。
+- （可选）商品图走 Cloudflare R2：将 `STORAGE_DRIVER=r2`，填写 `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` / `R2_PUBLIC_BASE_URL`（公开读 CDN 基址，无尾斜杠）。Bucket 需配置公开读或绑定自定义域名。Web 填写 `PRODUCT_IMAGE_PUBLIC_BASE_URL`（或兼容名 `NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL`），须与 `R2_PUBLIC_BASE_URL` 一致、无尾斜杠；该值由 Web 容器**运行时**注入页面，改 `.env` 后 `docker compose up -d --force-recreate web` 即可，无需为改 CDN 域名重建镜像。默认 `STORAGE_DRIVER=local` 时仍使用上传卷 `/app/uploads`。
 
 先验证配置，再拉取并启动（镜像已在本机时可跳过 `pull`）：
 

@@ -111,9 +111,27 @@ test("生产服务按数据库、迁移、API、Web 顺序启动", () => {
   assert.equal(services.web.depends_on.api.condition, "service_healthy");
   assert.equal(services.migrate.restart, "no");
   assert.equal(services.api.environment.PRODUCT_UPLOAD_ROOT, "/app/uploads");
+  assert.equal(services.api.environment.STORAGE_DRIVER, "local");
   assert.equal(
     services.web.environment.API_SERVER_BASE_URL,
     "http://api:3000/api/v1",
+  );
+});
+
+test("生产环境模板包含 R2 存储占位且默认 local", async () => {
+  const environment = await readProductionEnvironment();
+  const compose = readProductionCompose();
+
+  assert.equal(environment.STORAGE_DRIVER, "local");
+  assert.equal(environment.R2_ACCOUNT_ID, "");
+  assert.equal(environment.R2_PUBLIC_BASE_URL, "");
+  assert.equal(environment.PRODUCT_IMAGE_PUBLIC_BASE_URL, "");
+  assert.equal(environment.NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL, "");
+  assert.equal(compose.services.api.environment.STORAGE_DRIVER, "local");
+  assert.equal(compose.services.web.environment.PRODUCT_IMAGE_PUBLIC_BASE_URL, "");
+  assert.equal(
+    compose.services.web.environment.NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL,
+    "",
   );
 });
 

@@ -1,9 +1,7 @@
 import type { ApiComponents } from "@point-quest/api-client";
 import { Card } from "@point-quest/ui";
 import { Ban, CircleCheck, Clock3, Coins } from "lucide-react";
-import Image from "next/image";
-
-import { productImageUrl } from "@/lib/product-image";
+import { ProductImage } from "@/components/media/product-image";
 
 type Order = ApiComponents["schemas"]["OrderDto"];
 
@@ -40,11 +38,11 @@ export function OrderCard({ order }: { order: Order }) {
   return (
     <Card className="order-card">
       <div className="order-card__image">
-        <Image
+        <ProductImage
           alt={order.productNameSnapshot}
           height={240}
+          imageKey={order.productImageKeySnapshot}
           sizes="8rem"
-          src={productImageUrl(order.productImageKeySnapshot)}
           width={320}
         />
       </div>

@@ -8,7 +8,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { browserApiClient } from "@/lib/api/browser-client";
 import { getApiErrorMessage } from "@/lib/api/error-message";
-import { productImageUrl } from "@/lib/product-image";
+import {
+  isAbsoluteProductImageUrl,
+  productImageUrl,
+} from "@/lib/product-image";
 
 type Schemas = ApiComponents["schemas"];
 type Product = Schemas["ProductDto"];
@@ -108,6 +111,7 @@ export function ProductForm({
     () => (image ? URL.createObjectURL?.(image) : null),
     [image],
   );
+  const previewSrc = localPreview ?? (imageKey ? productImageUrl(imageKey) : null);
   const pending = phase !== "idle";
 
   useEffect(() => {
@@ -251,13 +255,15 @@ export function ProductForm({
           </label>
         </div>
 
-        {localPreview || imageKey ? (
+        {previewSrc ? (
           <div className="admin-image-preview">
             <Image
               alt="商品图片预览"
               height={180}
-              src={localPreview ?? productImageUrl(imageKey ?? "")}
-              unoptimized={Boolean(localPreview)}
+              src={previewSrc}
+              unoptimized={
+                Boolean(localPreview) || isAbsoluteProductImageUrl(previewSrc)
+              }
               width={240}
             />
             <span>{image?.name ?? "当前商品图片"}</span>

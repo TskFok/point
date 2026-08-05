@@ -1,9 +1,7 @@
 import type { ApiComponents } from "@point-quest/api-client";
 import { Button, Card } from "@point-quest/ui";
 import { Coins, Package, ShoppingBag } from "lucide-react";
-import Image from "next/image";
-
-import { productImageUrl } from "@/lib/product-image";
+import { ProductImage } from "@/components/media/product-image";
 
 type Product = ApiComponents["schemas"]["ProductDto"];
 
@@ -26,11 +24,11 @@ export function ProductCard({
   return (
     <Card className="product-card">
       <div className="product-card__image">
-        <Image
+        <ProductImage
           alt={product.name}
           height={600}
+          imageKey={product.imageKey}
           sizes="(max-width: 640px) 100vw, (max-width: 1100px) 50vw, 33vw"
-          src={productImageUrl(product.imageKey)}
           width={800}
         />
         <span

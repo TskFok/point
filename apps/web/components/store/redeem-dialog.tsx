@@ -3,7 +3,6 @@
 import type { ApiComponents } from "@point-quest/api-client";
 import { Button } from "@point-quest/ui";
 import { Coins, LoaderCircle, ShoppingBag, X } from "lucide-react";
-import Image from "next/image";
 import {
   Fragment,
   type RefObject,
@@ -13,7 +12,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
-import { productImageUrl } from "@/lib/product-image";
+import { ProductImage } from "@/components/media/product-image";
 
 type Product = ApiComponents["schemas"]["ProductDto"];
 
@@ -220,10 +219,10 @@ export function RedeemDialog({
           <X aria-hidden="true" />
         </button>
         <div className="redeem-dialog__product">
-          <Image
+          <ProductImage
             alt=""
             height={160}
-            src={productImageUrl(product.imageKey)}
+            imageKey={product.imageKey}
             width={200}
           />
           <div>

@@ -3,6 +3,7 @@ import "@point-quest/ui/tokens.css";
 import "./globals.css";
 
 import { ToastProvider } from "@/components/feedback/toast-region";
+import { ProductImageRuntimeConfig } from "@/components/providers/product-image-runtime-config";
 import { QueryProvider } from "@/components/providers/query-provider";
 
 export const metadata: Metadata = {
@@ -21,6 +22,7 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <body>
+        <ProductImageRuntimeConfig />
         <QueryProvider>
           <ToastProvider>{children}</ToastProvider>
         </QueryProvider>

@@ -56,6 +56,12 @@ services:
       AI_CONFIG_ENCRYPTION_KEY: ${AI_CONFIG_ENCRYPTION_KEY:?AI_CONFIG_ENCRYPTION_KEY is required}
       AI_TASK_STORE_RESPONSE_BODY: ${AI_TASK_STORE_RESPONSE_BODY:-false}
       PRODUCT_UPLOAD_ROOT: /app/uploads
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET: ${R2_BUCKET:-}
+      R2_PUBLIC_BASE_URL: ${R2_PUBLIC_BASE_URL:-}
     expose:
       - "3000"
     volumes:
@@ -90,6 +96,9 @@ services:
       PORT: "3001"
       HOSTNAME: 0.0.0.0
       API_SERVER_BASE_URL: http://api:3000/api/v1
+      # 运行时注入到 HTML（不依赖构建期内联）；二者任填其一即可
+      PRODUCT_IMAGE_PUBLIC_BASE_URL: ${PRODUCT_IMAGE_PUBLIC_BASE_URL:-}
+      NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL: ${NEXT_PUBLIC_PRODUCT_IMAGE_BASE_URL:-}
     ports:
       - 127.0.0.1:3001:3001
     depends_on:
