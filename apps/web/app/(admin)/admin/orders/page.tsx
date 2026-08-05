@@ -14,6 +14,10 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
+  AdminPageHeading,
+  AdminPageHeadingStat,
+} from "@/components/admin/admin-page-heading";
+import {
   OrderStatusDialog,
   type OrderStatusAction,
 } from "@/components/admin/order-status-dialog";
@@ -224,22 +228,19 @@ export default function AdminOrdersPage({
 
   return (
     <section className="admin-page">
-      <div
-        className="page-heading page-heading--split"
-        ref={fallbackFocusRef}
+      <AdminPageHeading
+        description="筛选待领取订单，确认交付，或安全取消并退还资产。"
+        headingRef={fallbackFocusRef}
+        kicker="兑换履约中心"
         tabIndex={-1}
+        title="订单管理"
       >
-        <div>
-          <p className="page-kicker">兑换履约中心</p>
-          <h1>订单管理</h1>
-          <p>筛选待领取订单，确认交付，或安全取消并退还资产。</p>
-        </div>
-        <div className="page-heading__stat">
-          <ClipboardList aria-hidden="true" />
-          <span>当前结果</span>
-          <strong>{meta?.total ?? "—"}</strong>
-        </div>
-      </div>
+        <AdminPageHeadingStat
+          icon={<ClipboardList aria-hidden="true" />}
+          label="当前结果"
+          value={meta?.total ?? "—"}
+        />
+      </AdminPageHeading>
 
       <Card className="admin-filter-card">
         <form

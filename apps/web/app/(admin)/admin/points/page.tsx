@@ -5,6 +5,10 @@ import { Card } from "@point-quest/ui";
 import { Clock3, Gauge, History, LoaderCircle, UserRound } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import {
+  AdminPageHeading,
+  AdminPageHeadingStat,
+} from "@/components/admin/admin-page-heading";
 import { PointConfigForm } from "@/components/admin/point-config-form";
 import { Pagination } from "@/components/data/pagination";
 import { EmptyState } from "@/components/empty-state";
@@ -98,18 +102,17 @@ export default function AdminPointsPage({
 
   return (
     <section className="admin-page">
-      <div className="page-heading page-heading--split">
-        <div>
-          <p className="page-kicker">学习奖励配置</p>
-          <h1>积分倍率</h1>
-          <p>每次保存都会追加一条历史记录，便于追踪奖励规则变化。</p>
-        </div>
-        <div className="page-heading__stat">
-          <Gauge aria-hidden="true" />
-          <span>当前倍率</span>
-          <strong>{current ? `${current.multiplier}×` : "—"}</strong>
-        </div>
-      </div>
+      <AdminPageHeading
+        description="每次保存都会追加一条历史记录，便于追踪奖励规则变化。"
+        kicker="学习奖励配置"
+        title="积分倍率"
+      >
+        <AdminPageHeadingStat
+          icon={<Gauge aria-hidden="true" />}
+          label="当前倍率"
+          value={current ? `${current.multiplier}×` : "—"}
+        />
+      </AdminPageHeading>
 
       {loading && !current ? (
         <Card aria-live="polite" className="page-loading" role="status">

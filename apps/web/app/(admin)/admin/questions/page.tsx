@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { AdminPageHeading } from "@/components/admin/admin-page-heading";
 import { QuestionFormDialog } from "@/components/admin/question-form-dialog";
 import { Pagination } from "@/components/data/pagination";
 import { StatusFilter } from "@/components/data/status-filter";
@@ -84,6 +85,7 @@ export default function AdminQuestionsPage({
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(
     null,
   );
+  const [confirmError, setConfirmError] = useState<string | null>(null);
   const [editing, setEditing] = useState<"create" | { id: string } | null>(
     null,
   );
@@ -146,8 +148,8 @@ export default function AdminQuestionsPage({
     void load();
   }, [appliedFilters, load, page]);
 
-  async function toggleStatus(question: Question) {
-    if (mutatingId) return;
+  async function toggleStatus(question: Question): Promise<string | null> {
+    if (mutatingId) return "请等待当前操作完成";
     setMutatingId(question.id);
     setMutationError(null);
     try {
@@ -155,32 +157,43 @@ export default function AdminQuestionsPage({
         isActive: !question.isActive,
       });
       await load();
+      return null;
     } catch (error) {
-      setMutationError(getApiErrorMessage(error));
+      return getApiErrorMessage(error);
     } finally {
       setMutatingId(null);
     }
   }
 
+  function openConfirm(action: ConfirmAction) {
+    setConfirmError(null);
+    setConfirmAction(action);
+  }
+
   async function handleConfirm() {
     if (!confirmAction || mutatingId) return;
-    await toggleStatus(confirmAction.target);
-    if (mounted.current) setConfirmAction(null);
+    setConfirmError(null);
+    const error = await toggleStatus(confirmAction.target);
+    if (!mounted.current) return;
+    if (error) {
+      setConfirmError(error);
+      return;
+    }
+    setConfirmAction(null);
   }
 
   return (
     <section className="admin-page">
-      <div className="page-heading page-heading--split">
-        <div>
-          <p className="page-kicker">英语内容中心</p>
-          <h1>题库管理</h1>
-          <p>维护题干、答案、解析和基础积分，控制题目是否进入练习池。</p>
-        </div>
+      <AdminPageHeading
+        description="维护题干、答案、解析和基础积分，控制题目是否进入练习池。"
+        kicker="英语内容中心"
+        title="题库管理"
+      >
         <Button onClick={() => setEditing("create")}>
           <Plus aria-hidden="true" />
           添加题目
         </Button>
-      </div>
+      </AdminPageHeading>
 
       {editing ? (
         <QuestionFormDialog
@@ -201,8 +214,12 @@ export default function AdminQuestionsPage({
           confirmLabel="停用题目"
           confirmVariant="danger"
           description="停用后该题目将不再进入练习池。"
+          error={confirmError}
           onCancel={() => {
-            if (!mutatingId) setConfirmAction(null);
+            if (!mutatingId) {
+              setConfirmAction(null);
+              setConfirmError(null);
+            }
           }}
           onConfirm={() => void handleConfirm()}
           pending={mutatingId === confirmAction.target.id}
@@ -331,13 +348,16 @@ export default function AdminQuestionsPage({
                           }
                           onClick={() => {
                             if (question.isActive) {
-                              setConfirmAction({
+                              openConfirm({
                                 kind: "disable",
                                 target: question,
                               });
                               return;
                             }
-                            void toggleStatus(question);
+                            void (async () => {
+                              const error = await toggleStatus(question);
+                              if (error) setMutationError(error);
+                            })();
                           }}
                           variant="secondary"
                         >

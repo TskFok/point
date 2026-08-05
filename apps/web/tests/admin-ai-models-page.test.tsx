@@ -1,3 +1,4 @@
+import { ApiNetworkError } from "@point-quest/api-client";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -113,6 +114,34 @@ describe("管理员 AI 模型页", () => {
     });
   });
 
+  it("删除失败保留确认弹窗并展示错误", async () => {
+    const user = userEvent.setup();
+    const api = createApi({
+      deleteAdminAiModel: jest
+        .fn()
+        .mockRejectedValue(
+          new ApiNetworkError("/api/v1/admin/ai-models/model-1", "offline"),
+        ),
+    });
+    render(<AdminAiModelsPage api={api} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("gpt-test")).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: "删除" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "确认删除模型「gpt-test」？",
+    });
+    await user.click(within(dialog).getByRole("button", { name: "删除" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "网络连接失败，请检查网络后重试",
+    );
+    expect(
+      screen.getByRole("dialog", { name: "确认删除模型「gpt-test」？" }),
+    ).toBeVisible();
+  });
+
   it("取消删除不调用 deleteAdminAiModel", async () => {
     const user = userEvent.setup();
     const api = createApi();
@@ -161,6 +190,34 @@ describe("管理员 AI 模型页", () => {
       });
       expect(screen.getByRole("status")).toHaveTextContent("已停用");
     });
+  });
+
+  it("停用失败保留确认弹窗并展示错误", async () => {
+    const user = userEvent.setup();
+    const api = createApi({
+      updateAdminAiModel: jest
+        .fn()
+        .mockRejectedValue(
+          new ApiNetworkError("/api/v1/admin/ai-models/model-1", "offline"),
+        ),
+    });
+    render(<AdminAiModelsPage api={api} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("gpt-test")).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: "停用" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "确认停用模型「gpt-test」？",
+    });
+    await user.click(within(dialog).getByRole("button", { name: "停用" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "网络连接失败，请检查网络后重试",
+    );
+    expect(
+      screen.getByRole("dialog", { name: "确认停用模型「gpt-test」？" }),
+    ).toBeVisible();
   });
 
   it("启用无需确认直接调用 updateAdminAiModel", async () => {

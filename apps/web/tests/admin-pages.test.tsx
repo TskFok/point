@@ -1,3 +1,4 @@
+import { ApiNetworkError } from "@point-quest/api-client";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -207,6 +208,38 @@ describe("管理员运营页面", () => {
       await screen.findByRole("img", { name: "已停用状态图标" }),
     ).toBeVisible();
     expect(api.listAdminQuestions).toHaveBeenCalledTimes(2);
+  });
+
+  it("题库停用失败保留确认弹窗并展示错误", async () => {
+    const user = userEvent.setup();
+    const api = {
+      createAdminQuestion: jest.fn(),
+      getAdminQuestion: jest.fn(),
+      listAdminQuestions: jest.fn().mockResolvedValue({
+        data: [question],
+        meta,
+      }),
+      updateAdminQuestion: jest
+        .fn()
+        .mockRejectedValue(
+          new ApiNetworkError("/api/v1/admin/questions/question-1", "offline"),
+        ),
+    };
+    window.history.replaceState(null, "", "/admin/questions");
+    render(<AdminQuestionsPage api={api} />);
+
+    await user.click(await screen.findByRole("button", { name: "停用题目" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "确认停用该题目？",
+    });
+    await user.click(within(dialog).getByRole("button", { name: "停用题目" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "网络连接失败，请检查网络后重试",
+    );
+    expect(
+      screen.getByRole("dialog", { name: "确认停用该题目？" }),
+    ).toBeVisible();
   });
 
   it("题库第二页最后一条停用后按当前筛选重载并回到有效末页", async () => {

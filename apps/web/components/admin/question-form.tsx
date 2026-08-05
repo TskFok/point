@@ -223,7 +223,6 @@ export function QuestionForm({
       onSaved?.(question);
     } catch (error) {
       setSubmitError(getApiErrorMessage(error));
-      setConfirmDisable(false);
     } finally {
       setSaving(false);
     }
@@ -237,8 +236,12 @@ export function QuestionForm({
           confirmLabel="停用题目"
           confirmVariant="danger"
           description="停用后该题目将不再进入练习池。"
+          error={submitError}
           onCancel={() => {
-            if (!saving) setConfirmDisable(false);
+            if (!saving) {
+              setConfirmDisable(false);
+              setSubmitError(null);
+            }
           }}
           onConfirm={() => void disableQuestion()}
           pending={saving}
@@ -408,7 +411,7 @@ export function QuestionForm({
             ))}
           </div>
         ) : null}
-        {submitError ? (
+        {submitError && !confirmDisable ? (
           <p className="admin-form__errors" role="alert">
             {submitError}
           </p>
@@ -425,7 +428,10 @@ export function QuestionForm({
             isActive ? (
               <Button
                 disabled={saving}
-                onClick={() => setConfirmDisable(true)}
+                onClick={() => {
+                  setSubmitError(null);
+                  setConfirmDisable(true);
+                }}
                 type="button"
               >
                 {saving ? (

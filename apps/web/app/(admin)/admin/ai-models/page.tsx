@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { AdminPageHeading } from "@/components/admin/admin-page-heading";
 import { AiModelForm } from "@/components/admin/ai-model-form";
 import { Pagination } from "@/components/data/pagination";
 import { StatusFilter } from "@/components/data/status-filter";
@@ -97,6 +98,7 @@ export default function AdminAiModelsPage({
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(
     null,
   );
+  const [confirmError, setConfirmError] = useState<string | null>(null);
   const automaticLoadKey = useRef<string | null>(null);
   const latestRequest = useRef(0);
   const mounted = useRef(true);
@@ -154,45 +156,57 @@ export default function AdminAiModelsPage({
     void load();
   }
 
-  async function toggleEnabled(model: AiModel) {
-    if (busyId) return;
+  async function toggleEnabled(model: AiModel): Promise<string | null> {
+    if (busyId) return "请等待当前操作完成";
     setBusyId(model.id);
     setActionMessage(null);
     try {
       await api.updateAdminAiModel(model.id, { isEnabled: !model.isEnabled });
       setActionMessage(model.isEnabled ? "已停用" : "已启用");
       await load();
+      return null;
     } catch (caught) {
-      setActionMessage(getApiErrorMessage(caught));
+      return getApiErrorMessage(caught);
     } finally {
       setBusyId(null);
     }
   }
 
-  async function removeModel(model: AiModel) {
-    if (busyId) return;
+  async function removeModel(model: AiModel): Promise<string | null> {
+    if (busyId) return "请等待当前操作完成";
     setBusyId(model.id);
     setActionMessage(null);
     try {
       await api.deleteAdminAiModel(model.id);
       setActionMessage("已删除");
       await load();
+      return null;
     } catch (caught) {
-      setActionMessage(getApiErrorMessage(caught));
+      return getApiErrorMessage(caught);
     } finally {
       setBusyId(null);
     }
   }
 
+  function openConfirm(action: ConfirmAction) {
+    setConfirmError(null);
+    setConfirmAction(action);
+  }
+
   async function handleConfirm() {
     if (!confirmAction || busyId) return;
+    setConfirmError(null);
     const { kind, target } = confirmAction;
-    if (kind === "delete") {
-      await removeModel(target);
-    } else {
-      await toggleEnabled(target);
+    const error =
+      kind === "delete"
+        ? await removeModel(target)
+        : await toggleEnabled(target);
+    if (!mounted.current) return;
+    if (error) {
+      setConfirmError(error);
+      return;
     }
-    if (mounted.current) setConfirmAction(null);
+    setConfirmAction(null);
   }
 
   async function testModel(model: AiModel) {
@@ -215,17 +229,16 @@ export default function AdminAiModelsPage({
 
   return (
     <section className="admin-page">
-      <div className="page-heading page-heading--split">
-        <div>
-          <p className="page-kicker">系统能力</p>
-          <h1>AI 模型</h1>
-          <p>配置模型名称、调用地址与 API Key，供后续智能能力使用。</p>
-        </div>
+      <AdminPageHeading
+        description="配置模型名称、调用地址与 API Key，供后续智能能力使用。"
+        kicker="系统能力"
+        title="AI 模型"
+      >
         <Button onClick={() => setEditing("create")}>
           <Plus aria-hidden="true" />
           添加模型
         </Button>
-      </div>
+      </AdminPageHeading>
 
       {editing ? (
         <FormDialog
@@ -256,8 +269,12 @@ export default function AdminAiModelsPage({
               ? "此操作不可撤销。"
               : "停用后将不可用于新的 AI 任务。"
           }
+          error={confirmError}
           onCancel={() => {
-            if (!busyId) setConfirmAction(null);
+            if (!busyId) {
+              setConfirmAction(null);
+              setConfirmError(null);
+            }
           }}
           onConfirm={() => void handleConfirm()}
           pending={busyId === confirmAction.target.id}
@@ -368,13 +385,16 @@ export default function AdminAiModelsPage({
                           disabled={busyId === model.id}
                           onClick={() => {
                             if (model.isEnabled) {
-                              setConfirmAction({
+                              openConfirm({
                                 kind: "disable",
                                 target: model,
                               });
                               return;
                             }
-                            void toggleEnabled(model);
+                            void (async () => {
+                              const error = await toggleEnabled(model);
+                              if (error) setActionMessage(error);
+                            })();
                           }}
                           variant="secondary"
                         >
@@ -391,7 +411,7 @@ export default function AdminAiModelsPage({
                         <Button
                           disabled={busyId === model.id}
                           onClick={() =>
-                            setConfirmAction({ kind: "delete", target: model })
+                            openConfirm({ kind: "delete", target: model })
                           }
                           variant="secondary"
                         >

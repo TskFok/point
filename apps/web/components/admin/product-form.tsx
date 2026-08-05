@@ -146,6 +146,7 @@ export function ProductForm({
     setSaved(false);
     if (validationErrors.length > 0) return;
     if (willDeactivateOnSave()) {
+      setSubmitError(null);
       setConfirmDeactivate(true);
       return;
     }
@@ -188,7 +189,6 @@ export function ProductForm({
       onSaved?.(product);
     } catch (error) {
       setSubmitError(getApiErrorMessage(error));
-      setConfirmDeactivate(false);
     } finally {
       setPhase("idle");
     }
@@ -202,8 +202,12 @@ export function ProductForm({
           confirmLabel="下架商品"
           confirmVariant="danger"
           description="下架后学员将无法在积分商城兑换该商品。"
+          error={submitError}
           onCancel={() => {
-            if (!pending) setConfirmDeactivate(false);
+            if (!pending) {
+              setConfirmDeactivate(false);
+              setSubmitError(null);
+            }
           }}
           onConfirm={() => void performSubmit()}
           pending={pending}
@@ -307,7 +311,7 @@ export function ProductForm({
             ))}
           </div>
         ) : null}
-        {submitError ? (
+        {submitError && !confirmDeactivate ? (
           <p className="admin-form__errors" role="alert">
             {submitError}
           </p>

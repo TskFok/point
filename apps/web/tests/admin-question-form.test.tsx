@@ -1,4 +1,4 @@
-import { ApiClientError } from "@point-quest/api-client";
+import { ApiClientError, ApiNetworkError } from "@point-quest/api-client";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -110,6 +110,95 @@ describe("管理员题目表单", () => {
     });
     expect(api.updateAdminQuestion).toHaveBeenCalledTimes(1);
     expect(await screen.findByText("题目已停用")).toBeVisible();
+  });
+
+  it("停用确认失败保留弹窗并展示错误，可重试", async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    api.updateAdminQuestion
+      .mockRejectedValueOnce(
+        new ApiNetworkError("/api/v1/admin/questions/question-used", "offline"),
+      )
+      .mockResolvedValueOnce({
+        basePoints: 10,
+        createdAt: "2026-07-31T08:00:00.000Z",
+        createdBy: "admin-1",
+        explanation: "Singular subject.",
+        hasAttempts: true,
+        id: "question-used",
+        isActive: false,
+        options: [
+          {
+            content: "is",
+            id: "opt-a",
+            isCorrect: true,
+            label: "A",
+            position: 0,
+          },
+          {
+            content: "are",
+            id: "opt-b",
+            isCorrect: false,
+            label: "B",
+            position: 1,
+          },
+        ],
+        stem: "She ___ a student.",
+        updatedAt: "2026-07-31T08:00:00.000Z",
+      });
+    const existingQuestion = {
+      basePoints: 10,
+      createdAt: "2026-07-31T08:00:00.000Z",
+      createdBy: "admin-1",
+      explanation: "Singular subject.",
+      hasAttempts: true,
+      id: "question-used",
+      isActive: true,
+      options: [
+        {
+          content: "is",
+          id: "opt-a",
+          isCorrect: true,
+          label: "A",
+          position: 0,
+        },
+        {
+          content: "are",
+          id: "opt-b",
+          isCorrect: false,
+          label: "B",
+          position: 1,
+        },
+      ],
+      stem: "She ___ a student.",
+      updatedAt: "2026-07-31T08:00:00.000Z",
+    };
+    render(
+      <QuestionForm
+        api={api}
+        initialQuestion={existingQuestion as never}
+        mode="edit"
+        questionId="question-used"
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "停用已有记录题目" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "确认停用该题目？",
+    });
+    await user.click(within(dialog).getByRole("button", { name: "停用题目" }));
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "网络连接失败，请检查网络后重试",
+    );
+    expect(
+      screen.getByRole("dialog", { name: "确认停用该题目？" }),
+    ).toBeVisible();
+
+    await user.click(within(dialog).getByRole("button", { name: "停用题目" }));
+    expect(await screen.findByText("题目已停用")).toBeVisible();
+    expect(api.updateAdminQuestion).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("dialog", { name: "确认停用该题目？" })).toBeNull();
   });
 
   it("保存时才发现答题记录后切换只读并仅允许停用", async () => {

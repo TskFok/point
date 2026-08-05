@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { AdminPageHeading } from "@/components/admin/admin-page-heading";
 import { ProductForm } from "@/components/admin/product-form";
 import { Pagination } from "@/components/data/pagination";
 import { StatusFilter } from "@/components/data/status-filter";
@@ -143,17 +144,16 @@ export default function AdminProductsPage({
 
   return (
     <section className="admin-page">
-      <div className="page-heading page-heading--split">
-        <div>
-          <p className="page-kicker">积分奖励中心</p>
-          <h1>商品管理</h1>
-          <p>维护商品图片、库存、积分价格和上架状态。</p>
-        </div>
+      <AdminPageHeading
+        description="维护商品图片、库存、积分价格和上架状态。"
+        kicker="积分奖励中心"
+        title="商品管理"
+      >
         <Button onClick={() => setEditing("create")}>
           <Plus aria-hidden="true" />
           添加商品
         </Button>
-      </div>
+      </AdminPageHeading>
 
       {editing ? (
         <FormDialog

@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { AdminPageHeading } from "@/components/admin/admin-page-heading";
 import { AiTaskForm } from "@/components/admin/ai-task-form";
 import { Pagination } from "@/components/data/pagination";
 import { StatusFilter } from "@/components/data/status-filter";
@@ -107,6 +108,7 @@ export default function AdminAiTasksPage({
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(
     null,
   );
+  const [confirmError, setConfirmError] = useState<string | null>(null);
   const automaticLoadKey = useRef<string | null>(null);
   const latestRequest = useRef(0);
   const mounted = useRef(true);
@@ -198,23 +200,24 @@ export default function AdminAiTasksPage({
     void load();
   }
 
-  async function toggleEnabled(task: AiTask) {
-    if (busyId) return;
+  async function toggleEnabled(task: AiTask): Promise<string | null> {
+    if (busyId) return "请等待当前操作完成";
     setBusyId(task.id);
     setActionMessage(null);
     try {
       await api.updateAdminAiTask(task.id, { isEnabled: !task.isEnabled });
       setActionMessage(task.isEnabled ? "已停用自动调度" : "已启用自动调度");
       await load();
+      return null;
     } catch (caught) {
-      setActionMessage(getApiErrorMessage(caught));
+      return getApiErrorMessage(caught);
     } finally {
       setBusyId(null);
     }
   }
 
-  async function removeTask(task: AiTask) {
-    if (busyId) return;
+  async function removeTask(task: AiTask): Promise<string | null> {
+    if (busyId) return "请等待当前操作完成";
     setBusyId(task.id);
     setActionMessage(null);
     try {
@@ -222,15 +225,16 @@ export default function AdminAiTasksPage({
       setActionMessage("已删除");
       if (runsFor?.id === task.id) setRunsFor(null);
       await load();
+      return null;
     } catch (caught) {
-      setActionMessage(getApiErrorMessage(caught));
+      return getApiErrorMessage(caught);
     } finally {
       setBusyId(null);
     }
   }
 
-  async function runTask(task: AiTask) {
-    if (busyId) return;
+  async function runTask(task: AiTask): Promise<string | null> {
+    if (busyId) return "请等待当前操作完成";
     setBusyId(task.id);
     setActionMessage(null);
     try {
@@ -244,24 +248,35 @@ export default function AdminAiTasksPage({
       if (runsFor?.id === task.id) {
         await loadRuns(task);
       }
+      return null;
     } catch (caught) {
-      setActionMessage(getApiErrorMessage(caught));
+      return getApiErrorMessage(caught);
     } finally {
       setBusyId(null);
     }
   }
 
+  function openConfirm(action: ConfirmAction) {
+    setConfirmError(null);
+    setConfirmAction(action);
+  }
+
   async function handleConfirm() {
     if (!confirmAction || busyId) return;
+    setConfirmError(null);
     const { kind, target } = confirmAction;
-    if (kind === "delete") {
-      await removeTask(target);
-    } else if (kind === "disable") {
-      await toggleEnabled(target);
-    } else {
-      await runTask(target);
+    const error =
+      kind === "delete"
+        ? await removeTask(target)
+        : kind === "disable"
+          ? await toggleEnabled(target)
+          : await runTask(target);
+    if (!mounted.current) return;
+    if (error) {
+      setConfirmError(error);
+      return;
     }
-    if (mounted.current) setConfirmAction(null);
+    setConfirmAction(null);
   }
 
   const confirmPresentation = confirmAction
@@ -289,12 +304,11 @@ export default function AdminAiTasksPage({
 
   return (
     <section className="admin-page">
-      <div className="page-heading page-heading--split">
-        <div>
-          <p className="page-kicker">系统能力</p>
-          <h1>AI 任务</h1>
-          <p>配置定时出题任务，按字典序调用 AI 生成英文题干与中文选项。</p>
-        </div>
+      <AdminPageHeading
+        description="配置定时出题任务，按字典序调用 AI 生成英文题干与中文选项。"
+        kicker="系统能力"
+        title="AI 任务"
+      >
         <Button
           onClick={() => {
             setEditing("create");
@@ -305,7 +319,7 @@ export default function AdminAiTasksPage({
           <Plus aria-hidden="true" />
           新建任务
         </Button>
-      </div>
+      </AdminPageHeading>
 
       <Card className="admin-filter-card">
         <div className="admin-filter-grid">
@@ -345,8 +359,12 @@ export default function AdminAiTasksPage({
           confirmLabel={confirmPresentation.confirmLabel}
           confirmVariant={confirmPresentation.confirmVariant}
           description={confirmPresentation.description}
+          error={confirmError}
           onCancel={() => {
-            if (!busyId) setConfirmAction(null);
+            if (!busyId) {
+              setConfirmAction(null);
+              setConfirmError(null);
+            }
           }}
           onConfirm={() => void handleConfirm()}
           pending={busyId === confirmAction.target.id}
@@ -509,13 +527,16 @@ export default function AdminAiTasksPage({
                         disabled={busyId === task.id}
                         onClick={() => {
                           if (task.isEnabled) {
-                            setConfirmAction({
+                            openConfirm({
                               kind: "disable",
                               target: task,
                             });
                             return;
                           }
-                          void toggleEnabled(task);
+                          void (async () => {
+                            const error = await toggleEnabled(task);
+                            if (error) setActionMessage(error);
+                          })();
                         }}
                         type="button"
                         variant="secondary"
@@ -530,7 +551,7 @@ export default function AdminAiTasksPage({
                       <Button
                         disabled={busyId === task.id}
                         onClick={() =>
-                          setConfirmAction({ kind: "run", target: task })
+                          openConfirm({ kind: "run", target: task })
                         }
                         type="button"
                         variant="secondary"
@@ -554,7 +575,7 @@ export default function AdminAiTasksPage({
                       <Button
                         disabled={busyId === task.id}
                         onClick={() =>
-                          setConfirmAction({ kind: "delete", target: task })
+                          openConfirm({ kind: "delete", target: task })
                         }
                         type="button"
                         variant="secondary"

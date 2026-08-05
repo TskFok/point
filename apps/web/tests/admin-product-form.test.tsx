@@ -199,6 +199,57 @@ describe("管理员商品表单", () => {
     });
   });
 
+  it("下架确认失败保留弹窗并展示错误，可重试", async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    api.updateAdminProduct
+      .mockRejectedValueOnce(
+        new ApiNetworkError("/api/v1/admin/products/product-1", "offline"),
+      )
+      .mockResolvedValueOnce({ id: "product-1" });
+    const initialProduct = {
+      createdAt: "2026-08-04T00:00:00.000Z",
+      id: "product-1",
+      name: "英语笔记本",
+      description: "适合记录生词",
+      imageKey: "products/existing.png",
+      stock: 8,
+      pointsCost: 120,
+      isActive: true,
+      updatedAt: "2026-08-04T00:00:00.000Z",
+    };
+    render(
+      <ProductForm
+        api={api}
+        initialProduct={initialProduct}
+        mode="edit"
+        productId="product-1"
+      />,
+    );
+
+    await user.click(screen.getByRole("checkbox", { name: "上架商品" }));
+    await user.click(screen.getByRole("button", { name: "保存商品" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "确认下架商品「英语笔记本」？",
+    });
+    await user.click(within(dialog).getByRole("button", { name: "下架商品" }));
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "网络连接失败，请检查网络后重试",
+    );
+    expect(
+      screen.getByRole("dialog", { name: "确认下架商品「英语笔记本」？" }),
+    ).toBeVisible();
+
+    await user.click(within(dialog).getByRole("button", { name: "下架商品" }));
+    await waitFor(() => {
+      expect(api.updateAdminProduct).toHaveBeenCalledTimes(2);
+    });
+    expect(
+      screen.queryByRole("dialog", { name: /确认下架商品/ }),
+    ).toBeNull();
+  });
+
   it("编辑时保持上架保存无需二次确认", async () => {
     const user = userEvent.setup();
     const api = createApi();
