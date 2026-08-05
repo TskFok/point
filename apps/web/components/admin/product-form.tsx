@@ -222,6 +222,7 @@ export function ProductForm({
           requestSubmit();
         }}
       >
+        <div className="admin-form__scroll">
         <div className="admin-form__grid">
           <label className="admin-field">
             <span>商品名称</span>
@@ -322,6 +323,7 @@ export function ProductForm({
             商品已保存
           </p>
         ) : null}
+        </div>
 
         <div className="admin-form__actions">
           <Button disabled={pending} type="submit">

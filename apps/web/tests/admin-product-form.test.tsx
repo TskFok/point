@@ -22,6 +22,17 @@ async function fillProduct(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("管理员商品表单", () => {
+  it("将操作区放在滚动区外", () => {
+    const { container } = render(<ProductForm api={createApi()} mode="create" />);
+    const form = container.querySelector(".admin-form");
+    const scroll = form?.querySelector(":scope > .admin-form__scroll");
+    const actions = form?.querySelector(":scope > .admin-form__actions");
+    expect(scroll).not.toBeNull();
+    expect(actions).not.toBeNull();
+    expect(scroll?.contains(screen.getByLabelText("商品名称"))).toBe(true);
+    expect(scroll?.contains(actions as Node)).toBe(false);
+  });
+
   it("校验必填名称、非负库存和正积分", async () => {
     const user = userEvent.setup();
     const api = createApi();

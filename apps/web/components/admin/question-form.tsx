@@ -256,6 +256,7 @@ export function QuestionForm({
           void submit();
         }}
       >
+        <div className="admin-form__scroll">
         <div className="admin-form__grid">
           <label className="admin-field admin-field--wide">
             <span>题干</span>
@@ -422,6 +423,7 @@ export function QuestionForm({
             {successMessage}
           </p>
         ) : null}
+        </div>
 
         <div className="admin-form__actions">
           {readOnly ? (

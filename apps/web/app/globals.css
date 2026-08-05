@@ -1625,6 +1625,10 @@ svg {
   box-shadow: var(--shadow-float);
 }
 
+.form-dialog__header {
+  flex-shrink: 0;
+}
+
 .form-dialog__header h2 {
   margin: 0;
   font-size: 1.35rem;
@@ -1637,9 +1641,49 @@ svg {
 }
 
 .form-dialog__body {
-  overflow: auto;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
   margin-top: 1rem;
   padding-right: 0.25rem;
+}
+
+.form-dialog__body > .admin-form-card,
+.form-dialog__body > .pq-card.admin-form-card {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.form-dialog__body .admin-form {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+}
+
+.form-dialog__body .admin-form__scroll {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  gap: 1.25rem;
+  overflow: auto;
+  padding-right: 0.15rem;
+  padding-bottom: 0.25rem;
+}
+
+.form-dialog__body .admin-form__actions {
+  flex-shrink: 0;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border);
+  background: var(--surface-raised);
 }
 
 .confirm-dialog {

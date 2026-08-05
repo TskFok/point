@@ -168,6 +168,7 @@ export function AiModelForm({
           void submit();
         }}
       >
+        <div className="admin-form__scroll">
         <div className="admin-form__grid">
           <label className="admin-field">
             <span>模型名称</span>
@@ -241,6 +242,7 @@ export function AiModelForm({
             模型配置已保存
           </p>
         ) : null}
+        </div>
 
         <div className="admin-form__actions">
           <Button disabled={saving || testing} type="submit">

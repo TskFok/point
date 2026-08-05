@@ -42,6 +42,22 @@ async function fillRequiredQuestion(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("管理员题目表单", () => {
+  it("将操作区放在滚动区外", () => {
+    const { container } = render(
+      <QuestionForm
+        api={createApi()}
+        mode="create"
+      />,
+    );
+    const form = container.querySelector(".admin-form");
+    const scroll = form?.querySelector(":scope > .admin-form__scroll");
+    const actions = form?.querySelector(":scope > .admin-form__actions");
+    expect(scroll).not.toBeNull();
+    expect(actions).not.toBeNull();
+    expect(scroll?.contains(screen.getByLabelText("题干"))).toBe(true);
+    expect(scroll?.contains(actions as Node)).toBe(false);
+  });
+
   it("已有答题记录时字段只读且停用只发送 isActive false", async () => {
     const user = userEvent.setup();
     const api = createApi();

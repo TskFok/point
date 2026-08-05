@@ -131,6 +131,7 @@ export function AiTaskForm({
           void submit();
         }}
       >
+        <div className="admin-form__scroll">
         <div className="admin-form__grid">
           <label className="admin-field">
             <span>任务名称</span>
@@ -233,6 +234,7 @@ export function AiTaskForm({
             任务已保存
           </p>
         ) : null}
+        </div>
 
         <div className="admin-form__actions">
           <Button disabled={saving} type="submit">
