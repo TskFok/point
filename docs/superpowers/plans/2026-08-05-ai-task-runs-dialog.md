@@ -39,7 +39,7 @@ Spec: `docs/superpowers/specs/2026-08-05-ai-task-runs-dialog-design.md`
 - Consumes: `FormDialog` from `@/components/ui/form-dialog`（已 import）
 - Produces: 无新导出；页面行为：`runsFor` 非空时渲染 `role="dialog"`，标题 `执行记录 · {name}`
 
-- [ ] **Step 1: 更新失败测试（dialog 打开 + 关闭）**
+- [x] **Step 1: 更新失败测试（dialog 打开 + 关闭）**
 
 将现有用例 `执行记录调用 listAdminAiTaskRuns` 改为断言 dialog，并追加关闭断言：
 
@@ -75,7 +75,7 @@ Spec: `docs/superpowers/specs/2026-08-05-ai-task-runs-dialog-design.md`
 
 说明：`FormDialog` 关闭按钮 `aria-label` 默认为「关闭」（见 `apps/web/tests/form-dialog.test.tsx`）。点击关闭后 dialog 应从文档移除。
 
-- [ ] **Step 2: 跑测确认失败（或行为不符）**
+- [x] **Step 2: 跑测确认失败（或行为不符）**
 
 Run:
 
@@ -85,7 +85,7 @@ pnpm --filter web test -- admin-ai-tasks-page.test.tsx -t "执行记录调用 li
 
 Expected: 失败——当前实现是页面内 `h2` + 文案「关闭」的 `Button`，不是 `role="dialog"`；或关闭后行为与断言不符。若因旧实现碰巧能匹配部分断言，以「缺少 `role="dialog"`」为准确认需改实现。
 
-- [ ] **Step 3: 将 runs 区块改为 FormDialog**
+- [x] **Step 3: 将 runs 区块改为 FormDialog**
 
 在 `apps/web/app/(admin)/admin/ai-tasks/page.tsx`：
 
@@ -156,7 +156,7 @@ Expected: 失败——当前实现是页面内 `h2` + 文案「关闭」的 `But
 - 保留 `Card` import（筛选区仍用 `Card`）。
 - 不要改 `loadRuns` / API / 表格列。
 
-- [ ] **Step 4: 跑测通过**
+- [x] **Step 4: 跑测通过**
 
 Run:
 
@@ -166,7 +166,7 @@ pnpm --filter web test -- admin-ai-tasks-page.test.tsx
 
 Expected: 全部 PASS。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/web/app/\(admin\)/admin/ai-tasks/page.tsx apps/web/tests/admin-ai-tasks-page.test.tsx
