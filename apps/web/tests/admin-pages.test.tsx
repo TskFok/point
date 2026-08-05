@@ -195,6 +195,11 @@ describe("管理员运营页面", () => {
     render(<AdminQuestionsPage api={api} />);
 
     await user.click(await screen.findByRole("button", { name: "停用题目" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "确认停用该题目？",
+    });
+    expect(api.updateAdminQuestion).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole("button", { name: "停用题目" }));
     expect(api.updateAdminQuestion).toHaveBeenCalledWith("question-1", {
       isActive: false,
     });
@@ -241,6 +246,10 @@ describe("管理员运营页面", () => {
     render(<AdminQuestionsPage api={api} />);
 
     await user.click(await screen.findByRole("button", { name: "停用题目" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "确认停用该题目？",
+    });
+    await user.click(within(dialog).getByRole("button", { name: "停用题目" }));
 
     expect(await screen.findByText("Replacement question")).toBeVisible();
     expect(api.listAdminQuestions).toHaveBeenNthCalledWith(2, {
@@ -276,6 +285,35 @@ describe("管理员运营页面", () => {
       screen.queryByRole("button", { name: "启用题目" }),
     ).not.toBeInTheDocument();
     expect(api.updateAdminQuestion).not.toHaveBeenCalled();
+  });
+
+  it("页头使用 page-heading--split 并展示当前倍率", async () => {
+    const config = {
+      createdAt: "2026-07-31T08:00:00.000Z",
+      id: "config-1",
+      multiplier: 2,
+      updatedBy: "admin-1",
+      updater: { id: "admin-1", username: "admin" },
+    };
+    const api = {
+      getAdminPointConfig: jest.fn().mockResolvedValue(config),
+      listAdminPointConfigHistory: jest.fn().mockResolvedValue({
+        data: [config],
+        meta,
+      }),
+      updateAdminPointConfig: jest.fn(),
+    };
+    const { container } = render(<AdminPointsPage api={api} />);
+
+    const heading = container.querySelector(".page-heading--split");
+    expect(heading).not.toBeNull();
+    expect(
+      within(heading as HTMLElement).getByRole("heading", { name: "积分倍率" }),
+    ).toBeVisible();
+    expect(
+      await within(heading as HTMLElement).findByText("2×"),
+    ).toBeVisible();
+    expect(within(heading as HTMLElement).getByText("当前倍率")).toBeVisible();
   });
 
   it("倍率限制为 1–10 整数并刷新配置历史", async () => {
@@ -551,6 +589,10 @@ describe("管理员运营页面", () => {
     await user.click(await screen.findByRole("button", { name: "编辑商品" }));
     await user.click(screen.getByRole("checkbox", { name: "上架商品" }));
     await user.click(screen.getByRole("button", { name: "保存商品" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "确认下架商品「英语笔记本」？",
+    });
+    await user.click(within(dialog).getByRole("button", { name: "下架商品" }));
 
     expect(await screen.findByText("英语贴纸")).toBeVisible();
     expect(api.listAdminProducts).toHaveBeenNthCalledWith(2, {

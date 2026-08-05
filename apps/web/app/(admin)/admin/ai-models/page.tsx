@@ -20,6 +20,7 @@ import { Pagination } from "@/components/data/pagination";
 import { StatusFilter } from "@/components/data/status-filter";
 import { EmptyState } from "@/components/empty-state";
 import { AsyncError } from "@/components/feedback/async-error";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FormDialog } from "@/components/ui/form-dialog";
 import { browserApiClient } from "@/lib/api/browser-client";
 import { getApiErrorMessage } from "@/lib/api/error-message";
@@ -38,6 +39,10 @@ type AiModelsApi = Pick<
 >;
 
 type Filters = { isEnabled: string };
+
+type ConfirmAction =
+  | { kind: "delete"; target: AiModel }
+  | { kind: "disable"; target: AiModel };
 
 const formatter = new Intl.DateTimeFormat("zh-CN", {
   dateStyle: "medium",
@@ -89,6 +94,9 @@ export default function AdminAiModelsPage({
   const [formPending, setFormPending] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(
+    null,
+  );
   const automaticLoadKey = useRef<string | null>(null);
   const latestRequest = useRef(0);
   const mounted = useRef(true);
@@ -163,9 +171,6 @@ export default function AdminAiModelsPage({
 
   async function removeModel(model: AiModel) {
     if (busyId) return;
-    if (!window.confirm(`确认删除模型「${model.name}」？此操作不可撤销。`)) {
-      return;
-    }
     setBusyId(model.id);
     setActionMessage(null);
     try {
@@ -177,6 +182,17 @@ export default function AdminAiModelsPage({
     } finally {
       setBusyId(null);
     }
+  }
+
+  async function handleConfirm() {
+    if (!confirmAction || busyId) return;
+    const { kind, target } = confirmAction;
+    if (kind === "delete") {
+      await removeModel(target);
+    } else {
+      await toggleEnabled(target);
+    }
+    if (mounted.current) setConfirmAction(null);
   }
 
   async function testModel(model: AiModel) {
@@ -228,6 +244,29 @@ export default function AdminAiModelsPage({
             onSaved={handleSaved}
           />
         </FormDialog>
+      ) : null}
+
+      {confirmAction ? (
+        <ConfirmDialog
+          cancelLabel="取消"
+          confirmLabel={confirmAction.kind === "delete" ? "删除" : "停用"}
+          confirmVariant="danger"
+          description={
+            confirmAction.kind === "delete"
+              ? "此操作不可撤销。"
+              : "停用后将不可用于新的 AI 任务。"
+          }
+          onCancel={() => {
+            if (!busyId) setConfirmAction(null);
+          }}
+          onConfirm={() => void handleConfirm()}
+          pending={busyId === confirmAction.target.id}
+          title={
+            confirmAction.kind === "delete"
+              ? `确认删除模型「${confirmAction.target.name}」？`
+              : `确认停用模型「${confirmAction.target.name}」？`
+          }
+        />
       ) : null}
 
       <Card className="admin-filter-card">
@@ -327,7 +366,16 @@ export default function AdminAiModelsPage({
                         </Button>
                         <Button
                           disabled={busyId === model.id}
-                          onClick={() => void toggleEnabled(model)}
+                          onClick={() => {
+                            if (model.isEnabled) {
+                              setConfirmAction({
+                                kind: "disable",
+                                target: model,
+                              });
+                              return;
+                            }
+                            void toggleEnabled(model);
+                          }}
                           variant="secondary"
                         >
                           {model.isEnabled ? "停用" : "启用"}
@@ -342,7 +390,9 @@ export default function AdminAiModelsPage({
                         </Button>
                         <Button
                           disabled={busyId === model.id}
-                          onClick={() => void removeModel(model)}
+                          onClick={() =>
+                            setConfirmAction({ kind: "delete", target: model })
+                          }
                           variant="secondary"
                         >
                           <Trash2 aria-hidden="true" />

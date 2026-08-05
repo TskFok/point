@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import AdminAiTasksPage from "@/app/(admin)/admin/ai-tasks/page";
@@ -90,12 +90,17 @@ function createApi(overrides: Record<string, unknown> = {}) {
 }
 
 describe("管理员 AI 任务页", () => {
-  it("点击新建任务打开表单弹窗", async () => {
+  it("新建任务按钮在页头右上角，点击打开表单弹窗", async () => {
     const user = userEvent.setup();
-    render(<AdminAiTasksPage api={createApi()} />);
+    const { container } = render(<AdminAiTasksPage api={createApi()} />);
 
     await screen.findByText("每日词汇");
-    await user.click(screen.getByRole("button", { name: "新建任务" }));
+    const heading = container.querySelector(".page-heading--split");
+    expect(heading).not.toBeNull();
+    const createButton = within(heading as HTMLElement).getByRole("button", {
+      name: "新建任务",
+    });
+    await user.click(createButton);
 
     expect(
       await screen.findByRole("dialog", { name: "新建 AI 任务" }),
@@ -142,7 +147,7 @@ describe("管理员 AI 任务页", () => {
     expect(container.querySelector(".admin-filter-card__row")).toBeNull();
   });
 
-  it("立即执行调用 runAdminAiTask", async () => {
+  it("立即执行需确认后才调用 runAdminAiTask", async () => {
     const user = userEvent.setup();
     const api = createApi();
     render(<AdminAiTasksPage api={api} />);
@@ -152,10 +157,117 @@ describe("管理员 AI 任务页", () => {
     });
     await user.click(screen.getByRole("button", { name: "立即执行" }));
 
+    const dialog = await screen.findByRole("dialog", {
+      name: "确认立即执行「每日词汇」？",
+    });
+    expect(api.runAdminAiTask).not.toHaveBeenCalled();
+
+    await user.click(within(dialog).getByRole("button", { name: "立即执行" }));
+
     await waitFor(() => {
       expect(api.runAdminAiTask).toHaveBeenCalledWith("task-1");
       expect(screen.getByRole("status")).toHaveTextContent("执行成功");
     });
+  });
+
+  it("取消立即执行不调用 runAdminAiTask", async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    render(<AdminAiTasksPage api={api} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("每日词汇")).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: "立即执行" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "确认立即执行「每日词汇」？",
+    });
+    await user.click(within(dialog).getByRole("button", { name: "取消" }));
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: "确认立即执行「每日词汇」？" }),
+      ).toBeNull();
+    });
+    expect(api.runAdminAiTask).not.toHaveBeenCalled();
+  });
+
+  it("删除需确认后才调用 deleteAdminAiTask", async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    render(<AdminAiTasksPage api={api} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("每日词汇")).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: "删除" }));
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "确认删除任务「每日词汇」？",
+    });
+    expect(api.deleteAdminAiTask).not.toHaveBeenCalled();
+
+    await user.click(within(dialog).getByRole("button", { name: "删除" }));
+
+    await waitFor(() => {
+      expect(api.deleteAdminAiTask).toHaveBeenCalledWith("task-1");
+      expect(screen.getByRole("status")).toHaveTextContent("已删除");
+    });
+  });
+
+  it("停用需确认后才调用 updateAdminAiTask", async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    render(<AdminAiTasksPage api={api} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("每日词汇")).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: "停用" }));
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "确认停用任务「每日词汇」？",
+    });
+    expect(api.updateAdminAiTask).not.toHaveBeenCalled();
+
+    await user.click(within(dialog).getByRole("button", { name: "停用" }));
+
+    await waitFor(() => {
+      expect(api.updateAdminAiTask).toHaveBeenCalledWith("task-1", {
+        isEnabled: false,
+      });
+      expect(screen.getByRole("status")).toHaveTextContent("已停用自动调度");
+    });
+  });
+
+  it("启用无需确认直接调用 updateAdminAiTask", async () => {
+    const user = userEvent.setup();
+    const disabledTask = { ...task, isEnabled: false };
+    const api = createApi({
+      listAdminAiTasks: jest
+        .fn()
+        .mockResolvedValue({ data: [disabledTask], meta }),
+      updateAdminAiTask: jest.fn().mockResolvedValue({
+        ...disabledTask,
+        isEnabled: true,
+      }),
+    });
+    render(<AdminAiTasksPage api={api} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("每日词汇")).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: "启用" }));
+
+    await waitFor(() => {
+      expect(api.updateAdminAiTask).toHaveBeenCalledWith("task-1", {
+        isEnabled: true,
+      });
+      expect(screen.getByRole("status")).toHaveTextContent("已启用自动调度");
+    });
+    expect(
+      screen.queryByRole("dialog", { name: /确认停用|确认删除|确认立即执行/ }),
+    ).toBeNull();
   });
 
   it("执行记录调用 listAdminAiTaskRuns", async () => {

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import AdminAiModelsPage from "@/app/(admin)/admin/ai-models/page";
@@ -87,6 +87,110 @@ describe("管理员 AI 模型页", () => {
       expect(api.testAdminAiModel).toHaveBeenCalledWith("model-1");
       expect(screen.getByRole("status")).toHaveTextContent("连通成功");
     });
+  });
+
+  it("删除需确认后才调用 deleteAdminAiModel", async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    render(<AdminAiModelsPage api={api} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("gpt-test")).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: "删除" }));
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "确认删除模型「gpt-test」？",
+    });
+    expect(dialog).toBeVisible();
+    expect(api.deleteAdminAiModel).not.toHaveBeenCalled();
+
+    await user.click(within(dialog).getByRole("button", { name: "删除" }));
+
+    await waitFor(() => {
+      expect(api.deleteAdminAiModel).toHaveBeenCalledWith("model-1");
+      expect(screen.getByRole("status")).toHaveTextContent("已删除");
+    });
+  });
+
+  it("取消删除不调用 deleteAdminAiModel", async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    render(<AdminAiModelsPage api={api} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("gpt-test")).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: "删除" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "确认删除模型「gpt-test」？",
+    });
+    await user.click(within(dialog).getByRole("button", { name: "取消" }));
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", {
+          name: "确认删除模型「gpt-test」？",
+        }),
+      ).toBeNull();
+    });
+    expect(api.deleteAdminAiModel).not.toHaveBeenCalled();
+  });
+
+  it("停用需确认后才调用 updateAdminAiModel", async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    render(<AdminAiModelsPage api={api} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("gpt-test")).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: "停用" }));
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "确认停用模型「gpt-test」？",
+    });
+    expect(dialog).toBeVisible();
+    expect(api.updateAdminAiModel).not.toHaveBeenCalled();
+
+    await user.click(within(dialog).getByRole("button", { name: "停用" }));
+
+    await waitFor(() => {
+      expect(api.updateAdminAiModel).toHaveBeenCalledWith("model-1", {
+        isEnabled: false,
+      });
+      expect(screen.getByRole("status")).toHaveTextContent("已停用");
+    });
+  });
+
+  it("启用无需确认直接调用 updateAdminAiModel", async () => {
+    const user = userEvent.setup();
+    const disabledModel = { ...model, isEnabled: false };
+    const api = createApi({
+      listAdminAiModels: jest
+        .fn()
+        .mockResolvedValue({ data: [disabledModel], meta }),
+      updateAdminAiModel: jest.fn().mockResolvedValue({
+        ...disabledModel,
+        isEnabled: true,
+      }),
+    });
+    render(<AdminAiModelsPage api={api} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("gpt-test")).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: "启用" }));
+
+    await waitFor(() => {
+      expect(api.updateAdminAiModel).toHaveBeenCalledWith("model-1", {
+        isEnabled: true,
+      });
+      expect(screen.getByRole("status")).toHaveTextContent("已启用");
+    });
+    expect(
+      screen.queryByRole("dialog", { name: /确认停用|确认删除/ }),
+    ).toBeNull();
   });
 
   it("翻页时按 page 重新拉取列表并更新 URL", async () => {

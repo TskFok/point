@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FormDialog } from "@/components/ui/form-dialog";
 
 function Harness({
@@ -92,5 +93,36 @@ describe("FormDialog", () => {
     await waitFor(() => {
       expect(dialog.contains(document.activeElement)).toBe(true);
     });
+  });
+
+  it("内层 ConfirmDialog 打开时外层 FormDialog 不抢焦点", async () => {
+    const user = userEvent.setup();
+    function NestedHarness() {
+      const [confirmOpen, setConfirmOpen] = useState(false);
+      return (
+        <FormDialog onClose={() => undefined} title="外层表单">
+          <button onClick={() => setConfirmOpen(true)} type="button">
+            打开确认
+          </button>
+          {confirmOpen ? (
+            <ConfirmDialog
+              onCancel={() => setConfirmOpen(false)}
+              onConfirm={() => setConfirmOpen(false)}
+              title="内层确认"
+            />
+          ) : null}
+        </FormDialog>
+      );
+    }
+
+    render(<NestedHarness />);
+    await user.click(await screen.findByRole("button", { name: "打开确认" }));
+    const confirm = await screen.findByRole("dialog", { name: "内层确认" });
+    await waitFor(() => {
+      expect(confirm.contains(document.activeElement)).toBe(true);
+    });
+    expect(
+      screen.getByRole("dialog", { hidden: true, name: "外层表单" }),
+    ).toBeInTheDocument();
   });
 });

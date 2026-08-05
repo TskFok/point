@@ -91,7 +91,13 @@ export function FormDialog({
       (focusable()[0] ?? dialog).focus();
     }
 
+    function isTopmostLayer() {
+      const layers = document.querySelectorAll(".dialog-layer");
+      return layers.item(layers.length - 1) === portalHost;
+    }
+
     function onKeyDown(event: KeyboardEvent) {
+      if (!isTopmostLayer()) return;
       if (event.key === "Escape") {
         event.preventDefault();
         if (!pendingRef.current) latestClose.current();
@@ -114,7 +120,10 @@ export function FormDialog({
     }
 
     function onFocusIn(event: FocusEvent) {
-      if (!dialog.contains(event.target as Node)) focusInside();
+      if (!isTopmostLayer()) return;
+      const target = event.target as Node | null;
+      if (!target || dialog.contains(target)) return;
+      focusInside();
     }
 
     focusInside();

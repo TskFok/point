@@ -19,6 +19,7 @@ import { Pagination } from "@/components/data/pagination";
 import { StatusFilter } from "@/components/data/status-filter";
 import { EmptyState } from "@/components/empty-state";
 import { AsyncError } from "@/components/feedback/async-error";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { browserApiClient } from "@/lib/api/browser-client";
 import { getApiErrorMessage } from "@/lib/api/error-message";
 import { ADMIN_QUESTIONS_OPEN_CREATE_KEY } from "@/lib/admin/questions-ui";
@@ -34,6 +35,7 @@ type QuestionsApi = Pick<
   | "updateAdminQuestion"
 >;
 type Filters = { search: string; isActive: string };
+type ConfirmAction = { kind: "disable"; target: Question };
 
 const emptyFilters: Filters = { search: "", isActive: "" };
 
@@ -79,6 +81,9 @@ export default function AdminQuestionsPage({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [mutatingId, setMutatingId] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(
+    null,
+  );
   const [editing, setEditing] = useState<"create" | { id: string } | null>(
     null,
   );
@@ -157,6 +162,12 @@ export default function AdminQuestionsPage({
     }
   }
 
+  async function handleConfirm() {
+    if (!confirmAction || mutatingId) return;
+    await toggleStatus(confirmAction.target);
+    if (mounted.current) setConfirmAction(null);
+  }
+
   return (
     <section className="admin-page">
       <div className="page-heading page-heading--split">
@@ -181,6 +192,21 @@ export default function AdminQuestionsPage({
             void load();
           }}
           questionId={editing === "create" ? undefined : editing.id}
+        />
+      ) : null}
+
+      {confirmAction ? (
+        <ConfirmDialog
+          cancelLabel="取消"
+          confirmLabel="停用题目"
+          confirmVariant="danger"
+          description="停用后该题目将不再进入练习池。"
+          onCancel={() => {
+            if (!mutatingId) setConfirmAction(null);
+          }}
+          onConfirm={() => void handleConfirm()}
+          pending={mutatingId === confirmAction.target.id}
+          title="确认停用该题目？"
         />
       ) : null}
 
@@ -303,7 +329,16 @@ export default function AdminQuestionsPage({
                             mutatingId !== null ||
                             (question.hasAttempts && !question.isActive)
                           }
-                          onClick={() => void toggleStatus(question)}
+                          onClick={() => {
+                            if (question.isActive) {
+                              setConfirmAction({
+                                kind: "disable",
+                                target: question,
+                              });
+                              return;
+                            }
+                            void toggleStatus(question);
+                          }}
                           variant="secondary"
                         >
                           {mutatingId === question.id ? (

@@ -9,6 +9,7 @@ import { Button, Card } from "@point-quest/ui";
 import { CheckCircle2, LoaderCircle, Plus, Save, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { browserApiClient } from "@/lib/api/browser-client";
 import { getApiErrorMessage } from "@/lib/api/error-message";
 
@@ -132,6 +133,7 @@ export function QuestionForm({
   const [errors, setErrors] = useState<string[]>([]);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [confirmDisable, setConfirmDisable] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [hasAttempts, setHasAttempts] = useState(
     initialQuestion?.hasAttempts ?? false,
@@ -217,9 +219,11 @@ export function QuestionForm({
       );
       setIsActive(false);
       setSuccessMessage("题目已停用");
+      setConfirmDisable(false);
       onSaved?.(question);
     } catch (error) {
       setSubmitError(getApiErrorMessage(error));
+      setConfirmDisable(false);
     } finally {
       setSaving(false);
     }
@@ -227,6 +231,20 @@ export function QuestionForm({
 
   return (
     <Card className="admin-form-card">
+      {confirmDisable ? (
+        <ConfirmDialog
+          cancelLabel="取消"
+          confirmLabel="停用题目"
+          confirmVariant="danger"
+          description="停用后该题目将不再进入练习池。"
+          onCancel={() => {
+            if (!saving) setConfirmDisable(false);
+          }}
+          onConfirm={() => void disableQuestion()}
+          pending={saving}
+          title="确认停用该题目？"
+        />
+      ) : null}
       <form
         className="admin-form"
         noValidate
@@ -407,7 +425,7 @@ export function QuestionForm({
             isActive ? (
               <Button
                 disabled={saving}
-                onClick={() => void disableQuestion()}
+                onClick={() => setConfirmDisable(true)}
                 type="button"
               >
                 {saving ? (

@@ -6,6 +6,7 @@ import { CheckCircle2, ImageUp, LoaderCircle, Save } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { browserApiClient } from "@/lib/api/browser-client";
 import { getApiErrorMessage } from "@/lib/api/error-message";
 import {
@@ -106,6 +107,7 @@ export function ProductForm({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [phase, setPhase] = useState<"idle" | "uploading" | "saving">("idle");
   const [saved, setSaved] = useState(false);
+  const [confirmDeactivate, setConfirmDeactivate] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const localPreview = useMemo(
     () => (image ? URL.createObjectURL?.(image) : null),
@@ -126,7 +128,11 @@ export function ProductForm({
     [localPreview],
   );
 
-  async function submit() {
+  function willDeactivateOnSave() {
+    return mode === "edit" && Boolean(initialProduct?.isActive) && !isActive;
+  }
+
+  function requestSubmit() {
     if (pending) return;
     const validationErrors = validateProduct(
       name,
@@ -139,7 +145,15 @@ export function ProductForm({
     setErrors(validationErrors);
     setSaved(false);
     if (validationErrors.length > 0) return;
+    if (willDeactivateOnSave()) {
+      setConfirmDeactivate(true);
+      return;
+    }
+    void performSubmit();
+  }
 
+  async function performSubmit() {
+    if (pending) return;
     setSubmitError(null);
     let nextImageKey = imageKey;
     try {
@@ -170,9 +184,11 @@ export function ProductForm({
             );
       setSaved(true);
       setImage(null);
+      setConfirmDeactivate(false);
       onSaved?.(product);
     } catch (error) {
       setSubmitError(getApiErrorMessage(error));
+      setConfirmDeactivate(false);
     } finally {
       setPhase("idle");
     }
@@ -180,12 +196,26 @@ export function ProductForm({
 
   return (
     <Card className="admin-form-card">
+      {confirmDeactivate ? (
+        <ConfirmDialog
+          cancelLabel="取消"
+          confirmLabel="下架商品"
+          confirmVariant="danger"
+          description="下架后学员将无法在积分商城兑换该商品。"
+          onCancel={() => {
+            if (!pending) setConfirmDeactivate(false);
+          }}
+          onConfirm={() => void performSubmit()}
+          pending={pending}
+          title={`确认下架商品「${name.trim() || initialProduct?.name || "未命名"}」？`}
+        />
+      ) : null}
       <form
         className="admin-form"
         noValidate
         onSubmit={(event) => {
           event.preventDefault();
-          void submit();
+          requestSubmit();
         }}
       >
         <div className="admin-form__grid">

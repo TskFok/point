@@ -21,6 +21,7 @@ import { Pagination } from "@/components/data/pagination";
 import { StatusFilter } from "@/components/data/status-filter";
 import { EmptyState } from "@/components/empty-state";
 import { AsyncError } from "@/components/feedback/async-error";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FormDialog } from "@/components/ui/form-dialog";
 import { browserApiClient } from "@/lib/api/browser-client";
 import { getApiErrorMessage } from "@/lib/api/error-message";
@@ -41,6 +42,11 @@ type AiTasksApi = Pick<
 >;
 
 type Filters = { isEnabled: string };
+
+type ConfirmAction =
+  | { kind: "delete"; target: AiTask }
+  | { kind: "disable"; target: AiTask }
+  | { kind: "run"; target: AiTask };
 
 const formatter = new Intl.DateTimeFormat("zh-CN", {
   dateStyle: "medium",
@@ -98,6 +104,9 @@ export default function AdminAiTasksPage({
   );
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(
+    null,
+  );
   const automaticLoadKey = useRef<string | null>(null);
   const latestRequest = useRef(0);
   const mounted = useRef(true);
@@ -206,9 +215,6 @@ export default function AdminAiTasksPage({
 
   async function removeTask(task: AiTask) {
     if (busyId) return;
-    if (!window.confirm(`确认删除任务「${task.name}」？此操作不可撤销。`)) {
-      return;
-    }
     setBusyId(task.id);
     setActionMessage(null);
     try {
@@ -245,10 +251,47 @@ export default function AdminAiTasksPage({
     }
   }
 
+  async function handleConfirm() {
+    if (!confirmAction || busyId) return;
+    const { kind, target } = confirmAction;
+    if (kind === "delete") {
+      await removeTask(target);
+    } else if (kind === "disable") {
+      await toggleEnabled(target);
+    } else {
+      await runTask(target);
+    }
+    if (mounted.current) setConfirmAction(null);
+  }
+
+  const confirmPresentation = confirmAction
+    ? confirmAction.kind === "delete"
+      ? {
+          title: `确认删除任务「${confirmAction.target.name}」？`,
+          description: "此操作不可撤销。",
+          confirmLabel: "删除",
+          confirmVariant: "danger" as const,
+        }
+      : confirmAction.kind === "disable"
+        ? {
+            title: `确认停用任务「${confirmAction.target.name}」？`,
+            description: "停用后将不再按计划自动出题。",
+            confirmLabel: "停用",
+            confirmVariant: "danger" as const,
+          }
+        : {
+            title: `确认立即执行「${confirmAction.target.name}」？`,
+            description: "将立即调用 AI 生成题目，可能产生费用与耗时。",
+            confirmLabel: "立即执行",
+            confirmVariant: "primary" as const,
+          }
+    : null;
+
   return (
     <section className="admin-page">
-      <header className="admin-page__header">
+      <div className="page-heading page-heading--split">
         <div>
+          <p className="page-kicker">系统能力</p>
           <h1>AI 任务</h1>
           <p>配置定时出题任务，按字典序调用 AI 生成英文题干与中文选项。</p>
         </div>
@@ -262,7 +305,7 @@ export default function AdminAiTasksPage({
           <Plus aria-hidden="true" />
           新建任务
         </Button>
-      </header>
+      </div>
 
       <Card className="admin-filter-card">
         <div className="admin-filter-grid">
@@ -294,6 +337,21 @@ export default function AdminAiTasksPage({
         <p className="success-banner" role="status">
           {actionMessage}
         </p>
+      ) : null}
+
+      {confirmAction && confirmPresentation ? (
+        <ConfirmDialog
+          cancelLabel="取消"
+          confirmLabel={confirmPresentation.confirmLabel}
+          confirmVariant={confirmPresentation.confirmVariant}
+          description={confirmPresentation.description}
+          onCancel={() => {
+            if (!busyId) setConfirmAction(null);
+          }}
+          onConfirm={() => void handleConfirm()}
+          pending={busyId === confirmAction.target.id}
+          title={confirmPresentation.title}
+        />
       ) : null}
 
       {editing ? (
@@ -449,7 +507,16 @@ export default function AdminAiTasksPage({
                       </Button>
                       <Button
                         disabled={busyId === task.id}
-                        onClick={() => void toggleEnabled(task)}
+                        onClick={() => {
+                          if (task.isEnabled) {
+                            setConfirmAction({
+                              kind: "disable",
+                              target: task,
+                            });
+                            return;
+                          }
+                          void toggleEnabled(task);
+                        }}
                         type="button"
                         variant="secondary"
                       >
@@ -462,7 +529,9 @@ export default function AdminAiTasksPage({
                       </Button>
                       <Button
                         disabled={busyId === task.id}
-                        onClick={() => void runTask(task)}
+                        onClick={() =>
+                          setConfirmAction({ kind: "run", target: task })
+                        }
                         type="button"
                         variant="secondary"
                       >
@@ -484,7 +553,9 @@ export default function AdminAiTasksPage({
                       </Button>
                       <Button
                         disabled={busyId === task.id}
-                        onClick={() => void removeTask(task)}
+                        onClick={() =>
+                          setConfirmAction({ kind: "delete", target: task })
+                        }
                         type="button"
                         variant="secondary"
                       >

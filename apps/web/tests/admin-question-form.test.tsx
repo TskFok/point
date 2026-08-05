@@ -1,8 +1,18 @@
 import { ApiClientError } from "@point-quest/api-client";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { QuestionForm } from "@/components/admin/question-form";
+
+async function confirmDisableQuestion(
+  user: ReturnType<typeof userEvent.setup>,
+) {
+  await user.click(screen.getByRole("button", { name: "停用已有记录题目" }));
+  const dialog = await screen.findByRole("dialog", {
+    name: "确认停用该题目？",
+  });
+  await user.click(within(dialog).getByRole("button", { name: "停用题目" }));
+}
 
 function createApi() {
   return {
@@ -84,6 +94,16 @@ describe("管理员题目表单", () => {
     ).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "停用已有记录题目" }));
+    expect(
+      await screen.findByRole("dialog", { name: "确认停用该题目？" }),
+    ).toBeVisible();
+    expect(api.updateAdminQuestion).not.toHaveBeenCalled();
+
+    await user.click(
+      within(
+        screen.getByRole("dialog", { name: "确认停用该题目？" }),
+      ).getByRole("button", { name: "停用题目" }),
+    );
 
     expect(api.updateAdminQuestion).toHaveBeenCalledWith("question-used", {
       isActive: false,
@@ -151,7 +171,7 @@ describe("管理员题目表单", () => {
     ).toBeVisible();
     expect(screen.getByLabelText("题干")).toBeDisabled();
 
-    await user.click(screen.getByRole("button", { name: "停用已有记录题目" }));
+    await confirmDisableQuestion(user);
     expect(api.updateAdminQuestion).toHaveBeenNthCalledWith(
       2,
       "question-race",

@@ -1,5 +1,5 @@
 import { ApiNetworkError } from "@point-quest/api-client";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { ProductForm } from "@/components/admin/product-form";
@@ -151,6 +151,93 @@ describe("管理员商品表单", () => {
     view.unmount();
     expect(onPendingChange).toHaveBeenCalledWith(false);
     resolveUpdate({ id: "product-1" });
+  });
+
+  it("编辑时取消上架保存需二次确认后才 update", async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    api.updateAdminProduct.mockResolvedValue({ id: "product-1" });
+    const initialProduct = {
+      createdAt: "2026-08-04T00:00:00.000Z",
+      id: "product-1",
+      name: "英语笔记本",
+      description: "适合记录生词",
+      imageKey: "products/existing.png",
+      stock: 8,
+      pointsCost: 120,
+      isActive: true,
+      updatedAt: "2026-08-04T00:00:00.000Z",
+    };
+    render(
+      <ProductForm
+        api={api}
+        initialProduct={initialProduct}
+        mode="edit"
+        productId="product-1"
+      />,
+    );
+
+    await user.click(screen.getByRole("checkbox", { name: "上架商品" }));
+    await user.click(screen.getByRole("button", { name: "保存商品" }));
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "确认下架商品「英语笔记本」？",
+    });
+    expect(api.updateAdminProduct).not.toHaveBeenCalled();
+
+    await user.click(within(dialog).getByRole("button", { name: "下架商品" }));
+
+    await waitFor(() => {
+      expect(api.updateAdminProduct).toHaveBeenCalledWith("product-1", {
+        description: "适合记录生词",
+        imageKey: "products/existing.png",
+        isActive: false,
+        name: "英语笔记本",
+        pointsCost: 120,
+        stock: 8,
+      });
+    });
+  });
+
+  it("编辑时保持上架保存无需二次确认", async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    api.updateAdminProduct.mockResolvedValue({ id: "product-1" });
+    const initialProduct = {
+      createdAt: "2026-08-04T00:00:00.000Z",
+      id: "product-1",
+      name: "英语笔记本",
+      description: "适合记录生词",
+      imageKey: "products/existing.png",
+      stock: 8,
+      pointsCost: 120,
+      isActive: true,
+      updatedAt: "2026-08-04T00:00:00.000Z",
+    };
+    render(
+      <ProductForm
+        api={api}
+        initialProduct={initialProduct}
+        mode="edit"
+        productId="product-1"
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "保存商品" }));
+
+    await waitFor(() => {
+      expect(api.updateAdminProduct).toHaveBeenCalledWith("product-1", {
+        description: "适合记录生词",
+        imageKey: "products/existing.png",
+        isActive: true,
+        name: "英语笔记本",
+        pointsCost: 120,
+        stock: 8,
+      });
+    });
+    expect(
+      screen.queryByRole("dialog", { name: /确认下架商品/ }),
+    ).toBeNull();
   });
 
   it("上传失败保留商品字段并可原样重试", async () => {
