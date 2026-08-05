@@ -42,6 +42,8 @@ describe("响应式应用导航", () => {
     expect(
       screen.getByRole("link", { name: /learner_01/ }),
     ).toHaveAttribute("href", "/learn/profile");
+    expect(screen.getByLabelText("当前积分 120")).toBeInTheDocument();
+    expect(document.querySelector(".app-header")).toBeNull();
     expect(within(desktopNav).queryByText("后台管理")).not.toBeInTheDocument();
     expect(screen.queryByText("题库管理")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "退出" })).toBeInTheDocument();
@@ -61,7 +63,7 @@ describe("响应式应用导航", () => {
     const mobileNav = screen.getByRole("navigation", {
       name: "学员移动导航",
     });
-    expect(within(mobileNav).getAllByRole("link").length).toBeLessThanOrEqual(5);
+    expect(within(mobileNav).getAllByRole("link").length).toBeLessThanOrEqual(6);
     expect(within(desktopNav).getByRole("link", { name: "练习" })).toHaveAttribute(
       "aria-current",
       "page",
@@ -69,6 +71,14 @@ describe("响应式应用导航", () => {
     expect(within(mobileNav).getByRole("link", { name: "练习" })).toHaveAttribute(
       "aria-current",
       "page",
+    );
+    expect(within(mobileNav).getByRole("link", { name: "订单" })).toHaveAttribute(
+      "href",
+      "/learn/orders",
+    );
+    expect(within(mobileNav).getByRole("link", { name: "我的" })).toHaveAttribute(
+      "href",
+      "/learn/profile",
     );
   });
 
@@ -90,6 +100,8 @@ describe("响应式应用导航", () => {
     expect(
       screen.getByRole("button", { name: "打开管理员菜单" }),
     ).toHaveAttribute("aria-expanded", "false");
+    expect(document.querySelector(".app-header")).toBeNull();
+    expect(screen.getByText("admin")).toBeInTheDocument();
     expect(screen.queryByText("错题本")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "退出" })).toBeInTheDocument();
   });

@@ -72,25 +72,23 @@ async function expectFixedNavigationDoesNotCoverMain(
   page: Page,
 ): Promise<void> {
   const geometry = await page.evaluate(() => {
-    const header = document.querySelector<HTMLElement>(".app-header");
     const main = document.querySelector<HTMLElement>(".app-content");
     const sidebar = document.querySelector<HTMLElement>(".app-sidebar");
-    if (!header || !main || !sidebar) {
+    if (!main || !sidebar) {
       throw new Error("应用框架缺少导航或主内容");
     }
-    const headerRect = header.getBoundingClientRect();
+    if (document.querySelector(".app-header")) {
+      throw new Error("不应再渲染拥挤的 app-header");
+    }
     const mainRect = main.getBoundingClientRect();
     const sidebarRect = sidebar.getBoundingClientRect();
     return {
-      headerBottom: headerRect.bottom,
       mainLeft: mainRect.left,
-      mainTop: mainRect.top,
       sidebarDisplay: getComputedStyle(sidebar).display,
       sidebarRight: sidebarRect.right,
     };
   });
 
-  expect(geometry.mainTop).toBeGreaterThanOrEqual(geometry.headerBottom - 1);
   if (geometry.sidebarDisplay !== "none") {
     expect(geometry.mainLeft).toBeGreaterThanOrEqual(geometry.sidebarRight - 1);
   }

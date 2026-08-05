@@ -335,8 +335,7 @@ svg {
 }
 
 .auth-card__eyebrow,
-.page-kicker,
-.app-header__eyebrow {
+.page-kicker {
   color: var(--color-primary);
   font-size: 0.76rem;
   font-weight: 800;
@@ -460,6 +459,43 @@ svg {
   gap: 0.75rem;
 }
 
+.sidebar-user,
+.student-status {
+  display: grid;
+  gap: 0.65rem;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: var(--radius-md);
+  padding: 0.9rem;
+  background: rgb(255 255 255 / 5%);
+}
+
+.sidebar-user strong,
+.student-status strong {
+  display: block;
+  color: #fff;
+  font-size: 0.95rem;
+}
+
+.sidebar-user span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: rgb(255 255 255 / 64%);
+  font-size: 0.78rem;
+}
+
+.sidebar-user svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.student-status__eyebrow {
+  margin: 0;
+  color: rgb(255 255 255 / 56%);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+}
+
 .sidebar-tip {
   display: grid;
   gap: 0.6rem;
@@ -518,64 +554,33 @@ svg {
   margin-left: 16.5rem;
 }
 
-.app-header {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  display: flex;
-  min-height: 5.2rem;
-  align-items: center;
-  gap: 1rem;
-  border-bottom: 1px solid rgb(222 217 232 / 72%);
-  padding: 0.85rem clamp(1rem, 3vw, 2.5rem);
-  background: rgb(248 246 252 / 90%);
-  backdrop-filter: blur(16px);
-}
-
-.app-header > :last-child {
-  margin-left: auto;
-}
-
-.app-header__eyebrow {
-  color: var(--color-text-muted);
-  letter-spacing: 0.04em;
-  text-transform: none;
-}
-
 .profile-link {
   display: block;
   min-height: 2.75rem;
   border-radius: var(--radius-sm);
-  padding: 0.2rem 0.4rem;
+  color: inherit;
 }
 
-.point-chip,
-.admin-role-chip {
+.student-status .point-chip {
   display: inline-flex;
-  min-height: 2.75rem;
+  min-height: 2.5rem;
+  width: fit-content;
   align-items: center;
   gap: 0.42rem;
-  border: 1px solid rgb(244 185 66 / 26%);
+  border: 1px solid rgb(244 185 66 / 32%);
   border-radius: 999px;
-  padding: 0.55rem 0.8rem;
-  color: var(--color-reward-strong);
-  background: var(--color-reward-soft);
+  padding: 0.45rem 0.75rem;
+  color: #ffe59f;
+  background: rgb(244 185 66 / 14%);
 }
 
-.point-chip span {
+.student-status .point-chip span {
   font-weight: 850;
 }
 
-.point-chip small {
+.student-status .point-chip small {
   font-size: 0.72rem;
-}
-
-.admin-role-chip {
-  color: var(--color-primary-strong);
-  border-color: rgb(103 80 199 / 18%);
-  background: var(--color-primary-soft);
-  font-size: 0.82rem;
-  font-weight: 750;
+  color: rgb(255 229 159 / 72%);
 }
 
 .app-content {
@@ -699,6 +704,16 @@ svg {
   border-radius: var(--radius-sm);
   color: inherit;
   background: transparent;
+}
+
+.admin-menu-button {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 40;
+  border: 1px solid rgb(222 217 232 / 80%);
+  background: rgb(255 255 255 / 94%);
+  box-shadow: var(--shadow-float);
 }
 
 .admin-drawer-layer {
@@ -2066,6 +2081,10 @@ svg {
     place-items: center;
   }
 
+  .app-shell--admin .app-content {
+    padding-top: 3.75rem;
+  }
+
   .admin-drawer-layer {
     display: block;
   }
@@ -2091,7 +2110,7 @@ svg {
     left: 0.6rem;
     z-index: 30;
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     min-height: 4.4rem;
     border: 1px solid rgb(222 217 232 / 80%);
     border-radius: 1.2rem;
@@ -2126,14 +2145,6 @@ svg {
     height: 1.15rem;
   }
 
-  .app-header {
-    min-height: 4.6rem;
-  }
-
-  .point-chip small {
-    display: none;
-  }
-
   .journey-card {
     grid-template-columns: auto 1fr;
   }
@@ -2148,25 +2159,12 @@ svg {
 }
 
 @media (max-width: 640px) {
-  .app-header {
-    padding-inline: 0.75rem;
-  }
-
-  .profile-link {
-    min-width: 0;
-  }
-
-  .profile-link strong,
-  .app-header__eyebrow {
-    display: block;
-    max-width: 12rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
   .app-content {
     padding: 1rem;
+  }
+
+  .app-shell--admin .app-content {
+    padding-top: 3.75rem;
   }
 
   .page-heading--split,

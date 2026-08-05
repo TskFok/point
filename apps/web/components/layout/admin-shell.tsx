@@ -159,6 +159,13 @@ export function AdminShell({ children, user }: AdminShellProps) {
           currentPath={pathname}
         />
         <div className="sidebar-footer">
+          <div className="sidebar-user">
+            <strong>{user.username}</strong>
+            <span>
+              <ShieldCheck aria-hidden="true" />
+              管理员
+            </span>
+          </div>
           <LogoutButton />
         </div>
       </aside>
@@ -167,28 +174,18 @@ export function AdminShell({ children, user }: AdminShellProps) {
         aria-hidden={menuOpen || undefined}
         className="app-workspace"
       >
-        <header className="app-header">
-          <button
-            aria-expanded={menuOpen}
-            aria-controls="admin-mobile-menu"
-            aria-haspopup="dialog"
-            aria-label="打开管理员菜单"
-            className="admin-menu-button"
-            onClick={() => setMenuOpen(true)}
-            ref={openerRef}
-            type="button"
-          >
-            <Menu aria-hidden="true" />
-          </button>
-          <div>
-            <p className="app-header__eyebrow">运营工作台</p>
-            <strong>{user.username}</strong>
-          </div>
-          <div className="admin-role-chip">
-            <ShieldCheck aria-hidden="true" />
-            <span>管理员</span>
-          </div>
-        </header>
+        <button
+          aria-expanded={menuOpen}
+          aria-controls="admin-mobile-menu"
+          aria-haspopup="dialog"
+          aria-label="打开管理员菜单"
+          className="admin-menu-button"
+          onClick={() => setMenuOpen(true)}
+          ref={openerRef}
+          type="button"
+        >
+          <Menu aria-hidden="true" />
+        </button>
         <main className="app-content">{children}</main>
       </div>
 

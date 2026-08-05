@@ -7,6 +7,7 @@ import {
   ClipboardList,
   ShoppingBag,
   Sparkles,
+  UserRound,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -26,6 +27,11 @@ const studentItems: NavigationItem[] = [
   { href: "/learn/wrong-questions", icon: BookOpenCheck, label: "错题" },
   { href: "/learn/store", icon: ShoppingBag, label: "商城" },
   { href: "/learn/orders", icon: ClipboardList, label: "订单" },
+];
+
+const studentMobileItems: NavigationItem[] = [
+  ...studentItems,
+  { href: "/learn/profile", icon: UserRound, label: "我的" },
 ];
 
 type StudentShellProps = {
@@ -91,6 +97,20 @@ export function StudentShell({
           })}
         </nav>
         <div className="sidebar-footer">
+          <div className="student-status">
+            <Link className="profile-link" href="/learn/profile">
+              <p className="student-status__eyebrow">今天也向前一步</p>
+              <strong>{user.username}</strong>
+            </Link>
+            <div
+              aria-label={`当前积分 ${pointsBalance}`}
+              className="point-chip"
+            >
+              <CircleDollarSign aria-hidden="true" />
+              <span>{pointsBalance}</span>
+              <small>积分</small>
+            </div>
+          </div>
           <div className="sidebar-tip">
             <Sparkles aria-hidden="true" />
             <p>每一次认真作答，都在为目标积蓄能量。</p>
@@ -100,21 +120,10 @@ export function StudentShell({
       </aside>
 
       <div className="app-workspace">
-        <header className="app-header">
-          <Link className="profile-link" href="/learn/profile">
-            <p className="app-header__eyebrow">今天也向前一步</p>
-            <strong>{user.username}</strong>
-          </Link>
-          <div aria-label={`当前积分 ${pointsBalance}`} className="point-chip">
-            <CircleDollarSign aria-hidden="true" />
-            <span>{pointsBalance}</span>
-            <small>积分</small>
-          </div>
-        </header>
         <main className="app-content">{children}</main>
       </div>
 
-      <MobileNav currentPath={activePath} items={studentItems} />
+      <MobileNav currentPath={activePath} items={studentMobileItems} />
     </div>
   );
 }

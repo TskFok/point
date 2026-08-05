@@ -15,7 +15,7 @@ type MobileNavProps = {
 export function MobileNav({ currentPath, items }: MobileNavProps) {
   return (
     <nav aria-label="学员移动导航" className="mobile-bottom-nav">
-      {items.slice(0, 5).map((item) => {
+      {items.slice(0, 6).map((item) => {
         const Icon = item.icon;
         const active =
           currentPath === item.href ||
