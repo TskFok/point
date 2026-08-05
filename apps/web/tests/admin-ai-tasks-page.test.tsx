@@ -342,7 +342,16 @@ describe("管理员 AI 任务页", () => {
         page: 1,
         pageSize: 20,
       });
-      expect(screen.getByText("执行记录 · 每日词汇")).toBeInTheDocument();
+      expect(
+        screen.getByRole("dialog", { name: "执行记录 · 每日词汇" }),
+      ).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "关闭" }));
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: "执行记录 · 每日词汇" }),
+      ).toBeNull();
     });
   });
 

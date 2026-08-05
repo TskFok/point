@@ -12,7 +12,6 @@ import {
   Play,
   Plus,
   Trash2,
-  X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -386,20 +385,19 @@ export default function AdminAiTasksPage({
       ) : null}
 
       {runsFor ? (
-        <Card className="admin-form-card">
-          <div className="admin-drawer__header">
-            <h2>执行记录 · {runsFor.name}</h2>
-            <Button onClick={() => setRunsFor(null)} type="button" variant="secondary">
-              <X aria-hidden="true" />
-              关闭
-            </Button>
-          </div>
+        <FormDialog
+          onClose={() => setRunsFor(null)}
+          title={`执行记录 · ${runsFor.name}`}
+        >
           {runsLoading ? (
             <p>
               <LoaderCircle aria-hidden="true" className="spin" /> 加载中
             </p>
           ) : runs.length === 0 ? (
-            <EmptyState title="暂无执行记录" description="立即执行或等待 crontab 触发后会出现记录。" />
+            <EmptyState
+              title="暂无执行记录"
+              description="立即执行或等待 crontab 触发后会出现记录。"
+            />
           ) : (
             <div className="admin-table-wrap">
               <table className="admin-table">
@@ -427,7 +425,8 @@ export default function AdminAiTasksPage({
                       </td>
                       <td>{run.questionsCreated}</td>
                       <td>
-                        {run.lastEntryIdBefore ?? "∅"} → {run.lastEntryIdAfter ?? "∅"}
+                        {run.lastEntryIdBefore ?? "∅"} →{" "}
+                        {run.lastEntryIdAfter ?? "∅"}
                       </td>
                       <td className="admin-table__error">
                         {run.errorMessage ?? "—"}
@@ -438,7 +437,7 @@ export default function AdminAiTasksPage({
               </table>
             </div>
           )}
-        </Card>
+        </FormDialog>
       ) : null}
 
       {loading ? (
