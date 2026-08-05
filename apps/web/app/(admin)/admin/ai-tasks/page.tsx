@@ -24,6 +24,7 @@ import { EmptyState } from "@/components/empty-state";
 import { AsyncError } from "@/components/feedback/async-error";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FormDialog } from "@/components/ui/form-dialog";
+import { useConfirmAction } from "@/hooks/use-confirm-action";
 import { browserApiClient } from "@/lib/api/browser-client";
 import { getApiErrorMessage } from "@/lib/api/error-message";
 
@@ -105,10 +106,6 @@ export default function AdminAiTasksPage({
   );
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(
-    null,
-  );
-  const [confirmError, setConfirmError] = useState<string | null>(null);
   const automaticLoadKey = useRef<string | null>(null);
   const latestRequest = useRef(0);
   const mounted = useRef(true);
@@ -256,28 +253,15 @@ export default function AdminAiTasksPage({
     }
   }
 
-  function openConfirm(action: ConfirmAction) {
-    setConfirmError(null);
-    setConfirmAction(action);
-  }
-
-  async function handleConfirm() {
-    if (!confirmAction || busyId) return;
-    setConfirmError(null);
-    const { kind, target } = confirmAction;
-    const error =
-      kind === "delete"
-        ? await removeTask(target)
-        : kind === "disable"
-          ? await toggleEnabled(target)
-          : await runTask(target);
-    if (!mounted.current) return;
-    if (error) {
-      setConfirmError(error);
-      return;
-    }
-    setConfirmAction(null);
-  }
+  const { confirmAction, confirmError, openConfirm, closeConfirm, handleConfirm } =
+    useConfirmAction<ConfirmAction>({
+      blocked: Boolean(busyId),
+      execute: async (action) => {
+        if (action.kind === "delete") return removeTask(action.target);
+        if (action.kind === "disable") return toggleEnabled(action.target);
+        return runTask(action.target);
+      },
+    });
 
   const confirmPresentation = confirmAction
     ? confirmAction.kind === "delete"
@@ -360,12 +344,7 @@ export default function AdminAiTasksPage({
           confirmVariant={confirmPresentation.confirmVariant}
           description={confirmPresentation.description}
           error={confirmError}
-          onCancel={() => {
-            if (!busyId) {
-              setConfirmAction(null);
-              setConfirmError(null);
-            }
-          }}
+          onCancel={closeConfirm}
           onConfirm={() => void handleConfirm()}
           pending={busyId === confirmAction.target.id}
           title={confirmPresentation.title}

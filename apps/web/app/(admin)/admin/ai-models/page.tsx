@@ -23,6 +23,7 @@ import { EmptyState } from "@/components/empty-state";
 import { AsyncError } from "@/components/feedback/async-error";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FormDialog } from "@/components/ui/form-dialog";
+import { useConfirmAction } from "@/hooks/use-confirm-action";
 import { browserApiClient } from "@/lib/api/browser-client";
 import { getApiErrorMessage } from "@/lib/api/error-message";
 
@@ -95,10 +96,6 @@ export default function AdminAiModelsPage({
   const [formPending, setFormPending] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(
-    null,
-  );
-  const [confirmError, setConfirmError] = useState<string | null>(null);
   const automaticLoadKey = useRef<string | null>(null);
   const latestRequest = useRef(0);
   const mounted = useRef(true);
@@ -188,26 +185,14 @@ export default function AdminAiModelsPage({
     }
   }
 
-  function openConfirm(action: ConfirmAction) {
-    setConfirmError(null);
-    setConfirmAction(action);
-  }
-
-  async function handleConfirm() {
-    if (!confirmAction || busyId) return;
-    setConfirmError(null);
-    const { kind, target } = confirmAction;
-    const error =
-      kind === "delete"
-        ? await removeModel(target)
-        : await toggleEnabled(target);
-    if (!mounted.current) return;
-    if (error) {
-      setConfirmError(error);
-      return;
-    }
-    setConfirmAction(null);
-  }
+  const { confirmAction, confirmError, openConfirm, closeConfirm, handleConfirm } =
+    useConfirmAction<ConfirmAction>({
+      blocked: Boolean(busyId),
+      execute: async (action) =>
+        action.kind === "delete"
+          ? removeModel(action.target)
+          : toggleEnabled(action.target),
+    });
 
   async function testModel(model: AiModel) {
     if (busyId) return;
@@ -270,12 +255,7 @@ export default function AdminAiModelsPage({
               : "停用后将不可用于新的 AI 任务。"
           }
           error={confirmError}
-          onCancel={() => {
-            if (!busyId) {
-              setConfirmAction(null);
-              setConfirmError(null);
-            }
-          }}
+          onCancel={closeConfirm}
           onConfirm={() => void handleConfirm()}
           pending={busyId === confirmAction.target.id}
           title={

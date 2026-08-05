@@ -69,4 +69,28 @@ import {
 - 仅在请求**成功**后关闭弹窗
 - 取消或重新打开确认时清除 `error`
 - 启用等无需确认的操作，错误仍写到页面级提示（如 `actionMessage` / `mutationError`）
-- 参考：`LogoutButton`、订单页 `OrderStatusDialog`
+- 列表页危险操作优先使用 `useConfirmAction`（见 `hooks/use-confirm-action.ts`），不要手写 `confirmAction` / `confirmError` 状态机
+- 参考：`LogoutButton`、订单页 `OrderStatusDialog`、AI 模型/任务/题库列表页
+
+```tsx
+const { confirmAction, confirmError, openConfirm, closeConfirm, handleConfirm } =
+  useConfirmAction<ConfirmAction>({
+    blocked: Boolean(busyId),
+    execute: async (action) => {
+      // 成功返回 null，失败返回错误文案
+      return action.kind === "delete"
+        ? remove(action.target)
+        : disable(action.target);
+    },
+  });
+
+{confirmAction ? (
+  <ConfirmDialog
+    error={confirmError}
+    onCancel={closeConfirm}
+    onConfirm={() => void handleConfirm()}
+    pending={busyId === confirmAction.target.id}
+    /* title / description / confirmLabel 由页面按 action 决定 */
+  />
+) : null}
+```

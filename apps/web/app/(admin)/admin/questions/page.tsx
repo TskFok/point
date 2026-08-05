@@ -21,6 +21,7 @@ import { StatusFilter } from "@/components/data/status-filter";
 import { EmptyState } from "@/components/empty-state";
 import { AsyncError } from "@/components/feedback/async-error";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { useConfirmAction } from "@/hooks/use-confirm-action";
 import { browserApiClient } from "@/lib/api/browser-client";
 import { getApiErrorMessage } from "@/lib/api/error-message";
 import { ADMIN_QUESTIONS_OPEN_CREATE_KEY } from "@/lib/admin/questions-ui";
@@ -82,10 +83,6 @@ export default function AdminQuestionsPage({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [mutatingId, setMutatingId] = useState<string | null>(null);
-  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(
-    null,
-  );
-  const [confirmError, setConfirmError] = useState<string | null>(null);
   const [editing, setEditing] = useState<"create" | { id: string } | null>(
     null,
   );
@@ -165,22 +162,11 @@ export default function AdminQuestionsPage({
     }
   }
 
-  function openConfirm(action: ConfirmAction) {
-    setConfirmError(null);
-    setConfirmAction(action);
-  }
-
-  async function handleConfirm() {
-    if (!confirmAction || mutatingId) return;
-    setConfirmError(null);
-    const error = await toggleStatus(confirmAction.target);
-    if (!mounted.current) return;
-    if (error) {
-      setConfirmError(error);
-      return;
-    }
-    setConfirmAction(null);
-  }
+  const { confirmAction, confirmError, openConfirm, closeConfirm, handleConfirm } =
+    useConfirmAction<ConfirmAction>({
+      blocked: Boolean(mutatingId),
+      execute: async (action) => toggleStatus(action.target),
+    });
 
   return (
     <section className="admin-page">
@@ -215,12 +201,7 @@ export default function AdminQuestionsPage({
           confirmVariant="danger"
           description="停用后该题目将不再进入练习池。"
           error={confirmError}
-          onCancel={() => {
-            if (!mutatingId) {
-              setConfirmAction(null);
-              setConfirmError(null);
-            }
-          }}
+          onCancel={closeConfirm}
           onConfirm={() => void handleConfirm()}
           pending={mutatingId === confirmAction.target.id}
           title="确认停用该题目？"
