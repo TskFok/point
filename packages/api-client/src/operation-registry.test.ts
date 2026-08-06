@@ -40,7 +40,7 @@ describe("operationRegistry", () => {
       ([left], [right]) => left.localeCompare(right),
     );
 
-    expect(fromClient).toHaveLength(51);
+    expect(fromClient).toHaveLength(52);
     expect(fromClient).toEqual(fromDocument);
   });
 });

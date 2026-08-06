@@ -11,6 +11,7 @@ import {
   Pencil,
   Plus,
   Search,
+  Trash2,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -32,14 +33,23 @@ type PageMeta = Schemas["PageMetaDto"];
 type QuestionsApi = Pick<
   ApiClient,
   | "createAdminQuestion"
+  | "deleteAdminQuestion"
   | "getAdminQuestion"
   | "listAdminQuestions"
   | "updateAdminQuestion"
 >;
 type Filters = { search: string; isActive: string };
-type ConfirmAction = { kind: "disable"; target: Question };
+type ConfirmAction =
+  | { kind: "disable"; target: Question }
+  | { kind: "delete"; target: Question };
 
 const emptyFilters: Filters = { search: "", isActive: "" };
+
+function stemPreview(stem: string, max = 40): string {
+  const trimmed = stem.trim();
+  if (trimmed.length <= max) return trimmed;
+  return `${trimmed.slice(0, max)}…`;
+}
 
 function readUrlState(): { filters: Filters; page: number } {
   if (typeof window === "undefined") return { filters: emptyFilters, page: 1 };
@@ -82,6 +92,7 @@ export default function AdminQuestionsPage({
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [mutatingId, setMutatingId] = useState<string | null>(null);
   const [editing, setEditing] = useState<"create" | { id: string } | null>(
     null,
@@ -162,10 +173,30 @@ export default function AdminQuestionsPage({
     }
   }
 
+  async function removeQuestion(question: Question): Promise<string | null> {
+    if (mutatingId) return "请等待当前操作完成";
+    setMutatingId(question.id);
+    setMutationError(null);
+    setActionMessage(null);
+    try {
+      await api.deleteAdminQuestion(question.id);
+      setActionMessage("已删除");
+      await load();
+      return null;
+    } catch (error) {
+      return getApiErrorMessage(error);
+    } finally {
+      setMutatingId(null);
+    }
+  }
+
   const { confirmAction, confirmError, openConfirm, closeConfirm, handleConfirm } =
     useConfirmAction<ConfirmAction>({
       blocked: Boolean(mutatingId),
-      execute: async (action) => toggleStatus(action.target),
+      execute: async (action) =>
+        action.kind === "delete"
+          ? removeQuestion(action.target)
+          : toggleStatus(action.target),
     });
 
   return (
@@ -197,14 +228,22 @@ export default function AdminQuestionsPage({
       {confirmAction ? (
         <ConfirmDialog
           cancelLabel="取消"
-          confirmLabel="停用题目"
+          confirmLabel={confirmAction.kind === "delete" ? "删除" : "停用题目"}
           confirmVariant="danger"
-          description="停用后该题目将不再进入练习池。"
+          description={
+            confirmAction.kind === "delete"
+              ? "此操作不可撤销。仅已停用且无答题记录的题目可删除。"
+              : "停用后该题目将不再进入练习池。"
+          }
           error={confirmError}
           onCancel={closeConfirm}
           onConfirm={() => void handleConfirm()}
           pending={mutatingId === confirmAction.target.id}
-          title="确认停用该题目？"
+          title={
+            confirmAction.kind === "delete"
+              ? `确认删除题目「${stemPreview(confirmAction.target.stem)}」？`
+              : "确认停用该题目？"
+          }
         />
       ) : null}
 
@@ -251,6 +290,12 @@ export default function AdminQuestionsPage({
           </Button>
         </form>
       </Card>
+
+      {actionMessage ? (
+        <p className="success-banner" role="status">
+          {actionMessage}
+        </p>
+      ) : null}
 
       {mutationError ? (
         <p className="admin-form__errors" role="alert">
@@ -355,6 +400,18 @@ export default function AdminQuestionsPage({
                               ? "停用题目"
                               : "启用题目"}
                         </Button>
+                        {!question.isActive && !question.hasAttempts ? (
+                          <Button
+                            disabled={mutatingId !== null}
+                            onClick={() =>
+                              openConfirm({ kind: "delete", target: question })
+                            }
+                            variant="secondary"
+                          >
+                            <Trash2 aria-hidden="true" />
+                            删除
+                          </Button>
+                        ) : null}
                       </div>
                     </td>
                   </tr>

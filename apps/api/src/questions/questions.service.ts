@@ -54,6 +54,20 @@ function questionHasAttempts(): ConflictException {
   });
 }
 
+function questionActiveConflict(): ConflictException {
+  return new ConflictException({
+    code: 'QUESTION_ACTIVE',
+    message: '请先停用再删除',
+  });
+}
+
+function questionHasAttemptsForDelete(): ConflictException {
+  return new ConflictException({
+    code: 'QUESTION_HAS_ATTEMPTS',
+    message: '已有答题记录，无法删除',
+  });
+}
+
 function concurrentModification(): ConflictException {
   return new ConflictException({
     code: 'CONCURRENT_MODIFICATION',
@@ -390,5 +404,25 @@ export class QuestionsService {
       }
       throw error;
     }
+  }
+
+  async remove(questionId: string): Promise<{ success: true }> {
+    const existing = await this.prisma.question.findUnique({
+      where: { id: questionId },
+    });
+    if (!existing) {
+      throw questionNotFound();
+    }
+    if (existing.isActive) {
+      throw questionActiveConflict();
+    }
+    const attemptCount = await this.prisma.answerAttempt.count({
+      where: { questionId },
+    });
+    if (attemptCount > 0) {
+      throw questionHasAttemptsForDelete();
+    }
+    await this.prisma.question.delete({ where: { id: questionId } });
+    return { success: true };
   }
 }

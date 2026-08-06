@@ -109,6 +109,10 @@ export const operationRegistry = {
     path: "/api/v1/admin/questions/{questionId}",
     method: "PATCH",
   },
+  adminDeleteQuestion: {
+    path: "/api/v1/admin/questions/{questionId}",
+    method: "DELETE",
+  },
   adminUploadProductImage: {
     path: "/api/v1/admin/uploads/product-images",
     method: "POST",
@@ -541,6 +545,11 @@ export function createApiClient(options: ApiClientOptions) {
         authMode: "authenticated",
         pathParams: { questionId },
         body: input,
+      }),
+    deleteAdminQuestion: (questionId: string) =>
+      request("adminDeleteQuestion", {
+        authMode: "authenticated",
+        pathParams: { questionId },
       }),
 
     getPreviewQuestions: (count?: number) =>

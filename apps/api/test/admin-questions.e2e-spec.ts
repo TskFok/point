@@ -395,7 +395,7 @@ describe('管理员题库与积分倍率 API', () => {
       });
   });
 
-  it('学员访问管理题库时返回稳定 403，且不存在 DELETE 接口', async () => {
+  it('学员访问管理题库时返回稳定 403', async () => {
     await request(server)
       .get('/api/v1/admin/questions')
       .set('Authorization', studentBearer)
@@ -403,11 +403,88 @@ describe('管理员题库与积分倍率 API', () => {
       .expect((response) => {
         expectErrorContract(response, 'FORBIDDEN');
       });
+  });
+
+  it('删除：已停用无记录成功；启用或有记录拒绝；不存在 404', async () => {
+    const created = await request(server)
+      .post('/api/v1/admin/questions')
+      .set('Authorization', adminBearer)
+      .send(validQuestion({ stem: 'Deletable inactive', isActive: false }))
+      .expect(201);
+    const deletable = created.body as unknown as QuestionBody;
+
+    await request(server)
+      .delete(`/api/v1/admin/questions/${deletable.id}`)
+      .set('Authorization', adminBearer)
+      .expect(200)
+      .expect({ success: true });
+
+    await request(server)
+      .get(`/api/v1/admin/questions/${deletable.id}`)
+      .set('Authorization', adminBearer)
+      .expect(404)
+      .expect((response) => {
+        expectErrorContract(response, 'QUESTION_NOT_FOUND');
+      });
+
+    const activeCreated = await request(server)
+      .post('/api/v1/admin/questions')
+      .set('Authorization', adminBearer)
+      .send(validQuestion({ stem: 'Still active for delete' }))
+      .expect(201);
+    const active = activeCreated.body as unknown as QuestionBody;
+
+    await request(server)
+      .delete(`/api/v1/admin/questions/${active.id}`)
+      .set('Authorization', adminBearer)
+      .expect(409)
+      .expect((response) => {
+        expectErrorContract(response, 'QUESTION_ACTIVE');
+      });
+
+    const withAttemptsCreated = await request(server)
+      .post('/api/v1/admin/questions')
+      .set('Authorization', adminBearer)
+      .send(
+        validQuestion({
+          stem: 'Inactive with attempts',
+          isActive: false,
+        }),
+      )
+      .expect(201);
+    const withAttempts = withAttemptsCreated.body as unknown as QuestionBody;
+    await prisma.answerAttempt.create({
+      data: {
+        id: `task-del-attempt-${testRunId}`,
+        userId: studentId,
+        questionId: withAttempts.id,
+        selectedOptionId: withAttempts.options[0].id,
+        mode: 'FIRST_ATTEMPT',
+        isCorrect: true,
+        basePointsSnapshot: withAttempts.basePoints,
+        multiplierSnapshot: 1,
+        pointsAwarded: withAttempts.basePoints,
+        balanceAfterSnapshot: withAttempts.basePoints,
+        errorCountSnapshot: 0,
+        idempotencyKey: `task-del-answer-${testRunId}`,
+      },
+    });
+
+    await request(server)
+      .delete(`/api/v1/admin/questions/${withAttempts.id}`)
+      .set('Authorization', adminBearer)
+      .expect(409)
+      .expect((response) => {
+        expectErrorContract(response, 'QUESTION_HAS_ATTEMPTS');
+      });
 
     await request(server)
       .delete('/api/v1/admin/questions/not-a-question')
       .set('Authorization', adminBearer)
-      .expect(404);
+      .expect(404)
+      .expect((response) => {
+        expectErrorContract(response, 'QUESTION_NOT_FOUND');
+      });
   });
 
   it('创建、分页筛选、读取并原子替换未作答题目的全部选项', async () => {

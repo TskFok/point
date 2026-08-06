@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -20,6 +21,7 @@ import {
   AdminQuestionDto,
   CreateQuestionRequestDto,
   QuestionListResponseDto,
+  SuccessResponseDto,
   UpdateQuestionRequestDto,
 } from '../openapi/api-contract.models';
 import { CreateQuestionDto } from './dto/create-question.dto';
@@ -86,5 +88,18 @@ export class AdminQuestionsController {
     @Body() body: UpdateQuestionDto,
   ) {
     return this.questionsService.update(questionId, body);
+  }
+
+  @Delete(':questionId')
+  @ApiContract({
+    operationId: 'adminDeleteQuestion',
+    summary: '删除已停用且无答题记录的题目',
+    responseType: SuccessResponseDto,
+    authenticated: true,
+    mutation: true,
+    params: [questionIdParam],
+  })
+  remove(@Param('questionId') questionId: string) {
+    return this.questionsService.remove(questionId);
   }
 }

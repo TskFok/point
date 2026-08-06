@@ -21,6 +21,7 @@ describe("createApiClient", () => {
         "deleteAdminAiModel",
         "deleteAdminAiTask",
         "deleteAdminProduct",
+        "deleteAdminQuestion",
         "getAdminAiModel",
         "getAdminAiTask",
         "getAdminDashboard",

@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  NotFoundException,
   type HttpException,
 } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
@@ -528,6 +529,90 @@ describe('QuestionsService', () => {
     expect((error as HttpException).getResponse()).toMatchObject({
       code: 'CONCURRENT_MODIFICATION',
     });
+  });
+});
+
+describe('QuestionsService.remove', () => {
+  const inactive = {
+    id: 'question-1',
+    stem: 'Choose the correct form.',
+    explanation: 'Grammar.',
+    basePoints: 10,
+    isActive: false,
+    createdBy: 'admin-1',
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+  };
+
+  function createRemoveService(options: {
+    existing?: typeof inactive | null;
+    attemptCount?: number;
+  }) {
+    const existing =
+      options.existing === undefined ? inactive : options.existing;
+    const prisma = {
+      question: {
+        findUnique: () => Promise.resolve(existing),
+        delete: ({ where }: { where: { id: string } }) =>
+          Promise.resolve({ id: where.id, ...existing }),
+      },
+      answerAttempt: {
+        count: () => Promise.resolve(options.attemptCount ?? 0),
+      },
+    };
+    return {
+      service: new QuestionsService(prisma as unknown as PrismaService),
+      prisma,
+    };
+  }
+
+  it('已停用且无答题记录时删除成功', async () => {
+    const { service, prisma } = createRemoveService({ attemptCount: 0 });
+    const deleteSpy = jest.spyOn(prisma.question, 'delete');
+    await expect(service.remove('question-1')).resolves.toEqual({
+      success: true,
+    });
+    expect(deleteSpy).toHaveBeenCalledWith({ where: { id: 'question-1' } });
+  });
+
+  it('不存在时 QUESTION_NOT_FOUND', async () => {
+    const { service } = createRemoveService({ existing: null });
+    await expect(service.remove('missing')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    await expect(service.remove('missing')).rejects.toMatchObject({
+      response: { code: 'QUESTION_NOT_FOUND' },
+    });
+  });
+
+  it('仍启用时 QUESTION_ACTIVE', async () => {
+    const { service } = createRemoveService({
+      existing: { ...inactive, isActive: true },
+    });
+    await expect(service.remove('question-1')).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    await expect(service.remove('question-1')).rejects.toMatchObject({
+      response: {
+        code: 'QUESTION_ACTIVE',
+        message: '请先停用再删除',
+      },
+    });
+  });
+
+  it('有答题记录时 QUESTION_HAS_ATTEMPTS（删除文案）', async () => {
+    const { service, prisma } = createRemoveService({ attemptCount: 1 });
+    const deleteSpy = jest.spyOn(prisma.question, 'delete');
+    await expect(service.remove('question-1')).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    await expect(service.remove('question-1')).rejects.toMatchObject({
+      response: {
+        code: 'QUESTION_HAS_ATTEMPTS',
+        message: '已有答题记录，无法删除',
+      },
+    });
+    expect(deleteSpy).not.toHaveBeenCalled();
   });
 });
 
