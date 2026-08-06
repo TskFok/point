@@ -101,14 +101,6 @@ export default function ProfilePage({
   return (
     <section className="student-page list-page">
       <div className="list-page__chrome">
-        <div className="page-heading">
-          <div>
-            <p className="page-kicker">个人中心</p>
-            <h1>账户与积分流水</h1>
-            <p>每一笔答题奖励、兑换和退款都会保留可审计记录。</p>
-          </div>
-        </div>
-
         {user && balance !== null ? (
           <>
             <div className="profile-summary">

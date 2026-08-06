@@ -46,12 +46,13 @@ describe("学员概览与个人中心", () => {
       }),
     };
 
-    render(<LearnPage api={api} />);
+    const { container } = render(<LearnPage api={api} />);
 
     expect(await screen.findByText("160")).toBeVisible();
     expect(screen.getByText("已首次作答 12 题")).toBeVisible();
     expect(screen.getByText("未回答 8 题")).toBeVisible();
     expect(screen.getByText("待练错题 3 题")).toBeVisible();
+    expect(container.querySelector(".page-heading")).toBeNull();
   });
 
   it("学习首页加载失败可重试", async () => {
@@ -115,12 +116,14 @@ describe("学员概览与个人中心", () => {
         }),
     };
 
-    render(<ProfilePage api={api} />);
+    const { container } = render(<ProfilePage api={api} />);
 
     expect(await screen.findByText("learner")).toBeVisible();
     expect(screen.getByText("当前余额 160 积分")).toBeVisible();
     expect(screen.getByText("答题奖励")).toBeVisible();
     expect(screen.getByText("+20")).toBeVisible();
+    expect(container.querySelector(".page-heading")).toBeNull();
+    expect(container.querySelector(".profile-summary")).not.toBeNull();
 
     await user.click(screen.getByRole("button", { name: "下一页" }));
     expect(api.listPointLedger).toHaveBeenLastCalledWith({

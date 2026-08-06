@@ -37,6 +37,22 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - 不要使用 `AdminPageHeading` 或手写 `.page-heading` / `.page-heading--split`
 - 不要把主 CTA 放到表格上方单独一行或页面底部来代替筛选行末尾槽位
 
+# 学生页顶栏约定
+
+适用范围：`app/(student)/learn/**/page.tsx`。
+
+侧栏 / 移动端导航标明当前页面与积分，正文不要再放冗余页头。
+
+## 禁止
+
+- 不要使用 `.page-heading` / `.page-heading--split`
+- 不要在商城顶栏放 `.balance-card`（余额以侧栏积分为准；兑换校验仍用页面内 `balance` 状态）
+
+## 允许保留
+
+- 个人中心 `profile-summary`、错题重练 `wrong-practice__heading`、区块 `section-heading`
+- 首页正文内的进度 / 摘要卡片（非 page-heading）
+
 # 确认弹窗失败约定
 
 适用范围：管理端使用 `ConfirmDialog` 的危险操作（删除、停用、下架、立即执行等）。

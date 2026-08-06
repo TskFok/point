@@ -6,7 +6,7 @@ import type {
 } from "@point-quest/api-client";
 import { ApiClientError } from "@point-quest/api-client";
 import { Card } from "@point-quest/ui";
-import { Gift, LoaderCircle, Sparkles } from "lucide-react";
+import { Gift, LoaderCircle } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
@@ -226,33 +226,16 @@ export default function StorePage({
     <section className="student-page list-page">
       <div className="list-page__chrome">
         <div
-          className="page-heading page-heading--split"
+          className="list-page-focus-target"
           ref={fallbackFocusRef}
           tabIndex={-1}
         >
-          <div>
-            <p className="page-kicker">积分奖励站</p>
-            <h1>把学习成果兑换成喜欢的奖励</h1>
-            <p>每次兑换一件商品，确认后会立即生成待领取订单。</p>
-          </div>
-          <Card
-            aria-label={`当前可用积分 ${balance ?? "加载中"}`}
-            className="balance-card"
-            tone="reward"
-          >
-            <Sparkles aria-hidden="true" />
-            <div>
-              <span>当前可用积分</span>
-              <strong>{balance ?? "—"}</strong>
-            </div>
-          </Card>
+          {successMessage ? (
+            <p className="success-banner" role="status">
+              {successMessage}
+            </p>
+          ) : null}
         </div>
-
-        {successMessage ? (
-          <p className="success-banner" role="status">
-            {successMessage}
-          </p>
-        ) : null}
       </div>
 
       {loading ? (

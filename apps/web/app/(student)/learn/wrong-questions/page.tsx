@@ -119,16 +119,6 @@ export default function WrongQuestionsPage({
 
   return (
     <section className={selected ? "student-page" : "student-page list-page"}>
-      <div className="list-page__chrome">
-        <div className="page-heading">
-          <div>
-            <p className="page-kicker">错题巩固</p>
-            <h1>把每一次错误变成真正掌握</h1>
-            <p>重练答对会移出待练列表，但不会重复获得积分。</p>
-          </div>
-        </div>
-      </div>
-
       {selected ? (
         <div className="wrong-practice">
           <div className="wrong-practice__heading">

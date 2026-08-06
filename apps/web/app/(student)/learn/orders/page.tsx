@@ -71,16 +71,6 @@ export default function OrdersPage({
 
   return (
     <section className="student-page list-page">
-      <div className="list-page__chrome">
-        <div className="page-heading">
-          <div>
-            <p className="page-kicker">我的兑换</p>
-            <h1>订单与领取进度</h1>
-            <p>订单会保留兑换时的商品、图片和积分快照。</p>
-          </div>
-        </div>
-      </div>
-
       {loading ? (
         <Card aria-live="polite" className="page-loading" role="status">
           <LoaderCircle aria-hidden="true" className="spin" />

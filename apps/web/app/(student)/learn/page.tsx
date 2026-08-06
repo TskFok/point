@@ -72,14 +72,6 @@ export default function LearnPage({
 
   return (
     <section className="student-page">
-      <div className="page-heading">
-        <div>
-          <p className="page-kicker">每日英语挑战</p>
-          <h1>今天也向目标再靠近一点</h1>
-          <p>完成未答题、掌握错题，把学习成果变成可以兑换的积分。</p>
-        </div>
-      </div>
-
       {loading ? (
         <Card aria-live="polite" className="page-loading" role="status">
           <LoaderCircle aria-hidden="true" className="spin" />

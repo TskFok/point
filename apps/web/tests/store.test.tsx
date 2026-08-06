@@ -107,7 +107,6 @@ describe("积分商城页面", () => {
 
     await user.click(screen.getByRole("button", { name: "确认兑换" }));
     expect(await screen.findByText("兑换成功，订单已生成")).toBeVisible();
-    expect(screen.getByLabelText("当前可用积分 120")).toBeVisible();
   });
 
   it.each([
@@ -150,14 +149,17 @@ describe("积分商城页面", () => {
         );
       }
 
-      render(<StorePage api={api} initialBalance={200} />);
+      const { container } = render(
+        <StorePage api={api} initialBalance={200} />,
+      );
 
       const opener = await screen.findByRole("button", {
         name: "兑换 80 积分",
       });
-      const fallback = screen
-        .getByRole("heading", { name: "把学习成果兑换成喜欢的奖励" })
-        .closest<HTMLElement>(".page-heading");
+      const fallback = container.querySelector<HTMLElement>(
+        ".list-page-focus-target",
+      );
+      expect(fallback).not.toBeNull();
       await user.click(opener);
       await user.click(screen.getByRole("button", { name: "确认兑换" }));
 
@@ -291,11 +293,9 @@ describe("积分商城页面", () => {
     );
     await user.click(screen.getByRole("button", { name: "确认兑换" }));
 
-    expect(
-      await screen.findByLabelText("当前可用积分 50"),
-    ).toBeVisible();
+    expect(await screen.findByText("还差 30 积分")).toBeVisible();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.getByText("还差 30 积分")).toBeVisible();
+    expect(screen.queryByLabelText(/当前可用积分/)).not.toBeInTheDocument();
   });
 
   it("服务端发现库存变化时立即将商品标为售罄", async () => {
@@ -386,7 +386,9 @@ describe("积分商城页面", () => {
 
     const chrome = container.querySelector(".list-page__chrome");
     expect(chrome).not.toBeNull();
-    expect(chrome?.querySelector(".page-heading")).not.toBeNull();
+    expect(chrome?.querySelector(".page-heading")).toBeNull();
+    expect(chrome?.querySelector(".balance-card")).toBeNull();
+    expect(chrome?.querySelector(".list-page-focus-target")).not.toBeNull();
     expect(body?.contains(chrome as Node)).toBe(false);
     expect(chrome?.contains(nav as Node)).toBe(false);
   });

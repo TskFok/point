@@ -102,7 +102,7 @@ describe("错题库页面", () => {
       meta: { ...pageMeta, total: 0, totalPages: 0 },
     });
 
-    render(<WrongQuestionsPage api={api} />);
+    const { container } = render(<WrongQuestionsPage api={api} />);
 
     expect(
       await screen.findByRole("heading", { name: "暂时没有待练错题" }),
@@ -111,6 +111,8 @@ describe("错题库页面", () => {
       "href",
       "/learn/practice",
     );
+    expect(container.querySelector(".page-heading")).toBeNull();
+    expect(container.querySelector(".list-page__chrome")).toBeNull();
   });
 
   it("加载失败显示可恢复错误，并能重试当前页", async () => {

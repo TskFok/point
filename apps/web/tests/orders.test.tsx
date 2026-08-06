@@ -43,7 +43,7 @@ describe("学员订单页面", () => {
       meta: { ...pageMeta, total: 3 },
     });
 
-    render(<OrdersPage api={api} />);
+    const { container } = render(<OrdersPage api={api} />);
 
     expect(await screen.findByText("待领取")).toBeVisible();
     expect(screen.getByRole("img", { name: "待领取状态图标" })).toBeVisible();
@@ -51,6 +51,8 @@ describe("学员订单页面", () => {
     expect(screen.getByRole("img", { name: "已完成状态图标" })).toBeVisible();
     expect(screen.getByText("已取消")).toBeVisible();
     expect(screen.getByRole("img", { name: "已取消状态图标" })).toBeVisible();
+    expect(container.querySelector(".page-heading")).toBeNull();
+    expect(container.querySelector(".list-page__chrome")).toBeNull();
   });
 
   it("显示商品快照、花费积分、订单号和创建时间", async () => {
