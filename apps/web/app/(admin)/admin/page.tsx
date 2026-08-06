@@ -87,16 +87,6 @@ export default function AdminDashboardPage({
 
   return (
     <section className="admin-page">
-      <Card className="admin-filter-card">
-        <div className="admin-filter-grid admin-filter-grid--chrome-only">
-          <div className="dashboard-timezone">
-            <CircleGauge aria-hidden="true" />
-            <span>今日口径</span>
-            <strong>Asia/Shanghai</strong>
-          </div>
-        </div>
-      </Card>
-
       {loading ? (
         <Card aria-live="polite" className="page-loading" role="status">
           <LoaderCircle aria-hidden="true" className="spin" />

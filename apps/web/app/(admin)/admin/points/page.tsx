@@ -2,10 +2,9 @@
 
 import type { ApiClient, ApiComponents } from "@point-quest/api-client";
 import { Card } from "@point-quest/ui";
-import { Clock3, Gauge, History, LoaderCircle, UserRound } from "lucide-react";
+import { Clock3, History, LoaderCircle, UserRound } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { AdminPageHeadingStat } from "@/components/admin/admin-page-heading";
 import { PointConfigForm } from "@/components/admin/point-config-form";
 import { Pagination } from "@/components/data/pagination";
 import { EmptyState } from "@/components/empty-state";
@@ -100,16 +99,6 @@ export default function AdminPointsPage({
   return (
     <section className="admin-page list-page">
       <div className="list-page__chrome">
-        <Card className="admin-filter-card">
-          <div className="admin-filter-grid admin-filter-grid--chrome-only">
-            <AdminPageHeadingStat
-              icon={<Gauge aria-hidden="true" />}
-              label="当前倍率"
-              value={current ? `${current.multiplier}×` : "—"}
-            />
-          </div>
-        </Card>
-
         {current ? (
           <>
             <PointConfigForm

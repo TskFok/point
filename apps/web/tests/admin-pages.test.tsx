@@ -95,11 +95,8 @@ describe("管理员运营页面", () => {
     expect(screen.getByText("启用题目")).toBeVisible();
     expect(screen.getByText("今日答题")).toBeVisible();
     expect(container.querySelector(".page-heading")).toBeNull();
-    expect(screen.getByText("今日口径")).toBeVisible();
-    expect(screen.getByText("Asia/Shanghai")).toBeVisible();
-    expect(
-      container.querySelector(".admin-filter-card .dashboard-timezone"),
-    ).not.toBeNull();
+    expect(container.querySelector(".admin-filter-card")).toBeNull();
+    expect(screen.queryByText("今日口径")).toBeNull();
   });
 
   it("概览快捷入口标记并跳转到题库创建弹窗", async () => {
@@ -379,7 +376,7 @@ describe("管理员运营页面", () => {
     expect(api.updateAdminQuestion).not.toHaveBeenCalled();
   });
 
-  it("筛选 chrome 展示当前倍率且无 page-heading", async () => {
+  it("积分页无 page-heading 与当前倍率 chrome", async () => {
     const config = {
       createdAt: "2026-07-31T08:00:00.000Z",
       id: "config-1",
@@ -397,13 +394,10 @@ describe("管理员运营页面", () => {
     };
     const { container } = render(<AdminPointsPage api={api} />);
 
+    expect(await screen.findByLabelText("积分倍率")).toHaveValue(2);
     expect(container.querySelector(".page-heading")).toBeNull();
-    const filterCard = container.querySelector(".admin-filter-card");
-    expect(filterCard).not.toBeNull();
-    expect(
-      await within(filterCard as HTMLElement).findByText("2×"),
-    ).toBeVisible();
-    expect(within(filterCard as HTMLElement).getByText("当前倍率")).toBeVisible();
+    expect(container.querySelector(".admin-filter-card")).toBeNull();
+    expect(screen.queryByText("当前倍率")).toBeNull();
   });
 
   it("倍率限制为 1–10 整数并刷新配置历史", async () => {

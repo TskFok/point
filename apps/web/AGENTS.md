@@ -15,8 +15,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
 `[筛选项…] → [应用筛选/筛选] → [主 CTA 或关键指标]`
 
 - **有主操作**：末尾放 CTA（如「添加商品」），带 `Plus` 图标，`type="button"`，打开新建弹窗。不得成为筛选 form 的默认 submit。
-- **无主操作、需展示指标**：末尾放 `AdminPageHeadingStat`（如订单「当前结果」、积分「当前倍率」）；加载中或未知用 `"—"`。
-- **无筛选项的页**（积分、仪表盘）：仍用单行 `admin-filter-card`，只放指标或时区信息。
+- **无主操作、无需指标**（订单）：筛选行以「应用筛选」结尾，不放 Stat。
+- **无筛选项的页**（积分、仪表盘）：不放顶栏 filter card；积分直接展示配置表单与历史，仪表盘直接展示运营指标网格与快捷操作。
 
 ```tsx
 <Card className="admin-filter-card">

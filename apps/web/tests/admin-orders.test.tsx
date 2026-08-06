@@ -101,10 +101,10 @@ describe("管理员订单页面", () => {
 
     expect(container.querySelector(".page-heading")).toBeNull();
     expect(
-      within(container.querySelector(".admin-filter-card") as HTMLElement).getByText(
+      within(container.querySelector(".admin-filter-card") as HTMLElement).queryByText(
         "当前结果",
       ),
-    ).toBeVisible();
+    ).toBeNull();
 
     await user.click(opener);
     expect(screen.getByRole("dialog", { name: "确认取消订单" })).toBeVisible();

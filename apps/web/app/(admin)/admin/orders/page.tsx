@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { AdminPageHeadingStat } from "@/components/admin/admin-page-heading";
 import {
   OrderStatusDialog,
   type OrderStatusAction,
@@ -310,11 +309,6 @@ export default function AdminOrdersPage({
                 <Filter aria-hidden="true" />
                 应用筛选
               </Button>
-              <AdminPageHeadingStat
-                icon={<ClipboardList aria-hidden="true" />}
-                label="当前结果"
-                value={meta?.total ?? "—"}
-              />
             </form>
             {filterError ? (
               <p className="admin-form__errors" role="alert">
