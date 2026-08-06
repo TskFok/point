@@ -20,6 +20,7 @@ describe("createApiClient", () => {
         "createOrder",
         "deleteAdminAiModel",
         "deleteAdminAiTask",
+        "deleteAdminProduct",
         "getAdminAiModel",
         "getAdminAiTask",
         "getAdminDashboard",

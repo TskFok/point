@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   ExecutionContext,
   Get,
   Injectable,
@@ -29,6 +30,7 @@ import {
   ProductDto,
   ProductImageUploadResponseDto,
   ProductListResponseDto,
+  SuccessResponseDto,
   UpdateProductRequestDto,
 } from '../openapi/api-contract.models';
 import {
@@ -132,6 +134,19 @@ export class AdminProductsController {
     @Body() body: UpdateProductDto,
   ) {
     return this.productsService.update(productId, body);
+  }
+
+  @Delete(':productId')
+  @ApiContract({
+    operationId: 'adminDeleteProduct',
+    summary: '删除已下架且无订单的商品',
+    responseType: SuccessResponseDto,
+    authenticated: true,
+    mutation: true,
+    params: [productIdParam],
+  })
+  remove(@Param('productId') productId: string) {
+    return this.productsService.remove(productId);
   }
 }
 

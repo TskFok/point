@@ -92,6 +92,10 @@ export const operationRegistry = {
     path: "/api/v1/admin/products/{productId}",
     method: "PATCH",
   },
+  adminDeleteProduct: {
+    path: "/api/v1/admin/products/{productId}",
+    method: "DELETE",
+  },
   adminListQuestions: { path: "/api/v1/admin/questions", method: "GET" },
   adminCreateQuestion: {
     path: "/api/v1/admin/questions",
@@ -719,6 +723,11 @@ export function createApiClient(options: ApiClientOptions) {
         authMode: "authenticated",
         pathParams: { productId },
         body: input,
+      }),
+    deleteAdminProduct: (productId: string) =>
+      request("adminDeleteProduct", {
+        authMode: "authenticated",
+        pathParams: { productId },
       }),
     uploadAdminProductImage: (file: Blob, filename = "product-image") => {
       const formData = new FormData();

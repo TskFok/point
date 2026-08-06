@@ -2837,6 +2837,16 @@ svg {
   height: 1rem;
 }
 
+.admin-product-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.admin-product-card__actions .pq-button {
+  flex: 1;
+}
+
 .point-config-card {
   display: grid;
   gap: 1.25rem;
@@ -3117,6 +3127,7 @@ svg {
 
   .admin-quick-actions__links,
   .admin-table__actions,
+  .admin-product-card__actions,
   .admin-form__actions {
     display: grid;
     grid-template-columns: 1fr;
@@ -3124,6 +3135,7 @@ svg {
 
   .admin-quick-actions__links .pq-button,
   .admin-table__actions .pq-button,
+  .admin-product-card__actions .pq-button,
   .admin-form__actions .pq-button {
     width: 100%;
   }

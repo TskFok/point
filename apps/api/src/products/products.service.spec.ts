@@ -1,4 +1,8 @@
-import { BadRequestException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { ProductsService } from './products.service';
 
 const imageKey = 'products/123e4567-e89b-42d3-a456-426614174000.png';
@@ -15,7 +19,13 @@ function validProduct(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function createService(existing?: Record<string, unknown>) {
+function createService(
+  existing?: Record<string, unknown> | null,
+  options: {
+    orderCount?: number;
+    deleteImpl?: () => Promise<unknown>;
+  } = {},
+) {
   const product = {
     create: ({ data }: { data: Record<string, unknown> }) =>
       Promise.resolve({
@@ -28,14 +38,23 @@ function createService(existing?: Record<string, unknown>) {
         ...existing,
         ...data,
       }),
+    delete: options.deleteImpl
+      ? options.deleteImpl
+      : ({ where }: { where: { id: string } }) =>
+          Promise.resolve({ id: where.id, ...existing }),
+  };
+  const order = {
+    count: () => Promise.resolve(options.orderCount ?? 0),
   };
   const transactionClient = {
     product,
+    order,
     $queryRaw: () =>
       Promise.resolve(existing ? [{ id: existing.id as string }] : []),
   };
   return new ProductsService({
     product,
+    order,
     $transaction: <T>(
       callback: (client: typeof transactionClient) => Promise<T>,
     ) => callback(transactionClient),
@@ -253,5 +272,54 @@ describe('ProductsService 领域校验', () => {
       1,
     );
     expect(state.isActive && state.pointsCost === 0).toBe(false);
+  });
+});
+
+describe('ProductsService.remove', () => {
+  const inactive = {
+    id: 'prod-1',
+    name: 'Badge',
+    description: 'Reward',
+    imageKey,
+    stock: 1,
+    pointsCost: 20,
+    isActive: false,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+  };
+
+  it('已下架且无订单时删除成功', async () => {
+    const service = createService(inactive, { orderCount: 0 });
+    await expect(service.remove('prod-1')).resolves.toEqual({ success: true });
+  });
+
+  it('不存在时 PRODUCT_NOT_FOUND', async () => {
+    const service = createService(null);
+    await expect(service.remove('missing')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    await expect(service.remove('missing')).rejects.toMatchObject({
+      response: { code: 'PRODUCT_NOT_FOUND' },
+    });
+  });
+
+  it('仍上架时 PRODUCT_ACTIVE', async () => {
+    const service = createService({ ...inactive, isActive: true });
+    await expect(service.remove('prod-1')).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    await expect(service.remove('prod-1')).rejects.toMatchObject({
+      response: { code: 'PRODUCT_ACTIVE' },
+    });
+  });
+
+  it('有订单时 PRODUCT_HAS_ORDERS', async () => {
+    const service = createService(inactive, { orderCount: 1 });
+    await expect(service.remove('prod-1')).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    await expect(service.remove('prod-1')).rejects.toMatchObject({
+      response: { code: 'PRODUCT_HAS_ORDERS' },
+    });
   });
 });

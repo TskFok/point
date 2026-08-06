@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -33,6 +34,20 @@ function productNotFound(): NotFoundException {
   return new NotFoundException({
     code: 'PRODUCT_NOT_FOUND',
     message: '商品不存在',
+  });
+}
+
+function productActiveConflict(): ConflictException {
+  return new ConflictException({
+    code: 'PRODUCT_ACTIVE',
+    message: '请先下架再删除',
+  });
+}
+
+function productHasOrdersConflict(): ConflictException {
+  return new ConflictException({
+    code: 'PRODUCT_HAS_ORDERS',
+    message: '该商品已有订单，无法删除',
   });
 }
 
@@ -254,5 +269,25 @@ export class ProductsService {
         data: updateData,
       });
     });
+  }
+
+  async remove(productId: string): Promise<{ success: true }> {
+    const existing = await this.prisma.product.findUnique({
+      where: { id: productId },
+    });
+    if (!existing) {
+      throw productNotFound();
+    }
+    if (existing.isActive) {
+      throw productActiveConflict();
+    }
+    const orderCount = await this.prisma.order.count({
+      where: { productId },
+    });
+    if (orderCount > 0) {
+      throw productHasOrdersConflict();
+    }
+    await this.prisma.product.delete({ where: { id: productId } });
+    return { success: true };
   }
 }

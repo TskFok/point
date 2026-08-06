@@ -522,6 +522,7 @@ describe("管理员运营页面", () => {
       }),
       updateAdminProduct: jest.fn(),
       uploadAdminProductImage: jest.fn(),
+      deleteAdminProduct: jest.fn(),
     };
     window.history.replaceState(null, "", "/admin/products");
     render(<AdminProductsPage api={api} />);
@@ -556,6 +557,7 @@ describe("管理员运营页面", () => {
       }),
       updateAdminProduct: jest.fn(),
       uploadAdminProductImage: jest.fn(),
+      deleteAdminProduct: jest.fn(),
     };
     window.history.replaceState(null, "", "/admin/products");
     render(<AdminProductsPage api={api} />);
@@ -611,6 +613,7 @@ describe("管理员运营页面", () => {
         isActive: false,
       }),
       uploadAdminProductImage: jest.fn(),
+      deleteAdminProduct: jest.fn(),
     };
     window.history.replaceState(
       null,

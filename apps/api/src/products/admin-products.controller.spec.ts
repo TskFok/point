@@ -1,6 +1,9 @@
 import { crc32 } from 'node:zlib';
 import sharp from 'sharp';
-import { AdminProductUploadsController } from './admin-products.controller';
+import {
+  AdminProductsController,
+  AdminProductUploadsController,
+} from './admin-products.controller';
 
 type CapturedNormalizedImage = {
   buffer: Buffer;
@@ -29,6 +32,19 @@ function addPngTextChunk(buffer: Buffer, payload: Buffer): Buffer {
     buffer.subarray(idatOffset),
   ]);
 }
+
+describe('AdminProductsController', () => {
+  it('remove 委托 ProductsService.remove', async () => {
+    const productsService = {
+      remove: jest.fn().mockResolvedValue({ success: true }),
+    };
+    const controller = new AdminProductsController(productsService as never);
+    await expect(controller.remove('prod-1')).resolves.toEqual({
+      success: true,
+    });
+    expect(productsService.remove).toHaveBeenCalledWith('prod-1');
+  });
+});
 
 describe('AdminProductUploadsController', () => {
   it('只把净化后的 buffer 和可信输出扩展名交给 StorageProvider', async () => {

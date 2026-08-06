@@ -401,7 +401,7 @@ describe('商品、库存与图片上传 API', () => {
       });
   });
 
-  it('管理员创建、筛选分页并局部更新商品，且没有 DELETE 路由', async () => {
+  it('管理员创建、筛选分页并局部更新商品，且可删除已下架无订单商品', async () => {
     const firstResponse = await request(requireServer())
       .post('/api/v1/admin/products')
       .set('Authorization', adminBearer)
@@ -470,7 +470,71 @@ describe('商品、库存与图片上传 API', () => {
     await request(requireServer())
       .delete(`/api/v1/admin/products/${first.id}`)
       .set('Authorization', adminBearer)
-      .expect(404);
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toEqual({ success: true });
+      });
+
+    await expect(
+      requirePrisma().product.findUnique({ where: { id: first.id } }),
+    ).resolves.toBeNull();
+  });
+
+  it('管理员删除仍上架商品时返回 PRODUCT_ACTIVE', async () => {
+    const created = await request(requireServer())
+      .post('/api/v1/admin/products')
+      .set('Authorization', adminBearer)
+      .send(
+        validProduct({
+          name: `Task 7 Active Delete ${testRunId}`,
+        }),
+      )
+      .expect(201);
+    const product = created.body as unknown as ProductBody;
+
+    await request(requireServer())
+      .delete(`/api/v1/admin/products/${product.id}`)
+      .set('Authorization', adminBearer)
+      .expect(409)
+      .expect((response) => {
+        expectErrorContract(response, 'PRODUCT_ACTIVE');
+      });
+  });
+
+  it('管理员删除有订单的下架商品时返回 PRODUCT_HAS_ORDERS', async () => {
+    const created = await request(requireServer())
+      .post('/api/v1/admin/products')
+      .set('Authorization', adminBearer)
+      .send(
+        validProduct({
+          name: `Task 7 Ordered Delete ${testRunId}`,
+          isActive: false,
+          pointsCost: 0,
+        }),
+      )
+      .expect(201);
+    const product = created.body as unknown as ProductBody;
+
+    await requirePrisma().order.create({
+      data: {
+        orderNo: `PQ-DEL-${testRunId}`,
+        userId: studentId,
+        productId: product.id,
+        productNameSnapshot: product.name,
+        productImageKeySnapshot: product.imageKey,
+        pointsCostSnapshot: product.pointsCost,
+        status: 'PENDING_PICKUP',
+        idempotencyKey: `delete-guard-${testRunId}`,
+      },
+    });
+
+    await request(requireServer())
+      .delete(`/api/v1/admin/products/${product.id}`)
+      .set('Authorization', adminBearer)
+      .expect(409)
+      .expect((response) => {
+        expectErrorContract(response, 'PRODUCT_HAS_ORDERS');
+      });
   });
 
   it.each([
