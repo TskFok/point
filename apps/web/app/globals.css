@@ -404,7 +404,9 @@ svg {
 }
 
 .app-shell {
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
   background: var(--surface-page);
 }
 
@@ -549,9 +551,14 @@ svg {
 }
 
 .app-workspace {
+  display: flex;
   min-width: 0;
-  min-height: 100vh;
+  min-height: 0;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
   margin-left: 16.5rem;
+  overflow: hidden;
 }
 
 .profile-link {
@@ -584,9 +591,14 @@ svg {
 }
 
 .app-content {
+  display: flex;
   width: min(100%, 92rem);
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
   margin-inline: auto;
   padding: clamp(1.25rem, 3vw, 2.5rem);
+  overflow: hidden;
 }
 
 .mobile-bottom-nav,
@@ -823,11 +835,32 @@ svg {
   margin-top: 1.5rem;
 }
 
-.student-page {
+.student-page,
+.admin-page {
   display: flex;
+  width: min(100%, 92rem);
+  min-height: 0;
+  flex: 1;
   flex-direction: column;
   gap: clamp(1.25rem, 2.4vw, 2rem);
-  min-height: calc(100vh - 5rem);
+  margin-inline: auto;
+  overflow: auto;
+}
+
+.admin-page {
+  gap: 1.5rem;
+}
+
+.admin-page.list-page,
+.student-page.list-page {
+  overflow: hidden;
+}
+
+.list-page__chrome {
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  gap: inherit;
 }
 
 .page-heading--split,
@@ -2109,10 +2142,6 @@ svg {
     padding-top: 3.75rem;
   }
 
-  .app-shell--admin .admin-page {
-    min-height: calc(100vh - 5rem - 2.5rem);
-  }
-
   .admin-drawer-layer {
     display: block;
   }
@@ -2127,12 +2156,24 @@ svg {
 }
 
 @media (max-width: 900px) {
+  .app-shell--student {
+    --student-bottom-nav-space: calc(5.6rem + env(safe-area-inset-bottom));
+  }
+
   .app-shell--student .app-content {
-    padding-bottom: 6.5rem;
+    padding-bottom: 1rem;
+  }
+
+  .app-shell--student .list-page .paginated-panel {
+    padding-bottom: var(--student-bottom-nav-space);
   }
 
   .app-shell--student .paginated-panel > .pagination {
-    padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+    padding-bottom: 0.75rem;
+  }
+
+  .app-shell--student .student-page:not(.list-page) {
+    padding-bottom: var(--student-bottom-nav-space);
   }
 
   .mobile-bottom-nav {
@@ -2332,15 +2373,6 @@ svg {
 }
 
 /* Admin operations */
-.admin-page {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-  width: min(100%, 92rem);
-  margin-inline: auto;
-  min-height: calc(100vh - 5rem);
-}
-
 .page-heading__stat,
 .dashboard-timezone {
   display: grid;

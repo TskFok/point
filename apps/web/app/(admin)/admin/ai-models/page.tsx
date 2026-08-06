@@ -213,17 +213,52 @@ export default function AdminAiModelsPage({
   }
 
   return (
-    <section className="admin-page">
-      <AdminPageHeading
-        description="配置模型名称、调用地址与 API Key，供后续智能能力使用。"
-        kicker="系统能力"
-        title="AI 模型"
-      >
-        <Button onClick={() => setEditing("create")}>
-          <Plus aria-hidden="true" />
-          添加模型
-        </Button>
-      </AdminPageHeading>
+    <section className="admin-page list-page">
+      <div className="list-page__chrome">
+        <AdminPageHeading
+          description="配置模型名称、调用地址与 API Key，供后续智能能力使用。"
+          kicker="系统能力"
+          title="AI 模型"
+        >
+          <Button onClick={() => setEditing("create")}>
+            <Plus aria-hidden="true" />
+            添加模型
+          </Button>
+        </AdminPageHeading>
+
+        <Card className="admin-filter-card">
+          <form
+            className="admin-filter-grid"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setPage(1);
+              setAppliedFilters({ ...filters });
+            }}
+          >
+            <StatusFilter
+              label="启用状态"
+              onChange={(isEnabled) =>
+                setFilters((current) => ({ ...current, isEnabled }))
+              }
+              options={[
+                { label: "已启用", value: "true" },
+                { label: "未启用", value: "false" },
+              ]}
+              value={filters.isEnabled}
+            />
+            <Button disabled={loading} type="submit">
+              <Filter aria-hidden="true" />
+              应用筛选
+            </Button>
+          </form>
+        </Card>
+
+        {actionMessage ? (
+          <p className="success-banner" role="status">
+            {actionMessage}
+          </p>
+        ) : null}
+      </div>
 
       {editing ? (
         <FormDialog
@@ -264,39 +299,6 @@ export default function AdminAiModelsPage({
               : `确认停用模型「${confirmAction.target.name}」？`
           }
         />
-      ) : null}
-
-      <Card className="admin-filter-card">
-        <form
-          className="admin-filter-grid"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setPage(1);
-            setAppliedFilters({ ...filters });
-          }}
-        >
-          <StatusFilter
-            label="启用状态"
-            onChange={(isEnabled) =>
-              setFilters((current) => ({ ...current, isEnabled }))
-            }
-            options={[
-              { label: "已启用", value: "true" },
-              { label: "未启用", value: "false" },
-            ]}
-            value={filters.isEnabled}
-          />
-          <Button disabled={loading} type="submit">
-            <Filter aria-hidden="true" />
-            应用筛选
-          </Button>
-        </form>
-      </Card>
-
-      {actionMessage ? (
-        <p className="success-banner" role="status">
-          {actionMessage}
-        </p>
       ) : null}
 
       {loading ? (

@@ -286,55 +286,57 @@ export default function AdminAiTasksPage({
     : null;
 
   return (
-    <section className="admin-page">
-      <AdminPageHeading
-        description="配置定时出题任务，按字典序调用 AI 生成英文题干与中文选项。"
-        kicker="系统能力"
-        title="AI 任务"
-      >
-        <Button
-          onClick={() => {
-            setEditing("create");
-            setActionMessage(null);
-          }}
-          type="button"
+    <section className="admin-page list-page">
+      <div className="list-page__chrome">
+        <AdminPageHeading
+          description="配置定时出题任务，按字典序调用 AI 生成英文题干与中文选项。"
+          kicker="系统能力"
+          title="AI 任务"
         >
-          <Plus aria-hidden="true" />
-          新建任务
-        </Button>
-      </AdminPageHeading>
-
-      <Card className="admin-filter-card">
-        <div className="admin-filter-grid">
-          <StatusFilter
-            label="启用状态"
-            onChange={(isEnabled) =>
-              setFilters((current) => ({ ...current, isEnabled }))
-            }
-            options={[
-              { label: "已启用", value: "true" },
-              { label: "未启用", value: "false" },
-            ]}
-            value={filters.isEnabled}
-          />
           <Button
             onClick={() => {
-              setAppliedFilters(filters);
-              setPage(1);
+              setEditing("create");
+              setActionMessage(null);
             }}
             type="button"
           >
-            <Filter aria-hidden="true" />
-            筛选
+            <Plus aria-hidden="true" />
+            新建任务
           </Button>
-        </div>
-      </Card>
+        </AdminPageHeading>
 
-      {actionMessage ? (
-        <p className="success-banner" role="status">
-          {actionMessage}
-        </p>
-      ) : null}
+        <Card className="admin-filter-card">
+          <div className="admin-filter-grid">
+            <StatusFilter
+              label="启用状态"
+              onChange={(isEnabled) =>
+                setFilters((current) => ({ ...current, isEnabled }))
+              }
+              options={[
+                { label: "已启用", value: "true" },
+                { label: "未启用", value: "false" },
+              ]}
+              value={filters.isEnabled}
+            />
+            <Button
+              onClick={() => {
+                setAppliedFilters(filters);
+                setPage(1);
+              }}
+              type="button"
+            >
+              <Filter aria-hidden="true" />
+              筛选
+            </Button>
+          </div>
+        </Card>
+
+        {actionMessage ? (
+          <p className="success-banner" role="status">
+            {actionMessage}
+          </p>
+        ) : null}
+      </div>
 
       {confirmAction && confirmPresentation ? (
         <ConfirmDialog

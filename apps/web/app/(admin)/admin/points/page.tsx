@@ -101,18 +101,46 @@ export default function AdminPointsPage({
   }, [load, page]);
 
   return (
-    <section className="admin-page">
-      <AdminPageHeading
-        description="每次保存都会追加一条历史记录，便于追踪奖励规则变化。"
-        kicker="学习奖励配置"
-        title="积分倍率"
-      >
-        <AdminPageHeadingStat
-          icon={<Gauge aria-hidden="true" />}
-          label="当前倍率"
-          value={current ? `${current.multiplier}×` : "—"}
-        />
-      </AdminPageHeading>
+    <section className="admin-page list-page">
+      <div className="list-page__chrome">
+        <AdminPageHeading
+          description="每次保存都会追加一条历史记录，便于追踪奖励规则变化。"
+          kicker="学习奖励配置"
+          title="积分倍率"
+        >
+          <AdminPageHeadingStat
+            icon={<Gauge aria-hidden="true" />}
+            label="当前倍率"
+            value={current ? `${current.multiplier}×` : "—"}
+          />
+        </AdminPageHeading>
+
+        {current ? (
+          <>
+            <PointConfigForm
+              api={api}
+              currentMultiplier={current.multiplier}
+              onSaved={(config) => {
+                setCurrent(config);
+                automaticLoadKey.current = null;
+                if (page === 1) {
+                  void load();
+                } else {
+                  setPage(1);
+                }
+              }}
+            />
+
+            <div className="admin-section-heading">
+              <div>
+                <p className="page-kicker">审计历史</p>
+                <h2>倍率变更记录</h2>
+              </div>
+              <History aria-hidden="true" />
+            </div>
+          </>
+        ) : null}
+      </div>
 
       {loading && !current ? (
         <Card aria-live="polite" className="page-loading" role="status">
@@ -123,27 +151,6 @@ export default function AdminPointsPage({
         <AsyncError message={error} onRetry={() => void load()} />
       ) : current ? (
         <>
-          <PointConfigForm
-            api={api}
-            currentMultiplier={current.multiplier}
-            onSaved={(config) => {
-              setCurrent(config);
-              automaticLoadKey.current = null;
-              if (page === 1) {
-                void load();
-              } else {
-                setPage(1);
-              }
-            }}
-          />
-
-          <div className="admin-section-heading">
-            <div>
-              <p className="page-kicker">审计历史</p>
-              <h2>倍率变更记录</h2>
-            </div>
-            <History aria-hidden="true" />
-          </div>
           {loading ? (
             <p
               aria-label="正在加载倍率历史"

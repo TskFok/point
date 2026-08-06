@@ -227,114 +227,116 @@ export default function AdminOrdersPage({
   }
 
   return (
-    <section className="admin-page">
-      <AdminPageHeading
-        description="筛选待领取订单，确认交付，或安全取消并退还资产。"
-        headingRef={fallbackFocusRef}
-        kicker="兑换履约中心"
-        tabIndex={-1}
-        title="订单管理"
-      >
-        <AdminPageHeadingStat
-          icon={<ClipboardList aria-hidden="true" />}
-          label="当前结果"
-          value={meta?.total ?? "—"}
-        />
-      </AdminPageHeading>
-
-      <Card className="admin-filter-card">
-        <form
-          className="admin-filter-grid admin-filter-grid--orders"
-          onSubmit={(event) => {
-            event.preventDefault();
-            applyFilters();
-          }}
+    <section className="admin-page list-page">
+      <div className="list-page__chrome">
+        <AdminPageHeading
+          description="筛选待领取订单，确认交付，或安全取消并退还资产。"
+          headingRef={fallbackFocusRef}
+          kicker="兑换履约中心"
+          tabIndex={-1}
+          title="订单管理"
         >
-          <label className="admin-field">
-            <span>订单号</span>
-            <div className="input-with-icon">
-              <Search aria-hidden="true" />
+          <AdminPageHeadingStat
+            icon={<ClipboardList aria-hidden="true" />}
+            label="当前结果"
+            value={meta?.total ?? "—"}
+          />
+        </AdminPageHeading>
+
+        <Card className="admin-filter-card">
+          <form
+            className="admin-filter-grid admin-filter-grid--orders"
+            onSubmit={(event) => {
+              event.preventDefault();
+              applyFilters();
+            }}
+          >
+            <label className="admin-field">
+              <span>订单号</span>
+              <div className="input-with-icon">
+                <Search aria-hidden="true" />
+                <input
+                  onChange={(event) =>
+                    setFilters((current) => ({
+                      ...current,
+                      orderNo: event.target.value,
+                    }))
+                  }
+                  placeholder="例如 PQ-2026"
+                  value={filters.orderNo}
+                />
+              </div>
+            </label>
+            <label className="admin-field">
+              <span>用户名</span>
               <input
                 onChange={(event) =>
                   setFilters((current) => ({
                     ...current,
-                    orderNo: event.target.value,
+                    username: event.target.value,
                   }))
                 }
-                placeholder="例如 PQ-2026"
-                value={filters.orderNo}
+                placeholder="输入学员用户名"
+                value={filters.username}
               />
-            </div>
-          </label>
-          <label className="admin-field">
-            <span>用户名</span>
-            <input
-              onChange={(event) =>
-                setFilters((current) => ({
-                  ...current,
-                  username: event.target.value,
-                }))
+            </label>
+            <StatusFilter
+              label="订单状态"
+              onChange={(status) =>
+                setFilters((current) => ({ ...current, status }))
               }
-              placeholder="输入学员用户名"
-              value={filters.username}
+              options={[
+                { label: "待领取", value: "PENDING_PICKUP" },
+                { label: "已完成", value: "COMPLETED" },
+                { label: "已取消", value: "CANCELLED" },
+              ]}
+              value={filters.status}
             />
-          </label>
-          <StatusFilter
-            label="订单状态"
-            onChange={(status) =>
-              setFilters((current) => ({ ...current, status }))
-            }
-            options={[
-              { label: "待领取", value: "PENDING_PICKUP" },
-              { label: "已完成", value: "COMPLETED" },
-              { label: "已取消", value: "CANCELLED" },
-            ]}
-            value={filters.status}
-          />
-          <label className="admin-field">
-            <span>开始日期</span>
-            <input
-              onChange={(event) =>
-                setFilters((current) => ({
-                  ...current,
-                  createdFrom: event.target.value,
-                }))
-              }
-              type="date"
-              value={filters.createdFrom}
-            />
-          </label>
-          <label className="admin-field">
-            <span>结束日期</span>
-            <input
-              onChange={(event) =>
-                setFilters((current) => ({
-                  ...current,
-                  createdTo: event.target.value,
-                }))
-              }
-              type="date"
-              value={filters.createdTo}
-            />
-          </label>
-          <Button disabled={loading} type="submit">
-            <Filter aria-hidden="true" />
-            应用筛选
-          </Button>
-        </form>
-        {filterError ? (
-          <p className="admin-form__errors" role="alert">
-            {filterError}
+            <label className="admin-field">
+              <span>开始日期</span>
+              <input
+                onChange={(event) =>
+                  setFilters((current) => ({
+                    ...current,
+                    createdFrom: event.target.value,
+                  }))
+                }
+                type="date"
+                value={filters.createdFrom}
+              />
+            </label>
+            <label className="admin-field">
+              <span>结束日期</span>
+              <input
+                onChange={(event) =>
+                  setFilters((current) => ({
+                    ...current,
+                    createdTo: event.target.value,
+                  }))
+                }
+                type="date"
+                value={filters.createdTo}
+              />
+            </label>
+            <Button disabled={loading} type="submit">
+              <Filter aria-hidden="true" />
+              应用筛选
+            </Button>
+          </form>
+          {filterError ? (
+            <p className="admin-form__errors" role="alert">
+              {filterError}
+            </p>
+          ) : null}
+        </Card>
+
+        {successMessage ? (
+          <p className="success-banner" role="status">
+            <CircleCheck aria-hidden="true" />
+            {successMessage}
           </p>
         ) : null}
-      </Card>
-
-      {successMessage ? (
-        <p className="success-banner" role="status">
-          <CircleCheck aria-hidden="true" />
-          {successMessage}
-        </p>
-      ) : null}
+      </div>
 
       {loading ? (
         <Card aria-live="polite" className="page-loading" role="status">

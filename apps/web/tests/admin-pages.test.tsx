@@ -147,6 +147,13 @@ describe("管理员运营页面", () => {
     expect(nav).not.toBeNull();
     expect(body?.contains(nav as Node)).toBe(false);
     expect(body?.querySelector(".admin-table-wrap")).not.toBeNull();
+
+    const chrome = container.querySelector(".list-page__chrome");
+    expect(chrome).not.toBeNull();
+    expect(chrome?.querySelector(".page-heading")).not.toBeNull();
+    expect(chrome?.querySelector(".admin-filter-card")).not.toBeNull();
+    expect(body?.contains(chrome as Node)).toBe(false);
+    expect(chrome?.contains(nav as Node)).toBe(false);
   });
 
   it("题库搜索、状态与分页写入 URL 并使用按钮编辑", async () => {

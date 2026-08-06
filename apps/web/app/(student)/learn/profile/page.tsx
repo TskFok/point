@@ -99,13 +99,46 @@ export default function ProfilePage({
   }, [load, page]);
 
   return (
-    <section className="student-page">
-      <div className="page-heading">
-        <div>
-          <p className="page-kicker">个人中心</p>
-          <h1>账户与积分流水</h1>
-          <p>每一笔答题奖励、兑换和退款都会保留可审计记录。</p>
+    <section className="student-page list-page">
+      <div className="list-page__chrome">
+        <div className="page-heading">
+          <div>
+            <p className="page-kicker">个人中心</p>
+            <h1>账户与积分流水</h1>
+            <p>每一笔答题奖励、兑换和退款都会保留可审计记录。</p>
+          </div>
         </div>
+
+        {user && balance !== null ? (
+          <>
+            <div className="profile-summary">
+              <Card className="profile-card" tone="primary">
+                <span className="profile-avatar" aria-hidden="true">
+                  <UserRound />
+                </span>
+                <div>
+                  <p>学员账户</p>
+                  <h2>{user.username}</h2>
+                  <span>账号 ID：{user.id}</span>
+                </div>
+              </Card>
+              <Card className="profile-balance" tone="reward">
+                <CircleDollarSign aria-hidden="true" />
+                <div>
+                  <p>可用积分</p>
+                  <h2>当前余额 {balance} 积分</h2>
+                </div>
+              </Card>
+            </div>
+
+            <div className="section-heading">
+              <div>
+                <p className="page-kicker">积分明细</p>
+                <h2>最近流水</h2>
+              </div>
+            </div>
+          </>
+        ) : null}
       </div>
 
       {loading ? (
@@ -116,81 +149,52 @@ export default function ProfilePage({
       ) : error ? (
         <AsyncError message={error} onRetry={() => void load()} />
       ) : user && balance !== null ? (
-        <>
-          <div className="profile-summary">
-            <Card className="profile-card" tone="primary">
-              <span className="profile-avatar" aria-hidden="true">
-                <UserRound />
-              </span>
-              <div>
-                <p>学员账户</p>
-                <h2>{user.username}</h2>
-                <span>账号 ID：{user.id}</span>
-              </div>
-            </Card>
-            <Card className="profile-balance" tone="reward">
-              <CircleDollarSign aria-hidden="true" />
-              <div>
-                <p>可用积分</p>
-                <h2>当前余额 {balance} 积分</h2>
-              </div>
-            </Card>
-          </div>
-
-          <div className="section-heading">
-            <div>
-              <p className="page-kicker">积分明细</p>
-              <h2>最近流水</h2>
+        ledger.length === 0 ? (
+          <EmptyState
+            description="完成首次正确作答后，积分奖励会记录在这里。"
+            icon={<ReceiptText />}
+            title="还没有积分流水"
+          />
+        ) : (
+          <div className="paginated-panel">
+            <div className="paginated-panel__body">
+              <Card className="ledger-list">
+                {ledger.map((entry) => (
+                  <article className="ledger-row" key={entry.id}>
+                    <span
+                      className={`ledger-row__icon ledger-row__icon--${
+                        entry.delta >= 0 ? "income" : "expense"
+                      }`}
+                    >
+                      <Coins aria-hidden="true" />
+                    </span>
+                    <div>
+                      <h3>{ledgerLabels[entry.type]}</h3>
+                      <time dateTime={entry.createdAt}>
+                        {dateTimeFormatter.format(new Date(entry.createdAt))}
+                      </time>
+                    </div>
+                    <div className="ledger-row__amount">
+                      <strong>
+                        {entry.delta > 0 ? "+" : ""}
+                        {entry.delta}
+                      </strong>
+                      <span>余额 {entry.balanceAfter}</span>
+                    </div>
+                  </article>
+                ))}
+              </Card>
             </div>
+            {meta ? (
+              <PaginationControls
+                disabled={loading}
+                onPageChange={setPage}
+                page={meta.page}
+                totalPages={meta.totalPages}
+              />
+            ) : null}
           </div>
-
-          {ledger.length === 0 ? (
-            <EmptyState
-              description="完成首次正确作答后，积分奖励会记录在这里。"
-              icon={<ReceiptText />}
-              title="还没有积分流水"
-            />
-          ) : (
-            <div className="paginated-panel">
-              <div className="paginated-panel__body">
-                <Card className="ledger-list">
-                  {ledger.map((entry) => (
-                    <article className="ledger-row" key={entry.id}>
-                      <span
-                        className={`ledger-row__icon ledger-row__icon--${
-                          entry.delta >= 0 ? "income" : "expense"
-                        }`}
-                      >
-                        <Coins aria-hidden="true" />
-                      </span>
-                      <div>
-                        <h3>{ledgerLabels[entry.type]}</h3>
-                        <time dateTime={entry.createdAt}>
-                          {dateTimeFormatter.format(new Date(entry.createdAt))}
-                        </time>
-                      </div>
-                      <div className="ledger-row__amount">
-                        <strong>
-                          {entry.delta > 0 ? "+" : ""}
-                          {entry.delta}
-                        </strong>
-                        <span>余额 {entry.balanceAfter}</span>
-                      </div>
-                    </article>
-                  ))}
-                </Card>
-              </div>
-              {meta ? (
-                <PaginationControls
-                  disabled={loading}
-                  onPageChange={setPage}
-                  page={meta.page}
-                  totalPages={meta.totalPages}
-                />
-              ) : null}
-            </div>
-          )}
-        </>
+        )
       ) : null}
     </section>
   );

@@ -70,12 +70,14 @@ export default function OrdersPage({
   }, [load, page]);
 
   return (
-    <section className="student-page">
-      <div className="page-heading">
-        <div>
-          <p className="page-kicker">我的兑换</p>
-          <h1>订单与领取进度</h1>
-          <p>订单会保留兑换时的商品、图片和积分快照。</p>
+    <section className="student-page list-page">
+      <div className="list-page__chrome">
+        <div className="page-heading">
+          <div>
+            <p className="page-kicker">我的兑换</p>
+            <h1>订单与领取进度</h1>
+            <p>订单会保留兑换时的商品、图片和积分快照。</p>
+          </div>
         </div>
       </div>
 

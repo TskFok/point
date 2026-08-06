@@ -383,6 +383,12 @@ describe("积分商城页面", () => {
     expect(nav).not.toBeNull();
     expect(body?.contains(nav as Node)).toBe(false);
     expect(body?.querySelector(".product-grid")).not.toBeNull();
+
+    const chrome = container.querySelector(".list-page__chrome");
+    expect(chrome).not.toBeNull();
+    expect(chrome?.querySelector(".page-heading")).not.toBeNull();
+    expect(body?.contains(chrome as Node)).toBe(false);
+    expect(chrome?.contains(nav as Node)).toBe(false);
   });
 
   it("失效商品使末页越界时回退并重新加载最后一个有效页", async () => {

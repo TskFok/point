@@ -172,17 +172,69 @@ export default function AdminProductsPage({
     });
 
   return (
-    <section className="admin-page">
-      <AdminPageHeading
-        description="维护商品图片、库存、积分价格和上架状态。"
-        kicker="积分奖励中心"
-        title="商品管理"
-      >
-        <Button onClick={() => setEditing("create")}>
-          <Plus aria-hidden="true" />
-          添加商品
-        </Button>
-      </AdminPageHeading>
+    <section className="admin-page list-page">
+      <div className="list-page__chrome">
+        <AdminPageHeading
+          description="维护商品图片、库存、积分价格和上架状态。"
+          kicker="积分奖励中心"
+          title="商品管理"
+        >
+          <Button onClick={() => setEditing("create")}>
+            <Plus aria-hidden="true" />
+            添加商品
+          </Button>
+        </AdminPageHeading>
+
+        <Card className="admin-filter-card">
+          <form
+            className="admin-filter-grid"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setPage(1);
+              setAppliedFilters({ ...filters });
+            }}
+          >
+            <label className="admin-field">
+              <span>搜索商品</span>
+              <div className="input-with-icon">
+                <Search aria-hidden="true" />
+                <input
+                  aria-label="搜索商品"
+                  onChange={(event) =>
+                    setFilters((current) => ({
+                      ...current,
+                      search: event.target.value,
+                    }))
+                  }
+                  placeholder="搜索名称或描述"
+                  value={filters.search}
+                />
+              </div>
+            </label>
+            <StatusFilter
+              label="上架状态"
+              onChange={(isActive) =>
+                setFilters((current) => ({ ...current, isActive }))
+              }
+              options={[
+                { label: "已上架", value: "true" },
+                { label: "已下架", value: "false" },
+              ]}
+              value={filters.isActive}
+            />
+            <Button disabled={loading} type="submit">
+              <Filter aria-hidden="true" />
+              应用筛选
+            </Button>
+          </form>
+        </Card>
+
+        {actionMessage ? (
+          <p className="success-banner" role="status">
+            {actionMessage}
+          </p>
+        ) : null}
+      </div>
 
       {editing ? (
         <FormDialog
@@ -223,56 +275,6 @@ export default function AdminProductsPage({
           pending={busyId === confirmAction.target.id}
           title={`确认删除商品「${confirmAction.target.name}」？`}
         />
-      ) : null}
-
-      <Card className="admin-filter-card">
-        <form
-          className="admin-filter-grid"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setPage(1);
-            setAppliedFilters({ ...filters });
-          }}
-        >
-          <label className="admin-field">
-            <span>搜索商品</span>
-            <div className="input-with-icon">
-              <Search aria-hidden="true" />
-              <input
-                aria-label="搜索商品"
-                onChange={(event) =>
-                  setFilters((current) => ({
-                    ...current,
-                    search: event.target.value,
-                  }))
-                }
-                placeholder="搜索名称或描述"
-                value={filters.search}
-              />
-            </div>
-          </label>
-          <StatusFilter
-            label="上架状态"
-            onChange={(isActive) =>
-              setFilters((current) => ({ ...current, isActive }))
-            }
-            options={[
-              { label: "已上架", value: "true" },
-              { label: "已下架", value: "false" },
-            ]}
-            value={filters.isActive}
-          />
-          <Button disabled={loading} type="submit">
-            <Filter aria-hidden="true" />
-            应用筛选
-          </Button>
-        </form>
-      </Card>
-
-      {actionMessage ? (
-        <p className="success-banner" role="status">
-          {actionMessage}
-        </p>
       ) : null}
 
       {loading ? (

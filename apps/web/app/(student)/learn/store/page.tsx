@@ -223,35 +223,37 @@ export default function StorePage({
   }
 
   return (
-    <section className="student-page">
-      <div
-        className="page-heading page-heading--split"
-        ref={fallbackFocusRef}
-        tabIndex={-1}
-      >
-        <div>
-          <p className="page-kicker">积分奖励站</p>
-          <h1>把学习成果兑换成喜欢的奖励</h1>
-          <p>每次兑换一件商品，确认后会立即生成待领取订单。</p>
-        </div>
-        <Card
-          aria-label={`当前可用积分 ${balance ?? "加载中"}`}
-          className="balance-card"
-          tone="reward"
+    <section className="student-page list-page">
+      <div className="list-page__chrome">
+        <div
+          className="page-heading page-heading--split"
+          ref={fallbackFocusRef}
+          tabIndex={-1}
         >
-          <Sparkles aria-hidden="true" />
           <div>
-            <span>当前可用积分</span>
-            <strong>{balance ?? "—"}</strong>
+            <p className="page-kicker">积分奖励站</p>
+            <h1>把学习成果兑换成喜欢的奖励</h1>
+            <p>每次兑换一件商品，确认后会立即生成待领取订单。</p>
           </div>
-        </Card>
-      </div>
+          <Card
+            aria-label={`当前可用积分 ${balance ?? "加载中"}`}
+            className="balance-card"
+            tone="reward"
+          >
+            <Sparkles aria-hidden="true" />
+            <div>
+              <span>当前可用积分</span>
+              <strong>{balance ?? "—"}</strong>
+            </div>
+          </Card>
+        </div>
 
-      {successMessage ? (
-        <p className="success-banner" role="status">
-          {successMessage}
-        </p>
-      ) : null}
+        {successMessage ? (
+          <p className="success-banner" role="status">
+            {successMessage}
+          </p>
+        ) : null}
+      </div>
 
       {loading ? (
         <Card aria-live="polite" className="page-loading" role="status">

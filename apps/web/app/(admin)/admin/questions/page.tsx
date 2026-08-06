@@ -291,17 +291,128 @@ export default function AdminQuestionsPage({
       : "停用题目";
 
   return (
-    <section className="admin-page">
-      <AdminPageHeading
-        description="维护题干、答案、解析和基础积分，控制题目是否进入练习池。"
-        kicker="英语内容中心"
-        title="题库管理"
-      >
-        <Button onClick={() => setEditing("create")}>
-          <Plus aria-hidden="true" />
-          添加题目
-        </Button>
-      </AdminPageHeading>
+    <section className="admin-page list-page">
+      <div className="list-page__chrome">
+        <AdminPageHeading
+          description="维护题干、答案、解析和基础积分，控制题目是否进入练习池。"
+          kicker="英语内容中心"
+          title="题库管理"
+        >
+          <Button onClick={() => setEditing("create")}>
+            <Plus aria-hidden="true" />
+            添加题目
+          </Button>
+        </AdminPageHeading>
+
+        <Card className="admin-filter-card">
+          <form
+            className="admin-filter-grid"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setPage(1);
+              setAppliedFilters({ ...filters });
+            }}
+          >
+            <label className="admin-field">
+              <span>搜索题目</span>
+              <div className="input-with-icon">
+                <Search aria-hidden="true" />
+                <input
+                  aria-label="搜索题目"
+                  onChange={(event) =>
+                    setFilters((current) => ({
+                      ...current,
+                      search: event.target.value,
+                    }))
+                  }
+                  placeholder="搜索题干或解析"
+                  value={filters.search}
+                />
+              </div>
+            </label>
+            <StatusFilter
+              label="启用状态"
+              onChange={(isActive) =>
+                setFilters((current) => ({ ...current, isActive }))
+              }
+              options={[
+                { label: "已启用", value: "true" },
+                { label: "已停用", value: "false" },
+              ]}
+              value={filters.isActive}
+            />
+            <Button disabled={loading} type="submit">
+              <Filter aria-hidden="true" />
+              应用筛选
+            </Button>
+          </form>
+        </Card>
+
+        {actionMessage ? (
+          <p className="success-banner" role="status">
+            {actionMessage}
+          </p>
+        ) : null}
+
+        {mutationError ? (
+          <p className="admin-form__errors" role="alert">
+            {mutationError}
+          </p>
+        ) : null}
+
+        {!loading && !loadError && selectedCount > 0 ? (
+          <div className="admin-batch-bar" role="region" aria-label="批量操作">
+            <span>已选 {selectedCount} 道</span>
+            <div className="admin-batch-bar__actions">
+              <Button
+                disabled={busy}
+                onClick={() => {
+                  void (async () => {
+                    const error = await runBatch("enable", selectedIds);
+                    if (error) setMutationError(error);
+                  })();
+                }}
+                variant="secondary"
+              >
+                {mutatingBatch ? (
+                  <LoaderCircle aria-hidden="true" className="spin" />
+                ) : (
+                  <CircleCheck aria-hidden="true" />
+                )}
+                批量启用
+              </Button>
+              <Button
+                disabled={busy}
+                onClick={() =>
+                  openConfirm({
+                    kind: "batch-disable",
+                    ids: selectedIds,
+                    count: selectedCount,
+                  })
+                }
+                variant="secondary"
+              >
+                <CircleOff aria-hidden="true" />
+                批量停用
+              </Button>
+              <Button
+                disabled={busy}
+                onClick={() =>
+                  openConfirm({
+                    kind: "batch-delete",
+                    ids: selectedIds,
+                    count: selectedCount,
+                  })
+                }
+                variant="secondary"
+              >
+                <Trash2 aria-hidden="true" />
+                批量删除
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </div>
 
       {editing ? (
         <QuestionFormDialog
@@ -335,62 +446,6 @@ export default function AdminQuestionsPage({
         />
       ) : null}
 
-      <Card className="admin-filter-card">
-        <form
-          className="admin-filter-grid"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setPage(1);
-            setAppliedFilters({ ...filters });
-          }}
-        >
-          <label className="admin-field">
-            <span>搜索题目</span>
-            <div className="input-with-icon">
-              <Search aria-hidden="true" />
-              <input
-                aria-label="搜索题目"
-                onChange={(event) =>
-                  setFilters((current) => ({
-                    ...current,
-                    search: event.target.value,
-                  }))
-                }
-                placeholder="搜索题干或解析"
-                value={filters.search}
-              />
-            </div>
-          </label>
-          <StatusFilter
-            label="启用状态"
-            onChange={(isActive) =>
-              setFilters((current) => ({ ...current, isActive }))
-            }
-            options={[
-              { label: "已启用", value: "true" },
-              { label: "已停用", value: "false" },
-            ]}
-            value={filters.isActive}
-          />
-          <Button disabled={loading} type="submit">
-            <Filter aria-hidden="true" />
-            应用筛选
-          </Button>
-        </form>
-      </Card>
-
-      {actionMessage ? (
-        <p className="success-banner" role="status">
-          {actionMessage}
-        </p>
-      ) : null}
-
-      {mutationError ? (
-        <p className="admin-form__errors" role="alert">
-          {mutationError}
-        </p>
-      ) : null}
-
       {loading ? (
         <Card aria-live="polite" className="page-loading" role="status">
           <LoaderCircle aria-hidden="true" className="spin" />
@@ -410,205 +465,151 @@ export default function AdminQuestionsPage({
           title="没有匹配的题目"
         />
       ) : (
-        <>
-          {selectedCount > 0 ? (
-            <div className="admin-batch-bar" role="region" aria-label="批量操作">
-              <span>已选 {selectedCount} 道</span>
-              <div className="admin-batch-bar__actions">
-                <Button
-                  disabled={busy}
-                  onClick={() => {
-                    void (async () => {
-                      const error = await runBatch("enable", selectedIds);
-                      if (error) setMutationError(error);
-                    })();
-                  }}
-                  variant="secondary"
-                >
-                  {mutatingBatch ? (
-                    <LoaderCircle aria-hidden="true" className="spin" />
-                  ) : (
-                    <CircleCheck aria-hidden="true" />
-                  )}
-                  批量启用
-                </Button>
-                <Button
-                  disabled={busy}
-                  onClick={() =>
-                    openConfirm({
-                      kind: "batch-disable",
-                      ids: selectedIds,
-                      count: selectedCount,
-                    })
-                  }
-                  variant="secondary"
-                >
-                  <CircleOff aria-hidden="true" />
-                  批量停用
-                </Button>
-                <Button
-                  disabled={busy}
-                  onClick={() =>
-                    openConfirm({
-                      kind: "batch-delete",
-                      ids: selectedIds,
-                      count: selectedCount,
-                    })
-                  }
-                  variant="secondary"
-                >
-                  <Trash2 aria-hidden="true" />
-                  批量删除
-                </Button>
-              </div>
-            </div>
-          ) : null}
-          <div className="paginated-panel">
-            <div className="paginated-panel__body">
-              <div className="admin-table-wrap">
-                <table className="admin-table">
-                  <caption className="sr-only">管理员题库列表</caption>
-                  <thead>
-                    <tr>
-                      <th className="admin-table__check">
+        <div className="paginated-panel">
+          <div className="paginated-panel__body">
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <caption className="sr-only">管理员题库列表</caption>
+                <thead>
+                  <tr>
+                    <th className="admin-table__check">
+                      <input
+                        aria-label="全选当前页"
+                        checked={allSelected}
+                        disabled={busy}
+                        onChange={(event) =>
+                          toggleSelectAll(event.target.checked)
+                        }
+                        type="checkbox"
+                      />
+                    </th>
+                    <th className="admin-table__primary">题干</th>
+                    <th>选项</th>
+                    <th>基础积分</th>
+                    <th>状态</th>
+                    <th className="admin-table__actions-cell">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {questions.map((question) => (
+                    <tr key={question.id}>
+                      <td className="admin-table__check" data-label="选择">
                         <input
-                          aria-label="全选当前页"
-                          checked={allSelected}
+                          aria-label={`选择题目「${stemPreview(question.stem)}」`}
+                          checked={selectedIds.includes(question.id)}
                           disabled={busy}
                           onChange={(event) =>
-                            toggleSelectAll(event.target.checked)
+                            toggleSelectOne(question.id, event.target.checked)
                           }
                           type="checkbox"
                         />
-                      </th>
-                      <th className="admin-table__primary">题干</th>
-                      <th>选项</th>
-                      <th>基础积分</th>
-                      <th>状态</th>
-                      <th className="admin-table__actions-cell">操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {questions.map((question) => (
-                      <tr key={question.id}>
-                        <td className="admin-table__check" data-label="选择">
-                          <input
-                            aria-label={`选择题目「${stemPreview(question.stem)}」`}
-                            checked={selectedIds.includes(question.id)}
-                            disabled={busy}
-                            onChange={(event) =>
-                              toggleSelectOne(question.id, event.target.checked)
-                            }
-                            type="checkbox"
-                          />
-                        </td>
-                        <td className="admin-table__primary" data-label="题干">
-                          <strong>{question.stem}</strong>
-                          <small>{question.explanation}</small>
-                        </td>
-                        <td data-label="选项">{question.options.length} 项</td>
-                        <td data-label="基础积分">{question.basePoints} 分</td>
-                        <td data-label="状态">
-                          <span
-                            className={`admin-status admin-status--${
-                              question.isActive ? "active" : "inactive"
-                            }`}
-                          >
-                            {question.isActive ? (
-                              <CircleCheck
-                                aria-label="已启用状态图标"
-                                role="img"
-                              />
-                            ) : (
-                              <CircleOff
-                                aria-label="已停用状态图标"
-                                role="img"
-                              />
-                            )}
-                            {question.isActive ? "已启用" : "已停用"}
-                          </span>
-                        </td>
-                        <td
-                          className="admin-table__actions-cell"
-                          data-label="操作"
+                      </td>
+                      <td className="admin-table__primary" data-label="题干">
+                        <strong>{question.stem}</strong>
+                        <small>{question.explanation}</small>
+                      </td>
+                      <td data-label="选项">{question.options.length} 项</td>
+                      <td data-label="基础积分">{question.basePoints} 分</td>
+                      <td data-label="状态">
+                        <span
+                          className={`admin-status admin-status--${
+                            question.isActive ? "active" : "inactive"
+                          }`}
                         >
-                          <div className="admin-table__actions">
-                            <Button
-                              onClick={() => setEditing({ id: question.id })}
-                              variant="secondary"
-                            >
-                              <Pencil aria-hidden="true" />
-                              编辑题目
-                            </Button>
-                            <Button
-                              disabled={
-                                busy ||
-                                (question.hasAttempts && !question.isActive)
+                          {question.isActive ? (
+                            <CircleCheck
+                              aria-label="已启用状态图标"
+                              role="img"
+                            />
+                          ) : (
+                            <CircleOff
+                              aria-label="已停用状态图标"
+                              role="img"
+                            />
+                          )}
+                          {question.isActive ? "已启用" : "已停用"}
+                        </span>
+                      </td>
+                      <td
+                        className="admin-table__actions-cell"
+                        data-label="操作"
+                      >
+                        <div className="admin-table__actions">
+                          <Button
+                            onClick={() => setEditing({ id: question.id })}
+                            variant="secondary"
+                          >
+                            <Pencil aria-hidden="true" />
+                            编辑题目
+                          </Button>
+                          <Button
+                            disabled={
+                              busy ||
+                              (question.hasAttempts && !question.isActive)
+                            }
+                            onClick={() => {
+                              if (question.isActive) {
+                                openConfirm({
+                                  kind: "disable",
+                                  target: question,
+                                });
+                                return;
                               }
-                              onClick={() => {
-                                if (question.isActive) {
-                                  openConfirm({
-                                    kind: "disable",
-                                    target: question,
-                                  });
-                                  return;
-                                }
-                                void (async () => {
-                                  const error = await toggleStatus(question);
-                                  if (error) setMutationError(error);
-                                })();
-                              }}
+                              void (async () => {
+                                const error = await toggleStatus(question);
+                                if (error) setMutationError(error);
+                              })();
+                            }}
+                            variant="secondary"
+                          >
+                            {mutatingId === question.id ? (
+                              <LoaderCircle
+                                aria-hidden="true"
+                                className="spin"
+                              />
+                            ) : question.isActive ? (
+                              <CircleOff aria-hidden="true" />
+                            ) : (
+                              <CircleCheck aria-hidden="true" />
+                            )}
+                            {question.hasAttempts && !question.isActive
+                              ? "已有记录不可启用"
+                              : question.isActive
+                                ? "停用题目"
+                                : "启用题目"}
+                          </Button>
+                          {!question.isActive && !question.hasAttempts ? (
+                            <Button
+                              disabled={busy}
+                              onClick={() =>
+                                openConfirm({
+                                  kind: "delete",
+                                  target: question,
+                                })
+                              }
                               variant="secondary"
                             >
-                              {mutatingId === question.id ? (
-                                <LoaderCircle
-                                  aria-hidden="true"
-                                  className="spin"
-                                />
-                              ) : question.isActive ? (
-                                <CircleOff aria-hidden="true" />
-                              ) : (
-                                <CircleCheck aria-hidden="true" />
-                              )}
-                              {question.hasAttempts && !question.isActive
-                                ? "已有记录不可启用"
-                                : question.isActive
-                                  ? "停用题目"
-                                  : "启用题目"}
+                              <Trash2 aria-hidden="true" />
+                              删除
                             </Button>
-                            {!question.isActive && !question.hasAttempts ? (
-                              <Button
-                                disabled={busy}
-                                onClick={() =>
-                                  openConfirm({
-                                    kind: "delete",
-                                    target: question,
-                                  })
-                                }
-                                variant="secondary"
-                              >
-                                <Trash2 aria-hidden="true" />
-                                删除
-                              </Button>
-                            ) : null}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            {meta ? (
-              <Pagination
-                disabled={loading}
-                onPageChange={setPage}
-                page={meta.page}
-                totalPages={meta.totalPages}
-              />
-            ) : null}
           </div>
-        </>
+          {meta ? (
+            <Pagination
+              disabled={loading}
+              onPageChange={setPage}
+              page={meta.page}
+              totalPages={meta.totalPages}
+            />
+          ) : null}
+        </div>
       )}
     </section>
   );
