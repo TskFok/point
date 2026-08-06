@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  BookMarked,
   BookOpen,
   BookOpenCheck,
   CircleDollarSign,
@@ -24,6 +25,7 @@ import { MobileNav, type NavigationItem } from "./mobile-nav";
 const studentItems: NavigationItem[] = [
   { href: "/learn", icon: Sparkles, label: "学习" },
   { href: "/learn/practice", icon: BookOpen, label: "练习" },
+  { href: "/learn/preview", icon: BookMarked, label: "预习" },
   { href: "/learn/wrong-questions", icon: BookOpenCheck, label: "错题" },
   { href: "/learn/store", icon: ShoppingBag, label: "商城" },
   { href: "/learn/orders", icon: ClipboardList, label: "订单" },

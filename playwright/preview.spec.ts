@@ -49,7 +49,10 @@ test("预习抽题展示题解，预习结束后在范围内答题并获得积�
   });
 
   await studentPage.goto("/learn");
-  await studentPage.getByRole("link", { name: /预习新题/ }).click();
+  await studentPage
+    .getByRole("navigation", { name: "学员主导航" })
+    .getByRole("link", { name: "预习" })
+    .click();
   await expect(studentPage).toHaveURL(/\/learn\/preview$/);
 
   await studentPage.getByLabel("自定义数量").fill("2");

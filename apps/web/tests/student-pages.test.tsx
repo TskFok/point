@@ -52,6 +52,7 @@ describe("学员概览与个人中心", () => {
     expect(screen.getByText("已首次作答 12 题")).toBeVisible();
     expect(screen.getByText("未回答 8 题")).toBeVisible();
     expect(screen.getByText("待练错题 3 题")).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "预习新题" })).toBeNull();
     expect(container.querySelector(".page-heading")).toBeNull();
   });
 

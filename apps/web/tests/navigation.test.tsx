@@ -20,7 +20,7 @@ describe("响应式应用导航", () => {
     mockReplace.mockClear();
   });
 
-  it("学员桌面端提供五个主入口且不暴露管理员菜单", () => {
+  it("学员桌面端提供六个主入口且不暴露管理员菜单", () => {
     render(
       <StudentShell user={{ username: "learner_01", pointsBalance: 120 }}>
         <p>学习内容</p>
@@ -30,10 +30,14 @@ describe("响应式应用导航", () => {
     const desktopNav = screen.getByRole("navigation", {
       name: "学员主导航",
     });
-    expect(within(desktopNav).getAllByRole("link")).toHaveLength(5);
+    expect(within(desktopNav).getAllByRole("link")).toHaveLength(6);
     expect(within(desktopNav).getByRole("link", { name: "练习" })).toHaveAttribute(
       "href",
       "/learn/practice",
+    );
+    expect(within(desktopNav).getByRole("link", { name: "预习" })).toHaveAttribute(
+      "href",
+      "/learn/preview",
     );
     expect(within(desktopNav).getByRole("link", { name: "错题" })).toHaveAttribute(
       "href",
@@ -63,7 +67,7 @@ describe("响应式应用导航", () => {
     const mobileNav = screen.getByRole("navigation", {
       name: "学员移动导航",
     });
-    expect(within(mobileNav).getAllByRole("link").length).toBeLessThanOrEqual(6);
+    expect(within(mobileNav).getAllByRole("link").length).toBeLessThanOrEqual(7);
     expect(within(desktopNav).getByRole("link", { name: "练习" })).toHaveAttribute(
       "aria-current",
       "page",
@@ -80,6 +84,31 @@ describe("响应式应用导航", () => {
       "href",
       "/learn/profile",
     );
+  });
+
+  it("预习路径同时激活桌面和移动端入口", () => {
+    mockUsePathname.mockReturnValue("/learn/preview");
+    render(
+      <StudentShell user={{ username: "learner_01", pointsBalance: 120 }}>
+        <p>预习内容</p>
+      </StudentShell>,
+    );
+
+    const desktopNav = screen.getByRole("navigation", {
+      name: "学员主导航",
+    });
+    const mobileNav = screen.getByRole("navigation", {
+      name: "学员移动导航",
+    });
+    expect(within(desktopNav).getByRole("link", { name: "预习" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(within(mobileNav).getByRole("link", { name: "预习" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(within(mobileNav).getAllByRole("link")).toHaveLength(7);
   });
 
   it("管理员真实路径激活侧栏菜单", () => {

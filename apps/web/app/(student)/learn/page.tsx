@@ -137,16 +137,6 @@ export default function LearnPage({
           </div>
 
           <div className="action-grid">
-            <Link href="/learn/preview">
-              <Card className="action-card">
-                <BookOpen aria-hidden="true" />
-                <div>
-                  <h2>预习新题</h2>
-                  <p>先看题解学习，再答题赚积分</p>
-                </div>
-                <ArrowRight aria-hidden="true" />
-              </Card>
-            </Link>
             <Link href="/learn/wrong-questions">
               <Card className="action-card">
                 <BookOpenCheck aria-hidden="true" />

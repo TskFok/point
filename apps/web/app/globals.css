@@ -1298,6 +1298,7 @@ svg {
 .preview-setup {
   display: grid;
   gap: 1.15rem;
+  padding: clamp(1.25rem, 3vw, 2rem);
 }
 
 .preview-setup__heading {
@@ -2136,7 +2137,7 @@ svg {
     left: 0.6rem;
     z-index: 30;
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     min-height: 4.4rem;
     border: 1px solid rgb(222 217 232 / 80%);
     border-radius: 1.2rem;

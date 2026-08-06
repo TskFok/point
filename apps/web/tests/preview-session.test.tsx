@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import { ApiClientError, ApiNetworkError } from "@point-quest/api-client";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -27,6 +30,20 @@ function createApi() {
 }
 
 describe("预习会话", () => {
+  it("选择数量阶段卡片带 preview-setup，且 CSS 提供内边距避免贴边", () => {
+    const { container } = render(<PreviewSession api={createApi()} />);
+    expect(container.querySelector(".preview-setup")).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { name: "选择预习题目数量" }),
+    ).toBeVisible();
+
+    const css = readFileSync(
+      path.join(__dirname, "../app/globals.css"),
+      "utf8",
+    );
+    expect(css).toMatch(/\.preview-setup\s*\{[^}]*padding:\s*[^;]+;/s);
+  });
+
   it("选择预设数量后开始预习，展示正确答案与题解", async () => {
     const user = userEvent.setup();
     const api = createApi();
