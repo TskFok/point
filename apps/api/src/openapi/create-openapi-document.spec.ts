@@ -113,15 +113,15 @@ describe('OpenAPI 契约', () => {
 
   afterAll(async () => close());
 
-  it('完整覆盖 39 个路径下 50 个稳定 operationId 的版本化路由', () => {
+  it('完整覆盖 40 个路径下 53 个稳定 operationId 的版本化路由', () => {
     const allOperations = operations(document);
     const operationIds = allOperations.map(
       (operation) => operation.operationId,
     );
 
-    expect(Object.keys(document.paths)).toHaveLength(39);
-    expect(allOperations).toHaveLength(50);
-    expect(new Set(operationIds).size).toBe(50);
+    expect(Object.keys(document.paths)).toHaveLength(40);
+    expect(allOperations).toHaveLength(53);
+    expect(new Set(operationIds).size).toBe(53);
     expect(operationIds).not.toContain(undefined);
     expect(
       Object.keys(document.paths).every((path) => path.startsWith('/api/v1/')),
@@ -142,6 +142,7 @@ describe('OpenAPI 契约', () => {
         'adminDeleteAiTask',
         'adminRunAiTask',
         'adminListAiTaskRuns',
+        'adminBatchQuestions',
       ]),
     );
   });
@@ -204,6 +205,20 @@ describe('OpenAPI 契约', () => {
 
     expect(schema.properties?.hasAttempts).toEqual({ type: 'boolean' });
     expect(schema.required).toContain('hasAttempts');
+  });
+
+  it('题库批量接口契约', () => {
+    const operation = document.paths['/api/v1/admin/questions/batch']?.post;
+    expect(operation?.operationId).toBe('adminBatchQuestions');
+    expect(responseSchema(operation!.responses!['200']!)).toEqual({
+      $ref: '#/components/schemas/BatchQuestionsResponseDto',
+    });
+    const body = operation?.requestBody as
+      | { content?: { 'application/json'?: { schema?: unknown } } }
+      | undefined;
+    expect(body?.content?.['application/json']?.schema).toEqual({
+      $ref: '#/components/schemas/BatchQuestionsRequestDto',
+    });
   });
 
   it('每个成功响应和统一错误响应都有非空 schema', () => {

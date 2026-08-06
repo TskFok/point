@@ -30,8 +30,10 @@ import { ADMIN_QUESTIONS_OPEN_CREATE_KEY } from "@/lib/admin/questions-ui";
 type Schemas = ApiComponents["schemas"];
 type Question = Schemas["AdminQuestionDto"];
 type PageMeta = Schemas["PageMetaDto"];
+type BatchAction = "enable" | "disable" | "delete";
 type QuestionsApi = Pick<
   ApiClient,
+  | "batchAdminQuestions"
   | "createAdminQuestion"
   | "deleteAdminQuestion"
   | "getAdminQuestion"
@@ -41,7 +43,9 @@ type QuestionsApi = Pick<
 type Filters = { search: string; isActive: string };
 type ConfirmAction =
   | { kind: "disable"; target: Question }
-  | { kind: "delete"; target: Question };
+  | { kind: "delete"; target: Question }
+  | { kind: "batch-disable"; ids: string[]; count: number }
+  | { kind: "batch-delete"; ids: string[]; count: number };
 
 const emptyFilters: Filters = { search: "", isActive: "" };
 
@@ -49,6 +53,17 @@ function stemPreview(stem: string, max = 40): string {
   const trimmed = stem.trim();
   if (trimmed.length <= max) return trimmed;
   return `${trimmed.slice(0, max)}…`;
+}
+
+function batchSuccessMessage(
+  action: BatchAction,
+  succeeded: number,
+  skipped: number,
+): string {
+  const verb =
+    action === "enable" ? "已启用" : action === "disable" ? "已停用" : "已删除";
+  if (skipped === 0) return `${verb} ${succeeded} 道`;
+  return `${verb} ${succeeded} 道，跳过 ${skipped} 道`;
 }
 
 function readUrlState(): { filters: Filters; page: number } {
@@ -94,12 +109,15 @@ export default function AdminQuestionsPage({
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [mutatingId, setMutatingId] = useState<string | null>(null);
+  const [mutatingBatch, setMutatingBatch] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [editing, setEditing] = useState<"create" | { id: string } | null>(
     null,
   );
   const automaticLoadKey = useRef<string | null>(null);
   const mounted = useRef(true);
   const latestRequest = useRef(0);
+  const busy = mutatingId !== null || mutatingBatch;
 
   useEffect(() => {
     mounted.current = true;
@@ -113,6 +131,10 @@ export default function AdminQuestionsPage({
       mounted.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [appliedFilters, page]);
 
   const load = useCallback(async () => {
     const requestId = latestRequest.current + 1;
@@ -157,7 +179,7 @@ export default function AdminQuestionsPage({
   }, [appliedFilters, load, page]);
 
   async function toggleStatus(question: Question): Promise<string | null> {
-    if (mutatingId) return "请等待当前操作完成";
+    if (busy) return "请等待当前操作完成";
     setMutatingId(question.id);
     setMutationError(null);
     try {
@@ -174,7 +196,7 @@ export default function AdminQuestionsPage({
   }
 
   async function removeQuestion(question: Question): Promise<string | null> {
-    if (mutatingId) return "请等待当前操作完成";
+    if (busy) return "请等待当前操作完成";
     setMutatingId(question.id);
     setMutationError(null);
     setActionMessage(null);
@@ -190,14 +212,83 @@ export default function AdminQuestionsPage({
     }
   }
 
+  async function runBatch(
+    action: BatchAction,
+    ids: string[],
+  ): Promise<string | null> {
+    if (busy) return "请等待当前操作完成";
+    if (ids.length === 0) return "请先选择题目";
+    setMutatingBatch(true);
+    setMutationError(null);
+    setActionMessage(null);
+    try {
+      const result = await api.batchAdminQuestions({ action, ids });
+      setActionMessage(
+        batchSuccessMessage(action, result.succeeded, result.skipped),
+      );
+      setSelectedIds([]);
+      await load();
+      return null;
+    } catch (error) {
+      return getApiErrorMessage(error);
+    } finally {
+      setMutatingBatch(false);
+    }
+  }
+
   const { confirmAction, confirmError, openConfirm, closeConfirm, handleConfirm } =
     useConfirmAction<ConfirmAction>({
-      blocked: Boolean(mutatingId),
-      execute: async (action) =>
-        action.kind === "delete"
-          ? removeQuestion(action.target)
-          : toggleStatus(action.target),
+      blocked: busy,
+      execute: async (action) => {
+        if (action.kind === "delete") return removeQuestion(action.target);
+        if (action.kind === "disable") return toggleStatus(action.target);
+        if (action.kind === "batch-delete") {
+          return runBatch("delete", action.ids);
+        }
+        return runBatch("disable", action.ids);
+      },
     });
+
+  const pageIds = questions.map((question) => question.id);
+  const allSelected =
+    pageIds.length > 0 && pageIds.every((id) => selectedIds.includes(id));
+  const selectedCount = selectedIds.length;
+
+  function toggleSelectAll(checked: boolean) {
+    setSelectedIds(checked ? pageIds : []);
+  }
+
+  function toggleSelectOne(id: string, checked: boolean) {
+    setSelectedIds((current) => {
+      if (checked) {
+        return current.includes(id) ? current : [...current, id];
+      }
+      return current.filter((item) => item !== id);
+    });
+  }
+
+  const confirmTitle =
+    confirmAction?.kind === "delete"
+      ? `确认删除题目「${stemPreview(confirmAction.target.stem)}」？`
+      : confirmAction?.kind === "disable"
+        ? "确认停用该题目？"
+        : confirmAction?.kind === "batch-delete"
+          ? `确认删除选中的 ${confirmAction.count} 道题目？`
+          : confirmAction?.kind === "batch-disable"
+            ? `确认停用选中的 ${confirmAction.count} 道题目？`
+            : "";
+
+  const confirmDescription =
+    confirmAction?.kind === "delete"
+      ? "此操作不可撤销。仅已停用且无答题记录的题目可删除。"
+      : confirmAction?.kind === "batch-delete"
+        ? "此操作不可撤销。仅已停用且无答题记录的题目会被删除，其余将跳过。"
+        : "停用后该题目将不再进入练习池。";
+
+  const confirmLabel =
+    confirmAction?.kind === "delete" || confirmAction?.kind === "batch-delete"
+      ? "删除"
+      : "停用题目";
 
   return (
     <section className="admin-page">
@@ -228,22 +319,19 @@ export default function AdminQuestionsPage({
       {confirmAction ? (
         <ConfirmDialog
           cancelLabel="取消"
-          confirmLabel={confirmAction.kind === "delete" ? "删除" : "停用题目"}
+          confirmLabel={confirmLabel}
           confirmVariant="danger"
-          description={
-            confirmAction.kind === "delete"
-              ? "此操作不可撤销。仅已停用且无答题记录的题目可删除。"
-              : "停用后该题目将不再进入练习池。"
-          }
+          description={confirmDescription}
           error={confirmError}
           onCancel={closeConfirm}
           onConfirm={() => void handleConfirm()}
-          pending={mutatingId === confirmAction.target.id}
-          title={
-            confirmAction.kind === "delete"
-              ? `确认删除题目「${stemPreview(confirmAction.target.stem)}」？`
-              : "确认停用该题目？"
+          pending={
+            confirmAction.kind === "batch-disable" ||
+            confirmAction.kind === "batch-delete"
+              ? mutatingBatch
+              : mutatingId === confirmAction.target.id
           }
+          title={confirmTitle}
         />
       ) : null}
 
@@ -323,22 +411,96 @@ export default function AdminQuestionsPage({
         />
       ) : (
         <>
+          {selectedCount > 0 ? (
+            <div className="admin-batch-bar" role="region" aria-label="批量操作">
+              <span>已选 {selectedCount} 道</span>
+              <div className="admin-batch-bar__actions">
+                <Button
+                  disabled={busy}
+                  onClick={() => {
+                    void (async () => {
+                      const error = await runBatch("enable", selectedIds);
+                      if (error) setMutationError(error);
+                    })();
+                  }}
+                  variant="secondary"
+                >
+                  {mutatingBatch ? (
+                    <LoaderCircle aria-hidden="true" className="spin" />
+                  ) : (
+                    <CircleCheck aria-hidden="true" />
+                  )}
+                  批量启用
+                </Button>
+                <Button
+                  disabled={busy}
+                  onClick={() =>
+                    openConfirm({
+                      kind: "batch-disable",
+                      ids: selectedIds,
+                      count: selectedCount,
+                    })
+                  }
+                  variant="secondary"
+                >
+                  <CircleOff aria-hidden="true" />
+                  批量停用
+                </Button>
+                <Button
+                  disabled={busy}
+                  onClick={() =>
+                    openConfirm({
+                      kind: "batch-delete",
+                      ids: selectedIds,
+                      count: selectedCount,
+                    })
+                  }
+                  variant="secondary"
+                >
+                  <Trash2 aria-hidden="true" />
+                  批量删除
+                </Button>
+              </div>
+            </div>
+          ) : null}
           <div className="admin-table-wrap">
             <table className="admin-table">
               <caption className="sr-only">管理员题库列表</caption>
               <thead>
                 <tr>
-                  <th>题干</th>
+                  <th className="admin-table__check">
+                    <input
+                      aria-label="全选当前页"
+                      checked={allSelected}
+                      disabled={busy}
+                      onChange={(event) =>
+                        toggleSelectAll(event.target.checked)
+                      }
+                      type="checkbox"
+                    />
+                  </th>
+                  <th className="admin-table__primary">题干</th>
                   <th>选项</th>
                   <th>基础积分</th>
                   <th>状态</th>
-                  <th>操作</th>
+                  <th className="admin-table__actions-cell">操作</th>
                 </tr>
               </thead>
               <tbody>
                 {questions.map((question) => (
                   <tr key={question.id}>
-                    <td data-label="题干">
+                    <td className="admin-table__check" data-label="选择">
+                      <input
+                        aria-label={`选择题目「${stemPreview(question.stem)}」`}
+                        checked={selectedIds.includes(question.id)}
+                        disabled={busy}
+                        onChange={(event) =>
+                          toggleSelectOne(question.id, event.target.checked)
+                        }
+                        type="checkbox"
+                      />
+                    </td>
+                    <td className="admin-table__primary" data-label="题干">
                       <strong>{question.stem}</strong>
                       <small>{question.explanation}</small>
                     </td>
@@ -358,7 +520,7 @@ export default function AdminQuestionsPage({
                         {question.isActive ? "已启用" : "已停用"}
                       </span>
                     </td>
-                    <td data-label="操作">
+                    <td className="admin-table__actions-cell" data-label="操作">
                       <div className="admin-table__actions">
                         <Button
                           onClick={() => setEditing({ id: question.id })}
@@ -369,7 +531,7 @@ export default function AdminQuestionsPage({
                         </Button>
                         <Button
                           disabled={
-                            mutatingId !== null ||
+                            busy ||
                             (question.hasAttempts && !question.isActive)
                           }
                           onClick={() => {
@@ -402,7 +564,7 @@ export default function AdminQuestionsPage({
                         </Button>
                         {!question.isActive && !question.hasAttempts ? (
                           <Button
-                            disabled={mutatingId !== null}
+                            disabled={busy}
                             onClick={() =>
                               openConfirm({ kind: "delete", target: question })
                             }

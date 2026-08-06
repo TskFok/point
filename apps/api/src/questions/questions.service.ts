@@ -6,9 +6,24 @@ import {
 } from '@nestjs/common';
 import { type Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  type BatchQuestionAction,
+  type BatchQuestionsDto,
+} from './dto/batch-questions.dto';
 import { type CreateQuestionDto } from './dto/create-question.dto';
 import { type ListQuestionsDto } from './dto/list-questions.dto';
 import { type UpdateQuestionDto } from './dto/update-question.dto';
+
+export type BatchQuestionsResult = {
+  succeeded: number;
+  skipped: number;
+  skippedByReason: {
+    notFound: number;
+    alreadyTargetState: number;
+    hasAttempts: number;
+    stillActive: number;
+  };
+};
 
 const questionInclude = {
   options: {
@@ -424,5 +439,91 @@ export class QuestionsService {
     }
     await this.prisma.question.delete({ where: { id: questionId } });
     return { success: true };
+  }
+
+  async batch(input: BatchQuestionsDto): Promise<BatchQuestionsResult> {
+    const uniqueIds = [...new Set(input.ids)];
+    if (uniqueIds.length === 0) {
+      throw validationFailed('题目 ID 列表不能为空');
+    }
+    if (uniqueIds.length > 100) {
+      throw validationFailed('题目 ID 列表最多 100 个');
+    }
+
+    const rows = await this.prisma.question.findMany({
+      where: { id: { in: uniqueIds } },
+      select: {
+        id: true,
+        isActive: true,
+        _count: { select: { attempts: true } },
+      },
+    });
+    const byId = new Map(rows.map((row) => [row.id, row]));
+
+    const skippedByReason = {
+      notFound: 0,
+      alreadyTargetState: 0,
+      hasAttempts: 0,
+      stillActive: 0,
+    };
+    const actionableIds: string[] = [];
+    const action: BatchQuestionAction = input.action;
+
+    for (const id of uniqueIds) {
+      const row = byId.get(id);
+      if (!row) {
+        skippedByReason.notFound += 1;
+        continue;
+      }
+      const hasAttempts = row._count.attempts > 0;
+      if (action === 'enable') {
+        if (row.isActive) {
+          skippedByReason.alreadyTargetState += 1;
+          continue;
+        }
+        if (hasAttempts) {
+          skippedByReason.hasAttempts += 1;
+          continue;
+        }
+        actionableIds.push(id);
+        continue;
+      }
+      if (action === 'disable') {
+        if (!row.isActive) {
+          skippedByReason.alreadyTargetState += 1;
+          continue;
+        }
+        actionableIds.push(id);
+        continue;
+      }
+      if (row.isActive) {
+        skippedByReason.stillActive += 1;
+        continue;
+      }
+      if (hasAttempts) {
+        skippedByReason.hasAttempts += 1;
+        continue;
+      }
+      actionableIds.push(id);
+    }
+
+    let succeeded = 0;
+    if (actionableIds.length > 0) {
+      if (action === 'delete') {
+        const result = await this.prisma.question.deleteMany({
+          where: { id: { in: actionableIds } },
+        });
+        succeeded = result.count;
+      } else {
+        const result = await this.prisma.question.updateMany({
+          where: { id: { in: actionableIds } },
+          data: { isActive: action === 'enable' },
+        });
+        succeeded = result.count;
+      }
+    }
+
+    const skipped = uniqueIds.length - succeeded;
+    return { succeeded, skipped, skippedByReason };
   }
 }

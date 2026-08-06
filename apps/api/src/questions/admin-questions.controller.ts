@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   Param,
   Patch,
   Post,
@@ -19,11 +20,14 @@ import {
 } from '../openapi/api-contract.decorator';
 import {
   AdminQuestionDto,
+  BatchQuestionsRequestDto,
+  BatchQuestionsResponseDto,
   CreateQuestionRequestDto,
   QuestionListResponseDto,
   SuccessResponseDto,
   UpdateQuestionRequestDto,
 } from '../openapi/api-contract.models';
+import { BatchQuestionsDto } from './dto/batch-questions.dto';
 import { CreateQuestionDto } from './dto/create-question.dto';
 import { ListQuestionsDto } from './dto/list-questions.dto';
 import { UpdateQuestionDto } from './dto/update-question.dto';
@@ -59,6 +63,21 @@ export class AdminQuestionsController {
   })
   create(@Body() body: CreateQuestionDto, @CurrentUser() user: RequestUser) {
     return this.questionsService.create(body, user.id);
+  }
+
+  @Post('batch')
+  @HttpCode(200)
+  @ApiContract({
+    operationId: 'adminBatchQuestions',
+    summary: '批量启用、停用或删除题目',
+    responseType: BatchQuestionsResponseDto,
+    responseStatus: 200,
+    authenticated: true,
+    mutation: true,
+    bodyType: BatchQuestionsRequestDto,
+  })
+  batch(@Body() body: BatchQuestionsDto) {
+    return this.questionsService.batch(body);
   }
 
   @Get(':questionId')

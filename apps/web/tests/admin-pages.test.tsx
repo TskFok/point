@@ -123,6 +123,7 @@ describe("管理员运营页面", () => {
     const user = userEvent.setup();
     const api = {
       createAdminQuestion: jest.fn(),
+      batchAdminQuestions: jest.fn(),
       deleteAdminQuestion: jest.fn(),
       getAdminQuestion: jest.fn(),
       listAdminQuestions: jest.fn().mockResolvedValue({
@@ -156,6 +157,7 @@ describe("管理员运营页面", () => {
     sessionStorage.setItem("admin-questions-open-create", "1");
     const api = {
       createAdminQuestion: jest.fn(),
+      batchAdminQuestions: jest.fn(),
       deleteAdminQuestion: jest.fn(),
       getAdminQuestion: jest.fn(),
       listAdminQuestions: jest.fn().mockResolvedValue({
@@ -178,6 +180,7 @@ describe("管理员运营页面", () => {
     const user = userEvent.setup();
     const api = {
       createAdminQuestion: jest.fn(),
+      batchAdminQuestions: jest.fn(),
       deleteAdminQuestion: jest.fn(),
       getAdminQuestion: jest.fn(),
       listAdminQuestions: jest
@@ -217,6 +220,7 @@ describe("管理员运营页面", () => {
     const user = userEvent.setup();
     const api = {
       createAdminQuestion: jest.fn(),
+      batchAdminQuestions: jest.fn(),
       deleteAdminQuestion: jest.fn(),
       getAdminQuestion: jest.fn(),
       listAdminQuestions: jest.fn().mockResolvedValue({
@@ -255,6 +259,7 @@ describe("管理员运营页面", () => {
     };
     const api = {
       createAdminQuestion: jest.fn(),
+      batchAdminQuestions: jest.fn(),
       deleteAdminQuestion: jest.fn(),
       getAdminQuestion: jest.fn(),
       listAdminQuestions: jest
@@ -306,6 +311,7 @@ describe("管理员运营页面", () => {
   it("题库中已有答题记录的停用题目不能重新启用", async () => {
     const api = {
       createAdminQuestion: jest.fn(),
+      batchAdminQuestions: jest.fn(),
       deleteAdminQuestion: jest.fn(),
       getAdminQuestion: jest.fn(),
       listAdminQuestions: jest.fn().mockResolvedValue({

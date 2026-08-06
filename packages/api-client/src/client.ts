@@ -101,6 +101,10 @@ export const operationRegistry = {
     path: "/api/v1/admin/questions",
     method: "POST",
   },
+  adminBatchQuestions: {
+    path: "/api/v1/admin/questions/batch",
+    method: "POST",
+  },
   adminGetQuestion: {
     path: "/api/v1/admin/questions/{questionId}",
     method: "GET",
@@ -529,6 +533,11 @@ export function createApiClient(options: ApiClientOptions) {
       }),
     createAdminQuestion: (input: JsonBodyOf<"adminCreateQuestion">) =>
       request("adminCreateQuestion", {
+        authMode: "authenticated",
+        body: input,
+      }),
+    batchAdminQuestions: (input: JsonBodyOf<"adminBatchQuestions">) =>
+      request("adminBatchQuestions", {
         authMode: "authenticated",
         body: input,
       }),

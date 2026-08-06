@@ -487,6 +487,142 @@ describe('管理员题库与积分倍率 API', () => {
       });
   });
 
+  it('批量：启用/停用/删除尽力执行并汇总跳过', async () => {
+    const enableTarget = (
+      await request(server)
+        .post('/api/v1/admin/questions')
+        .set('Authorization', adminBearer)
+        .send(validQuestion({ stem: 'Batch enable target', isActive: false }))
+        .expect(201)
+    ).body as unknown as QuestionBody;
+
+    const alreadyActive = (
+      await request(server)
+        .post('/api/v1/admin/questions')
+        .set('Authorization', adminBearer)
+        .send(validQuestion({ stem: 'Batch already active' }))
+        .expect(201)
+    ).body as unknown as QuestionBody;
+
+    const withAttempts = (
+      await request(server)
+        .post('/api/v1/admin/questions')
+        .set('Authorization', adminBearer)
+        .send(
+          validQuestion({
+            stem: 'Batch inactive with attempts',
+            isActive: false,
+          }),
+        )
+        .expect(201)
+    ).body as unknown as QuestionBody;
+    await prisma.answerAttempt.create({
+      data: {
+        id: `task-batch-attempt-${testRunId}`,
+        userId: studentId,
+        questionId: withAttempts.id,
+        selectedOptionId: withAttempts.options[0].id,
+        mode: 'FIRST_ATTEMPT',
+        isCorrect: true,
+        basePointsSnapshot: withAttempts.basePoints,
+        multiplierSnapshot: 1,
+        pointsAwarded: withAttempts.basePoints,
+        balanceAfterSnapshot: withAttempts.basePoints,
+        errorCountSnapshot: 0,
+        idempotencyKey: `task-batch-answer-${testRunId}`,
+      },
+    });
+
+    await request(server)
+      .post('/api/v1/admin/questions/batch')
+      .set('Authorization', adminBearer)
+      .send({
+        action: 'enable',
+        ids: [enableTarget.id, alreadyActive.id, withAttempts.id, 'missing-id'],
+      })
+      .expect(200)
+      .expect({
+        succeeded: 1,
+        skipped: 3,
+        skippedByReason: {
+          notFound: 1,
+          alreadyTargetState: 1,
+          hasAttempts: 1,
+          stillActive: 0,
+        },
+      });
+
+    await request(server)
+      .get(`/api/v1/admin/questions/${enableTarget.id}`)
+      .set('Authorization', adminBearer)
+      .expect(200)
+      .expect((response) => {
+        expect((response.body as QuestionBody).isActive).toBe(true);
+      });
+
+    const disableTarget = enableTarget;
+    const alreadyInactive = withAttempts;
+    await request(server)
+      .post('/api/v1/admin/questions/batch')
+      .set('Authorization', adminBearer)
+      .send({
+        action: 'disable',
+        ids: [disableTarget.id, alreadyInactive.id],
+      })
+      .expect(200)
+      .expect({
+        succeeded: 1,
+        skipped: 1,
+        skippedByReason: {
+          notFound: 0,
+          alreadyTargetState: 1,
+          hasAttempts: 0,
+          stillActive: 0,
+        },
+      });
+
+    const deletable = (
+      await request(server)
+        .post('/api/v1/admin/questions')
+        .set('Authorization', adminBearer)
+        .send(validQuestion({ stem: 'Batch deletable', isActive: false }))
+        .expect(201)
+    ).body as unknown as QuestionBody;
+
+    await request(server)
+      .post('/api/v1/admin/questions/batch')
+      .set('Authorization', adminBearer)
+      .send({
+        action: 'delete',
+        ids: [deletable.id, alreadyActive.id, withAttempts.id],
+      })
+      .expect(200)
+      .expect({
+        succeeded: 1,
+        skipped: 2,
+        skippedByReason: {
+          notFound: 0,
+          alreadyTargetState: 0,
+          hasAttempts: 1,
+          stillActive: 1,
+        },
+      });
+
+    await request(server)
+      .get(`/api/v1/admin/questions/${deletable.id}`)
+      .set('Authorization', adminBearer)
+      .expect(404);
+
+    await request(server)
+      .post('/api/v1/admin/questions/batch')
+      .set('Authorization', adminBearer)
+      .send({ action: 'enable', ids: [] })
+      .expect(400)
+      .expect((response) => {
+        expectErrorContract(response, 'VALIDATION_FAILED');
+      });
+  });
+
   it('创建、分页筛选、读取并原子替换未作答题目的全部选项', async () => {
     const firstCreate = await request(server)
       .post('/api/v1/admin/questions')

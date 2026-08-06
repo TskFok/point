@@ -532,6 +532,141 @@ describe('QuestionsService', () => {
   });
 });
 
+describe('QuestionsService.batch', () => {
+  type BatchRow = {
+    id: string;
+    isActive: boolean;
+    _count: { attempts: number };
+  };
+
+  function createBatchService(rows: BatchRow[]) {
+    const updateMany = jest.fn().mockResolvedValue({ count: 0 });
+    const deleteMany = jest.fn().mockResolvedValue({ count: 0 });
+    const findMany = jest.fn().mockImplementation(
+      ({ where }: { where: { id: { in: string[] } } }) => {
+        const ids = new Set(where.id.in);
+        return Promise.resolve(rows.filter((row) => ids.has(row.id)));
+      },
+    );
+    const prisma = {
+      question: { findMany, updateMany, deleteMany },
+    };
+    return {
+      service: new QuestionsService(prisma as unknown as PrismaService),
+      findMany,
+      updateMany,
+      deleteMany,
+    };
+  }
+
+  it('enable：可启用写入，已启用/有记录/不存在跳过', async () => {
+    const { service, updateMany, deleteMany } = createBatchService([
+      { id: 'a', isActive: false, _count: { attempts: 0 } },
+      { id: 'b', isActive: true, _count: { attempts: 0 } },
+      { id: 'c', isActive: false, _count: { attempts: 2 } },
+    ]);
+    updateMany.mockResolvedValue({ count: 1 });
+
+    await expect(
+      service.batch({
+        action: 'enable',
+        ids: ['a', 'b', 'c', 'missing', 'a'],
+      }),
+    ).resolves.toEqual({
+      succeeded: 1,
+      skipped: 3,
+      skippedByReason: {
+        notFound: 1,
+        alreadyTargetState: 1,
+        hasAttempts: 1,
+        stillActive: 0,
+      },
+    });
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['a'] } },
+      data: { isActive: true },
+    });
+    expect(deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('disable：启用中写入，已停用不存在跳过', async () => {
+    const { service, updateMany } = createBatchService([
+      { id: 'a', isActive: true, _count: { attempts: 0 } },
+      { id: 'b', isActive: false, _count: { attempts: 0 } },
+    ]);
+    updateMany.mockResolvedValue({ count: 1 });
+
+    await expect(
+      service.batch({ action: 'disable', ids: ['a', 'b', 'missing'] }),
+    ).resolves.toEqual({
+      succeeded: 1,
+      skipped: 2,
+      skippedByReason: {
+        notFound: 1,
+        alreadyTargetState: 1,
+        hasAttempts: 0,
+        stillActive: 0,
+      },
+    });
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['a'] } },
+      data: { isActive: false },
+    });
+  });
+
+  it('delete：可删写入，仍启用/有记录/不存在跳过', async () => {
+    const { service, deleteMany, updateMany } = createBatchService([
+      { id: 'a', isActive: false, _count: { attempts: 0 } },
+      { id: 'b', isActive: true, _count: { attempts: 0 } },
+      { id: 'c', isActive: false, _count: { attempts: 1 } },
+    ]);
+    deleteMany.mockResolvedValue({ count: 1 });
+
+    await expect(
+      service.batch({ action: 'delete', ids: ['a', 'b', 'c', 'missing'] }),
+    ).resolves.toEqual({
+      succeeded: 1,
+      skipped: 3,
+      skippedByReason: {
+        notFound: 1,
+        alreadyTargetState: 0,
+        hasAttempts: 1,
+        stillActive: 1,
+      },
+    });
+    expect(deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: ['a'] } },
+    });
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
+  it('无可写 ID 时不调用写入', async () => {
+    const { service, updateMany, deleteMany } = createBatchService([
+      { id: 'a', isActive: true, _count: { attempts: 0 } },
+    ]);
+    await expect(
+      service.batch({ action: 'enable', ids: ['a'] }),
+    ).resolves.toMatchObject({ succeeded: 0, skipped: 1 });
+    expect(updateMany).not.toHaveBeenCalled();
+    expect(deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('空 ids 或超过 100 抛 VALIDATION_FAILED', async () => {
+    const { service } = createBatchService([]);
+    await expect(service.batch({ action: 'enable', ids: [] })).rejects.toMatchObject({
+      response: { code: 'VALIDATION_FAILED' },
+    });
+    await expect(
+      service.batch({
+        action: 'enable',
+        ids: Array.from({ length: 101 }, (_, i) => `id-${i}`),
+      }),
+    ).rejects.toMatchObject({
+      response: { code: 'VALIDATION_FAILED' },
+    });
+  });
+});
+
 describe('QuestionsService.remove', () => {
   const inactive = {
     id: 'question-1',

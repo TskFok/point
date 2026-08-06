@@ -591,6 +591,87 @@
         ],
         "type": "object"
       },
+      "BatchQuestionsRequestDto": {
+        "properties": {
+          "action": {
+            "enum": [
+              "enable",
+              "disable",
+              "delete"
+            ],
+            "type": "string"
+          },
+          "ids": {
+            "items": {
+              "maxLength": 191,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "action",
+          "ids"
+        ],
+        "type": "object"
+      },
+      "BatchQuestionsResponseDto": {
+        "properties": {
+          "skipped": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "skippedByReason": {
+            "$ref": "#/components/schemas/BatchQuestionsSkippedByReasonDto"
+          },
+          "succeeded": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "succeeded",
+          "skipped",
+          "skippedByReason"
+        ],
+        "type": "object"
+      },
+      "BatchQuestionsSkippedByReasonDto": {
+        "properties": {
+          "alreadyTargetState": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "hasAttempts": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "notFound": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "stillActive": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "notFound",
+          "alreadyTargetState",
+          "hasAttempts",
+          "stillActive"
+        ],
+        "type": "object"
+      },
       "CreateAiModelRequestDto": {
         "properties": {
           "apiKey": {
@@ -5202,6 +5283,127 @@
           }
         ],
         "summary": "创建英语选择题",
+        "tags": [
+          "管理端-题库"
+        ]
+      }
+    },
+    "/api/v1/admin/questions/batch": {
+      "post": {
+        "operationId": "adminBatchQuestions",
+        "parameters": [
+          {
+            "description": "使用 Cookie 身份认证执行写操作时必填；Bearer 模式勿填",
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchQuestionsRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchQuestionsResponseDto"
+                }
+              }
+            },
+            "description": "成功"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            },
+            "description": "请求参数验证失败"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            },
+            "description": "身份认证失败"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            },
+            "description": "权限不足或 CSRF 校验失败"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            },
+            "description": "资源不存在"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            },
+            "description": "状态、幂等或并发冲突"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            },
+            "description": "请求体或上传文件过大"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorDto"
+                }
+              }
+            },
+            "description": "服务器内部错误"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "批量启用、停用或删除题目",
         "tags": [
           "管理端-题库"
         ]

@@ -251,6 +251,44 @@ export class QuestionListResponseDto {
   meta!: PageMetaDto;
 }
 
+export class BatchQuestionsRequestDto {
+  @ApiProperty({ enum: ['enable', 'disable', 'delete'] })
+  action!: 'enable' | 'disable' | 'delete';
+
+  @ApiProperty({
+    type: 'array',
+    items: { type: 'string', minLength: 1, maxLength: 191 },
+    minItems: 1,
+    maxItems: 100,
+  })
+  ids!: string[];
+}
+
+export class BatchQuestionsSkippedByReasonDto {
+  @ApiProperty({ ...int32, minimum: 0 })
+  notFound!: number;
+
+  @ApiProperty({ ...int32, minimum: 0 })
+  alreadyTargetState!: number;
+
+  @ApiProperty({ ...int32, minimum: 0 })
+  hasAttempts!: number;
+
+  @ApiProperty({ ...int32, minimum: 0 })
+  stillActive!: number;
+}
+
+export class BatchQuestionsResponseDto {
+  @ApiProperty({ ...int32, minimum: 0 })
+  succeeded!: number;
+
+  @ApiProperty({ ...int32, minimum: 0 })
+  skipped!: number;
+
+  @ApiProperty({ type: () => BatchQuestionsSkippedByReasonDto })
+  skippedByReason!: BatchQuestionsSkippedByReasonDto;
+}
+
 export class LearnerQuestionOptionDto {
   @ApiProperty()
   id!: string;

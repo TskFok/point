@@ -11,6 +11,7 @@ describe("createApiClient", () => {
     expect(Object.keys(client).sort()).toEqual(
       [
         "answerQuestion",
+        "batchAdminQuestions",
         "cancelAdminOrder",
         "completeAdminOrder",
         "createAdminAiModel",

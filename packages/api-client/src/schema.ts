@@ -317,6 +317,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/questions/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 批量启用、停用或删除题目 */
+        post: operations["adminBatchQuestions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/questions/{questionId}": {
         parameters: {
             query?: never;
@@ -858,6 +875,28 @@ export interface components {
             message: string;
             /** @example 7da2aa93-ef82-45c8-9df0-84232e6a5b13 */
             requestId: string;
+        };
+        BatchQuestionsRequestDto: {
+            /** @enum {string} */
+            action: "enable" | "disable" | "delete";
+            ids: string[];
+        };
+        BatchQuestionsResponseDto: {
+            /** Format: int32 */
+            skipped: number;
+            skippedByReason: components["schemas"]["BatchQuestionsSkippedByReasonDto"];
+            /** Format: int32 */
+            succeeded: number;
+        };
+        BatchQuestionsSkippedByReasonDto: {
+            /** Format: int32 */
+            alreadyTargetState: number;
+            /** Format: int32 */
+            hasAttempts: number;
+            /** Format: int32 */
+            notFound: number;
+            /** Format: int32 */
+            stillActive: number;
         };
         CreateAiModelRequestDto: {
             apiKey: string;
@@ -3594,6 +3633,96 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminQuestionDto"];
+                };
+            };
+            /** @description 请求参数验证失败 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description 身份认证失败 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description 权限不足或 CSRF 校验失败 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description 资源不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description 状态、幂等或并发冲突 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description 请求体或上传文件过大 */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description 服务器内部错误 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    adminBatchQuestions: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description 使用 Cookie 身份认证执行写操作时必填；Bearer 模式勿填 */
+                "X-CSRF-Token"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchQuestionsRequestDto"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchQuestionsResponseDto"];
                 };
             };
             /** @description 请求参数验证失败 */

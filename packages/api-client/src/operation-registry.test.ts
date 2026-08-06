@@ -11,7 +11,7 @@ type OpenApiDocument = {
 };
 
 describe("operationRegistry", () => {
-  it("与 openapi.json 的全部 51 个 operationId、path 和 method 完全一致", async () => {
+  it("与 openapi.json 的全部 53 个 operationId、path 和 method 完全一致", async () => {
     const document = JSON.parse(
       await readFile(
         new URL("../../../openapi/openapi.json", import.meta.url),
@@ -40,7 +40,7 @@ describe("operationRegistry", () => {
       ([left], [right]) => left.localeCompare(right),
     );
 
-    expect(fromClient).toHaveLength(52);
+    expect(fromClient).toHaveLength(53);
     expect(fromClient).toEqual(fromDocument);
   });
 });

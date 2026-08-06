@@ -13,4 +13,26 @@ describe('AdminQuestionsController', () => {
     });
     expect(questionsService.remove).toHaveBeenCalledWith('question-1');
   });
+
+  it('batch 委托 QuestionsService.batch', async () => {
+    const result = {
+      succeeded: 1,
+      skipped: 0,
+      skippedByReason: {
+        notFound: 0,
+        alreadyTargetState: 0,
+        hasAttempts: 0,
+        stillActive: 0,
+      },
+    };
+    const questionsService = {
+      batch: jest.fn().mockResolvedValue(result),
+    };
+    const controller = new AdminQuestionsController(
+      questionsService as never,
+    );
+    const body = { action: 'enable' as const, ids: ['question-1'] };
+    await expect(controller.batch(body)).resolves.toEqual(result);
+    expect(questionsService.batch).toHaveBeenCalledWith(body);
+  });
 });
