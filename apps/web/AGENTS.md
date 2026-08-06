@@ -4,62 +4,38 @@
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
-# 管理页页头约定
+# 管理页顶栏约定
 
-适用范围：`app/(admin)/admin/**/page.tsx`。新建或改版管理页时必须遵守，禁止再引入自定义 header 类（如 `admin-page__header`），禁止手写 `page-heading` 结构。
+适用范围：`app/(admin)/admin/**/page.tsx`。禁止再引入大块 `page-heading` / `AdminPageHeading`，禁止自定义 `admin-page__header`。
 
 ## 结构
 
-页头统一使用 `AdminPageHeading`（见 `components/admin/admin-page-heading.tsx`）：
+列表页顶栏使用 `admin-filter-card` + `admin-filter-grid`（放在 `.list-page__chrome` 内）。行内顺序：
+
+`[筛选项…] → [应用筛选/筛选] → [主 CTA 或关键指标]`
+
+- **有主操作**：末尾放 CTA（如「添加商品」），带 `Plus` 图标，`type="button"`，打开新建弹窗。不得成为筛选 form 的默认 submit。
+- **无主操作、需展示指标**：末尾放 `AdminPageHeadingStat`（如订单「当前结果」、积分「当前倍率」）；加载中或未知用 `"—"`。
+- **无筛选项的页**（积分、仪表盘）：仍用单行 `admin-filter-card`，只放指标或时区信息。
 
 ```tsx
-import {
-  AdminPageHeading,
-  AdminPageHeadingStat,
-} from "@/components/admin/admin-page-heading";
-
-<AdminPageHeading
-  kicker="分区/能力名"
-  title="页面标题"
-  description="一句说明当前页职责。"
->
-  {/* 右侧槽位：见下方二选一 */}
-</AdminPageHeading>
+<Card className="admin-filter-card">
+  <form className="admin-filter-grid" onSubmit={…}>
+    {/* 筛选项 + 应用筛选 */}
+    <Button type="button" onClick={() => setEditing("create")}>
+      <Plus aria-hidden="true" />
+      添加商品
+    </Button>
+  </form>
+</Card>
 ```
 
-左侧固定为：`page-kicker` + `h1` + 说明文案。`children` 为右侧槽位，二选一，不要同时放两个，也不要留空。
-
-## 右侧槽位
-
-1. **有主操作时**：放 CTA 按钮（如「添加商品」「新建任务」），通常带 `Plus` 图标，点击打开新建弹窗或进入创建流程。
-2. **无主操作、需展示关键指标时**：放 `AdminPageHeadingStat`（如订单「当前结果」、积分「当前倍率」）；加载中或未知用 `"—"`。
-
-```tsx
-{/* CTA */}
-<AdminPageHeading kicker="…" title="…" description="…">
-  <Button onClick={() => setEditing("create")}>
-    <Plus aria-hidden="true" />
-    添加商品
-  </Button>
-</AdminPageHeading>
-
-{/* 或 stat */}
-<AdminPageHeading kicker="…" title="…" description="…">
-  <AdminPageHeadingStat
-    icon={<ClipboardList aria-hidden="true" />}
-    label="当前结果"
-    value={meta?.total ?? "—"}
-  />
-</AdminPageHeading>
-```
-
-特殊右侧内容（如仪表盘时区）可直接作为 `children`；需要焦点回落时用 `headingRef` / `tabIndex`。
+侧栏导航标明当前页面，正文不再重复 kicker / 大标题 / 说明段。
 
 ## 禁止
 
-- 不要使用 `admin-page__header` 或其他自定义页头 class
-- 不要手写 `page-heading` / `page-heading--split`（应通过 `AdminPageHeading`）
-- 不要把主 CTA 放进筛选区、表格上方或页面底部来代替页头右侧槽位
+- 不要使用 `AdminPageHeading` 或手写 `.page-heading` / `.page-heading--split`
+- 不要把主 CTA 放到表格上方单独一行或页面底部来代替筛选行末尾槽位
 
 # 确认弹窗失败约定
 

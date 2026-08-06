@@ -1,5 +1,5 @@
 import { ApiNetworkError } from "@point-quest/api-client";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import AdminOrdersPage from "@/app/(admin)/admin/orders/page";
@@ -96,8 +96,15 @@ describe("管理员订单页面", () => {
         ],
         meta,
       });
-    render(<AdminOrdersPage api={api} />);
+    const { container } = render(<AdminOrdersPage api={api} />);
     const opener = await screen.findByRole("button", { name: "取消订单" });
+
+    expect(container.querySelector(".page-heading")).toBeNull();
+    expect(
+      within(container.querySelector(".admin-filter-card") as HTMLElement).getByText(
+        "当前结果",
+      ),
+    ).toBeVisible();
 
     await user.click(opener);
     expect(screen.getByRole("dialog", { name: "确认取消订单" })).toBeVisible();
@@ -107,9 +114,10 @@ describe("管理员订单页面", () => {
       await screen.findByText("订单已取消，积分与库存已退回"),
     ).toBeVisible();
     expect(screen.getByRole("img", { name: "已取消状态图标" })).toBeVisible();
-    const fallback = screen
-      .getByRole("heading", { name: "订单管理" })
-      .closest<HTMLElement>(".page-heading");
+    const fallback = container.querySelector(
+      ".admin-filter-focus-target",
+    ) as HTMLElement | null;
+    expect(fallback).not.toBeNull();
     expect(opener).not.toBeInTheDocument();
     await waitFor(() => expect(fallback).toHaveFocus());
   });

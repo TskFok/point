@@ -91,14 +91,15 @@ function createApi(overrides: Record<string, unknown> = {}) {
 }
 
 describe("管理员 AI 任务页", () => {
-  it("新建任务按钮在页头右上角，点击打开表单弹窗", async () => {
+  it("新建任务按钮在筛选行，点击打开表单弹窗", async () => {
     const user = userEvent.setup();
     const { container } = render(<AdminAiTasksPage api={createApi()} />);
 
     await screen.findByText("每日词汇");
-    const heading = container.querySelector(".page-heading--split");
-    expect(heading).not.toBeNull();
-    const createButton = within(heading as HTMLElement).getByRole("button", {
+    expect(container.querySelector(".page-heading")).toBeNull();
+    const filterCard = container.querySelector(".admin-filter-card");
+    expect(filterCard).not.toBeNull();
+    const createButton = within(filterCard as HTMLElement).getByRole("button", {
       name: "新建任务",
     });
     await user.click(createButton);

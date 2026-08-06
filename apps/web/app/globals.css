@@ -2561,13 +2561,25 @@ svg {
 
 .admin-filter-grid {
   display: grid;
-  grid-template-columns: minmax(15rem, 2fr) minmax(10rem, 1fr) auto;
+  grid-template-columns: minmax(15rem, 2fr) minmax(10rem, 1fr) auto auto;
   align-items: end;
   gap: 0.75rem;
 }
 
 .admin-filter-grid--orders {
-  grid-template-columns: repeat(5, minmax(9rem, 1fr)) auto;
+  grid-template-columns: repeat(5, minmax(9rem, 1fr)) auto auto;
+}
+
+.admin-filter-grid--chrome-only {
+  grid-template-columns: auto;
+  justify-content: end;
+}
+
+.admin-filter-card .page-heading__stat,
+.admin-filter-card .dashboard-timezone {
+  padding: 0.55rem 0.85rem;
+  min-width: 10rem;
+  box-shadow: none;
 }
 
 .admin-field {
@@ -3145,6 +3157,14 @@ svg {
   .admin-filter-grid > .pq-button,
   .admin-filter-grid--orders > .pq-button {
     width: 100%;
+  }
+
+  .admin-filter-grid > .page-heading__stat,
+  .admin-filter-grid--orders > .page-heading__stat,
+  .admin-filter-grid--chrome-only > .page-heading__stat,
+  .admin-filter-grid--chrome-only > .dashboard-timezone {
+    width: 100%;
+    min-width: 0;
   }
 
   .question-option-editor {

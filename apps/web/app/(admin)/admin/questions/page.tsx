@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { AdminPageHeading } from "@/components/admin/admin-page-heading";
 import { QuestionFormDialog } from "@/components/admin/question-form-dialog";
 import { Pagination } from "@/components/data/pagination";
 import { StatusFilter } from "@/components/data/status-filter";
@@ -293,17 +292,6 @@ export default function AdminQuestionsPage({
   return (
     <section className="admin-page list-page">
       <div className="list-page__chrome">
-        <AdminPageHeading
-          description="维护题干、答案、解析和基础积分，控制题目是否进入练习池。"
-          kicker="英语内容中心"
-          title="题库管理"
-        >
-          <Button onClick={() => setEditing("create")}>
-            <Plus aria-hidden="true" />
-            添加题目
-          </Button>
-        </AdminPageHeading>
-
         <Card className="admin-filter-card">
           <form
             className="admin-filter-grid"
@@ -344,6 +332,10 @@ export default function AdminQuestionsPage({
             <Button disabled={loading} type="submit">
               <Filter aria-hidden="true" />
               应用筛选
+            </Button>
+            <Button onClick={() => setEditing("create")} type="button">
+              <Plus aria-hidden="true" />
+              添加题目
             </Button>
           </form>
         </Card>

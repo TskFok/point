@@ -86,7 +86,7 @@ describe("管理员运营页面", () => {
         todayAnswerCount: 34,
       }),
     };
-    render(<AdminDashboardPage api={api} />);
+    const { container } = render(<AdminDashboardPage api={api} />);
 
     expect(await screen.findByText("12")).toBeVisible();
     expect(screen.getByText("34")).toBeVisible();
@@ -94,6 +94,12 @@ describe("管理员运营页面", () => {
     expect(screen.getByText("6")).toBeVisible();
     expect(screen.getByText("启用题目")).toBeVisible();
     expect(screen.getByText("今日答题")).toBeVisible();
+    expect(container.querySelector(".page-heading")).toBeNull();
+    expect(screen.getByText("今日口径")).toBeVisible();
+    expect(screen.getByText("Asia/Shanghai")).toBeVisible();
+    expect(
+      container.querySelector(".admin-filter-card .dashboard-timezone"),
+    ).not.toBeNull();
   });
 
   it("概览快捷入口标记并跳转到题库创建弹窗", async () => {
@@ -150,8 +156,12 @@ describe("管理员运营页面", () => {
 
     const chrome = container.querySelector(".list-page__chrome");
     expect(chrome).not.toBeNull();
-    expect(chrome?.querySelector(".page-heading")).not.toBeNull();
+    expect(chrome?.querySelector(".page-heading")).toBeNull();
     expect(chrome?.querySelector(".admin-filter-card")).not.toBeNull();
+    const filterCard = chrome?.querySelector(".admin-filter-card") as HTMLElement;
+    expect(
+      within(filterCard).getByRole("button", { name: "添加题目" }),
+    ).toBeVisible();
     expect(body?.contains(chrome as Node)).toBe(false);
     expect(chrome?.contains(nav as Node)).toBe(false);
   });
@@ -369,7 +379,7 @@ describe("管理员运营页面", () => {
     expect(api.updateAdminQuestion).not.toHaveBeenCalled();
   });
 
-  it("页头使用 page-heading--split 并展示当前倍率", async () => {
+  it("筛选 chrome 展示当前倍率且无 page-heading", async () => {
     const config = {
       createdAt: "2026-07-31T08:00:00.000Z",
       id: "config-1",
@@ -387,15 +397,13 @@ describe("管理员运营页面", () => {
     };
     const { container } = render(<AdminPointsPage api={api} />);
 
-    const heading = container.querySelector(".page-heading--split");
-    expect(heading).not.toBeNull();
+    expect(container.querySelector(".page-heading")).toBeNull();
+    const filterCard = container.querySelector(".admin-filter-card");
+    expect(filterCard).not.toBeNull();
     expect(
-      within(heading as HTMLElement).getByRole("heading", { name: "积分倍率" }),
+      await within(filterCard as HTMLElement).findByText("2×"),
     ).toBeVisible();
-    expect(
-      await within(heading as HTMLElement).findByText("2×"),
-    ).toBeVisible();
-    expect(within(heading as HTMLElement).getByText("当前倍率")).toBeVisible();
+    expect(within(filterCard as HTMLElement).getByText("当前倍率")).toBeVisible();
   });
 
   it("倍率限制为 1–10 整数并刷新配置历史", async () => {
@@ -574,13 +582,20 @@ describe("管理员运营页面", () => {
       deleteAdminProduct: jest.fn(),
     };
     window.history.replaceState(null, "", "/admin/products");
-    render(<AdminProductsPage api={api} />);
+    const { container } = render(<AdminProductsPage api={api} />);
 
     expect(
       await screen.findByRole("img", { name: product.name }),
     ).toHaveAttribute("src", "/file.svg");
     expect(screen.getByText("库存 8")).toBeVisible();
     expect(screen.getByText("120 积分")).toBeVisible();
+    expect(container.querySelector(".page-heading")).toBeNull();
+    expect(
+      within(container.querySelector(".admin-filter-card") as HTMLElement).getByRole(
+        "button",
+        { name: "添加商品" },
+      ),
+    ).toBeVisible();
 
     await user.click(screen.getByRole("button", { name: "添加商品" }));
     expect(

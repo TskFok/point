@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { AdminPageHeading } from "@/components/admin/admin-page-heading";
 import { AiModelForm } from "@/components/admin/ai-model-form";
 import { Pagination } from "@/components/data/pagination";
 import { StatusFilter } from "@/components/data/status-filter";
@@ -215,17 +214,6 @@ export default function AdminAiModelsPage({
   return (
     <section className="admin-page list-page">
       <div className="list-page__chrome">
-        <AdminPageHeading
-          description="配置模型名称、调用地址与 API Key，供后续智能能力使用。"
-          kicker="系统能力"
-          title="AI 模型"
-        >
-          <Button onClick={() => setEditing("create")}>
-            <Plus aria-hidden="true" />
-            添加模型
-          </Button>
-        </AdminPageHeading>
-
         <Card className="admin-filter-card">
           <form
             className="admin-filter-grid"
@@ -249,6 +237,10 @@ export default function AdminAiModelsPage({
             <Button disabled={loading} type="submit">
               <Filter aria-hidden="true" />
               应用筛选
+            </Button>
+            <Button onClick={() => setEditing("create")} type="button">
+              <Plus aria-hidden="true" />
+              添加模型
             </Button>
           </form>
         </Card>

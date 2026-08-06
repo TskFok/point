@@ -13,7 +13,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { AdminPageHeading } from "@/components/admin/admin-page-heading";
 import { AsyncError } from "@/components/feedback/async-error";
 import { ADMIN_QUESTIONS_OPEN_CREATE_KEY } from "@/lib/admin/questions-ui";
 import { browserApiClient } from "@/lib/api/browser-client";
@@ -88,17 +87,15 @@ export default function AdminDashboardPage({
 
   return (
     <section className="admin-page">
-      <AdminPageHeading
-        description="数据实时来自题库、答题、订单和商品模块。"
-        kicker="运营概览"
-        title="今天的学习运营一目了然"
-      >
-        <div className="dashboard-timezone">
-          <CircleGauge aria-hidden="true" />
-          <span>今日口径</span>
-          <strong>Asia/Shanghai</strong>
+      <Card className="admin-filter-card">
+        <div className="admin-filter-grid admin-filter-grid--chrome-only">
+          <div className="dashboard-timezone">
+            <CircleGauge aria-hidden="true" />
+            <span>今日口径</span>
+            <strong>Asia/Shanghai</strong>
+          </div>
         </div>
-      </AdminPageHeading>
+      </Card>
 
       {loading ? (
         <Card aria-live="polite" className="page-loading" role="status">

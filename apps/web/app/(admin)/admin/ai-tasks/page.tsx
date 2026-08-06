@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { AdminPageHeading } from "@/components/admin/admin-page-heading";
 import { AiTaskForm } from "@/components/admin/ai-task-form";
 import { Pagination } from "@/components/data/pagination";
 import { StatusFilter } from "@/components/data/status-filter";
@@ -288,23 +287,6 @@ export default function AdminAiTasksPage({
   return (
     <section className="admin-page list-page">
       <div className="list-page__chrome">
-        <AdminPageHeading
-          description="配置定时出题任务，按字典序调用 AI 生成英文题干与中文选项。"
-          kicker="系统能力"
-          title="AI 任务"
-        >
-          <Button
-            onClick={() => {
-              setEditing("create");
-              setActionMessage(null);
-            }}
-            type="button"
-          >
-            <Plus aria-hidden="true" />
-            新建任务
-          </Button>
-        </AdminPageHeading>
-
         <Card className="admin-filter-card">
           <div className="admin-filter-grid">
             <StatusFilter
@@ -327,6 +309,16 @@ export default function AdminAiTasksPage({
             >
               <Filter aria-hidden="true" />
               筛选
+            </Button>
+            <Button
+              onClick={() => {
+                setEditing("create");
+                setActionMessage(null);
+              }}
+              type="button"
+            >
+              <Plus aria-hidden="true" />
+              新建任务
             </Button>
           </div>
         </Card>

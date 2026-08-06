@@ -5,10 +5,7 @@ import { Card } from "@point-quest/ui";
 import { Clock3, Gauge, History, LoaderCircle, UserRound } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import {
-  AdminPageHeading,
-  AdminPageHeadingStat,
-} from "@/components/admin/admin-page-heading";
+import { AdminPageHeadingStat } from "@/components/admin/admin-page-heading";
 import { PointConfigForm } from "@/components/admin/point-config-form";
 import { Pagination } from "@/components/data/pagination";
 import { EmptyState } from "@/components/empty-state";
@@ -103,17 +100,15 @@ export default function AdminPointsPage({
   return (
     <section className="admin-page list-page">
       <div className="list-page__chrome">
-        <AdminPageHeading
-          description="每次保存都会追加一条历史记录，便于追踪奖励规则变化。"
-          kicker="学习奖励配置"
-          title="积分倍率"
-        >
-          <AdminPageHeadingStat
-            icon={<Gauge aria-hidden="true" />}
-            label="当前倍率"
-            value={current ? `${current.multiplier}×` : "—"}
-          />
-        </AdminPageHeading>
+        <Card className="admin-filter-card">
+          <div className="admin-filter-grid admin-filter-grid--chrome-only">
+            <AdminPageHeadingStat
+              icon={<Gauge aria-hidden="true" />}
+              label="当前倍率"
+              value={current ? `${current.multiplier}×` : "—"}
+            />
+          </div>
+        </Card>
 
         {current ? (
           <>
