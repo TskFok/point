@@ -463,132 +463,151 @@ export default function AdminQuestionsPage({
               </div>
             </div>
           ) : null}
-          <div className="admin-table-wrap">
-            <table className="admin-table">
-              <caption className="sr-only">管理员题库列表</caption>
-              <thead>
-                <tr>
-                  <th className="admin-table__check">
-                    <input
-                      aria-label="全选当前页"
-                      checked={allSelected}
-                      disabled={busy}
-                      onChange={(event) =>
-                        toggleSelectAll(event.target.checked)
-                      }
-                      type="checkbox"
-                    />
-                  </th>
-                  <th className="admin-table__primary">题干</th>
-                  <th>选项</th>
-                  <th>基础积分</th>
-                  <th>状态</th>
-                  <th className="admin-table__actions-cell">操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {questions.map((question) => (
-                  <tr key={question.id}>
-                    <td className="admin-table__check" data-label="选择">
-                      <input
-                        aria-label={`选择题目「${stemPreview(question.stem)}」`}
-                        checked={selectedIds.includes(question.id)}
-                        disabled={busy}
-                        onChange={(event) =>
-                          toggleSelectOne(question.id, event.target.checked)
-                        }
-                        type="checkbox"
-                      />
-                    </td>
-                    <td className="admin-table__primary" data-label="题干">
-                      <strong>{question.stem}</strong>
-                      <small>{question.explanation}</small>
-                    </td>
-                    <td data-label="选项">{question.options.length} 项</td>
-                    <td data-label="基础积分">{question.basePoints} 分</td>
-                    <td data-label="状态">
-                      <span
-                        className={`admin-status admin-status--${
-                          question.isActive ? "active" : "inactive"
-                        }`}
-                      >
-                        {question.isActive ? (
-                          <CircleCheck aria-label="已启用状态图标" role="img" />
-                        ) : (
-                          <CircleOff aria-label="已停用状态图标" role="img" />
-                        )}
-                        {question.isActive ? "已启用" : "已停用"}
-                      </span>
-                    </td>
-                    <td className="admin-table__actions-cell" data-label="操作">
-                      <div className="admin-table__actions">
-                        <Button
-                          onClick={() => setEditing({ id: question.id })}
-                          variant="secondary"
-                        >
-                          <Pencil aria-hidden="true" />
-                          编辑题目
-                        </Button>
-                        <Button
-                          disabled={
-                            busy ||
-                            (question.hasAttempts && !question.isActive)
+          <div className="paginated-panel">
+            <div className="paginated-panel__body">
+              <div className="admin-table-wrap">
+                <table className="admin-table">
+                  <caption className="sr-only">管理员题库列表</caption>
+                  <thead>
+                    <tr>
+                      <th className="admin-table__check">
+                        <input
+                          aria-label="全选当前页"
+                          checked={allSelected}
+                          disabled={busy}
+                          onChange={(event) =>
+                            toggleSelectAll(event.target.checked)
                           }
-                          onClick={() => {
-                            if (question.isActive) {
-                              openConfirm({
-                                kind: "disable",
-                                target: question,
-                              });
-                              return;
-                            }
-                            void (async () => {
-                              const error = await toggleStatus(question);
-                              if (error) setMutationError(error);
-                            })();
-                          }}
-                          variant="secondary"
-                        >
-                          {mutatingId === question.id ? (
-                            <LoaderCircle aria-hidden="true" className="spin" />
-                          ) : question.isActive ? (
-                            <CircleOff aria-hidden="true" />
-                          ) : (
-                            <CircleCheck aria-hidden="true" />
-                          )}
-                          {question.hasAttempts && !question.isActive
-                            ? "已有记录不可启用"
-                            : question.isActive
-                              ? "停用题目"
-                              : "启用题目"}
-                        </Button>
-                        {!question.isActive && !question.hasAttempts ? (
-                          <Button
+                          type="checkbox"
+                        />
+                      </th>
+                      <th className="admin-table__primary">题干</th>
+                      <th>选项</th>
+                      <th>基础积分</th>
+                      <th>状态</th>
+                      <th className="admin-table__actions-cell">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {questions.map((question) => (
+                      <tr key={question.id}>
+                        <td className="admin-table__check" data-label="选择">
+                          <input
+                            aria-label={`选择题目「${stemPreview(question.stem)}」`}
+                            checked={selectedIds.includes(question.id)}
                             disabled={busy}
-                            onClick={() =>
-                              openConfirm({ kind: "delete", target: question })
+                            onChange={(event) =>
+                              toggleSelectOne(question.id, event.target.checked)
                             }
-                            variant="secondary"
+                            type="checkbox"
+                          />
+                        </td>
+                        <td className="admin-table__primary" data-label="题干">
+                          <strong>{question.stem}</strong>
+                          <small>{question.explanation}</small>
+                        </td>
+                        <td data-label="选项">{question.options.length} 项</td>
+                        <td data-label="基础积分">{question.basePoints} 分</td>
+                        <td data-label="状态">
+                          <span
+                            className={`admin-status admin-status--${
+                              question.isActive ? "active" : "inactive"
+                            }`}
                           >
-                            <Trash2 aria-hidden="true" />
-                            删除
-                          </Button>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                            {question.isActive ? (
+                              <CircleCheck
+                                aria-label="已启用状态图标"
+                                role="img"
+                              />
+                            ) : (
+                              <CircleOff
+                                aria-label="已停用状态图标"
+                                role="img"
+                              />
+                            )}
+                            {question.isActive ? "已启用" : "已停用"}
+                          </span>
+                        </td>
+                        <td
+                          className="admin-table__actions-cell"
+                          data-label="操作"
+                        >
+                          <div className="admin-table__actions">
+                            <Button
+                              onClick={() => setEditing({ id: question.id })}
+                              variant="secondary"
+                            >
+                              <Pencil aria-hidden="true" />
+                              编辑题目
+                            </Button>
+                            <Button
+                              disabled={
+                                busy ||
+                                (question.hasAttempts && !question.isActive)
+                              }
+                              onClick={() => {
+                                if (question.isActive) {
+                                  openConfirm({
+                                    kind: "disable",
+                                    target: question,
+                                  });
+                                  return;
+                                }
+                                void (async () => {
+                                  const error = await toggleStatus(question);
+                                  if (error) setMutationError(error);
+                                })();
+                              }}
+                              variant="secondary"
+                            >
+                              {mutatingId === question.id ? (
+                                <LoaderCircle
+                                  aria-hidden="true"
+                                  className="spin"
+                                />
+                              ) : question.isActive ? (
+                                <CircleOff aria-hidden="true" />
+                              ) : (
+                                <CircleCheck aria-hidden="true" />
+                              )}
+                              {question.hasAttempts && !question.isActive
+                                ? "已有记录不可启用"
+                                : question.isActive
+                                  ? "停用题目"
+                                  : "启用题目"}
+                            </Button>
+                            {!question.isActive && !question.hasAttempts ? (
+                              <Button
+                                disabled={busy}
+                                onClick={() =>
+                                  openConfirm({
+                                    kind: "delete",
+                                    target: question,
+                                  })
+                                }
+                                variant="secondary"
+                              >
+                                <Trash2 aria-hidden="true" />
+                                删除
+                              </Button>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            {meta ? (
+              <Pagination
+                disabled={loading}
+                onPageChange={setPage}
+                page={meta.page}
+                totalPages={meta.totalPages}
+              />
+            ) : null}
           </div>
-          {meta ? (
-            <Pagination
-              disabled={loading}
-              onPageChange={setPage}
-              page={meta.page}
-              totalPages={meta.totalPages}
-            />
-          ) : null}
         </>
       )}
     </section>

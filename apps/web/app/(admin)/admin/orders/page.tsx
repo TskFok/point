@@ -350,88 +350,90 @@ export default function AdminOrdersPage({
           title="没有匹配的订单"
         />
       ) : (
-        <>
-          <div className="admin-table-wrap">
-            <table className="admin-table">
-              <caption className="sr-only">管理员订单列表</caption>
-              <thead>
-                <tr>
-                  <th>订单与学员</th>
-                  <th>商品</th>
-                  <th>花费</th>
-                  <th>创建时间</th>
-                  <th>状态</th>
-                  <th>操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.map((order) => {
-                  const status = statusPresentation[order.status];
-                  const StatusIcon = status.Icon;
-                  return (
-                    <tr key={order.id}>
-                      <td data-label="订单与学员">
-                        <strong>{order.orderNo}</strong>
-                        <small>{order.user.username}</small>
-                      </td>
-                      <td data-label="商品">{order.productNameSnapshot}</td>
-                      <td data-label="花费">{order.pointsCostSnapshot} 积分</td>
-                      <td data-label="创建时间">
-                        <time dateTime={order.createdAt}>
-                          {dateTimeFormatter.format(new Date(order.createdAt))}
-                        </time>
-                      </td>
-                      <td data-label="状态">
-                        <span
-                          className={`admin-status admin-status--${order.status.toLowerCase()}`}
-                        >
-                          <StatusIcon
-                            aria-label={`${status.label}状态图标`}
-                            role="img"
-                          />
-                          {status.label}
-                        </span>
-                      </td>
-                      <td data-label="操作">
-                        {order.status === "PENDING_PICKUP" ? (
-                          <div className="admin-table__actions">
-                            <Button
-                              onClick={() => {
-                                setSuccessMessage(null);
-                                setActionError(null);
-                                setActiveDialog({
-                                  action: "complete",
-                                  order,
-                                });
-                              }}
-                            >
-                              <CircleCheck aria-hidden="true" />
-                              完成订单
-                            </Button>
-                            <Button
-                              onClick={() => {
-                                setSuccessMessage(null);
-                                setActionError(null);
-                                setActiveDialog({
-                                  action: "cancel",
-                                  order,
-                                });
-                              }}
-                              variant="danger"
-                            >
-                              <Ban aria-hidden="true" />
-                              取消订单
-                            </Button>
-                          </div>
-                        ) : (
-                          <span className="admin-table__muted">无需操作</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+        <div className="paginated-panel">
+          <div className="paginated-panel__body">
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <caption className="sr-only">管理员订单列表</caption>
+                <thead>
+                  <tr>
+                    <th>订单与学员</th>
+                    <th>商品</th>
+                    <th>花费</th>
+                    <th>创建时间</th>
+                    <th>状态</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {orders.map((order) => {
+                    const status = statusPresentation[order.status];
+                    const StatusIcon = status.Icon;
+                    return (
+                      <tr key={order.id}>
+                        <td data-label="订单与学员">
+                          <strong>{order.orderNo}</strong>
+                          <small>{order.user.username}</small>
+                        </td>
+                        <td data-label="商品">{order.productNameSnapshot}</td>
+                        <td data-label="花费">{order.pointsCostSnapshot} 积分</td>
+                        <td data-label="创建时间">
+                          <time dateTime={order.createdAt}>
+                            {dateTimeFormatter.format(new Date(order.createdAt))}
+                          </time>
+                        </td>
+                        <td data-label="状态">
+                          <span
+                            className={`admin-status admin-status--${order.status.toLowerCase()}`}
+                          >
+                            <StatusIcon
+                              aria-label={`${status.label}状态图标`}
+                              role="img"
+                            />
+                            {status.label}
+                          </span>
+                        </td>
+                        <td data-label="操作">
+                          {order.status === "PENDING_PICKUP" ? (
+                            <div className="admin-table__actions">
+                              <Button
+                                onClick={() => {
+                                  setSuccessMessage(null);
+                                  setActionError(null);
+                                  setActiveDialog({
+                                    action: "complete",
+                                    order,
+                                  });
+                                }}
+                              >
+                                <CircleCheck aria-hidden="true" />
+                                完成订单
+                              </Button>
+                              <Button
+                                onClick={() => {
+                                  setSuccessMessage(null);
+                                  setActionError(null);
+                                  setActiveDialog({
+                                    action: "cancel",
+                                    order,
+                                  });
+                                }}
+                                variant="danger"
+                              >
+                                <Ban aria-hidden="true" />
+                                取消订单
+                              </Button>
+                            </div>
+                          ) : (
+                            <span className="admin-table__muted">无需操作</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
           {meta ? (
             <Pagination
@@ -441,7 +443,7 @@ export default function AdminOrdersPage({
               totalPages={meta.totalPages}
             />
           ) : null}
-        </>
+        </div>
       )}
 
       {activeDialog ? (

@@ -169,25 +169,27 @@ export default function WrongQuestionsPage({
           title="暂时没有待练错题"
         />
       ) : (
-        <>
-          <div className="wrong-grid">
-            {items.map((item) => (
-              <Card className="wrong-card" key={item.question.id}>
-                <div className="wrong-card__count">
-                  <RotateCcw aria-hidden="true" />
-                  累计答错 {item.errorCount} 次
-                </div>
-                <h2>{item.question.stem}</h2>
-                <p>{item.question.options.length} 个选项 · 单项选择</p>
-                <Button
-                  fullWidth
-                  onClick={() => setSelected(item)}
-                  variant="secondary"
-                >
-                  继续练习
-                </Button>
-              </Card>
-            ))}
+        <div className="paginated-panel">
+          <div className="paginated-panel__body">
+            <div className="wrong-grid">
+              {items.map((item) => (
+                <Card className="wrong-card" key={item.question.id}>
+                  <div className="wrong-card__count">
+                    <RotateCcw aria-hidden="true" />
+                    累计答错 {item.errorCount} 次
+                  </div>
+                  <h2>{item.question.stem}</h2>
+                  <p>{item.question.options.length} 个选项 · 单项选择</p>
+                  <Button
+                    fullWidth
+                    onClick={() => setSelected(item)}
+                    variant="secondary"
+                  >
+                    继续练习
+                  </Button>
+                </Card>
+              ))}
+            </div>
           </div>
           {meta ? (
             <PaginationControls
@@ -197,7 +199,7 @@ export default function WrongQuestionsPage({
               totalPages={meta.totalPages}
             />
           ) : null}
-        </>
+        </div>
       )}
     </section>
   );

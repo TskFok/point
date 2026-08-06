@@ -98,11 +98,13 @@ export default function OrdersPage({
           title="还没有兑换订单"
         />
       ) : (
-        <>
-          <div className="order-list">
-            {orders.map((order) => (
-              <OrderCard key={order.id} order={order} />
-            ))}
+        <div className="paginated-panel">
+          <div className="paginated-panel__body">
+            <div className="order-list">
+              {orders.map((order) => (
+                <OrderCard key={order.id} order={order} />
+              ))}
+            </div>
           </div>
           {meta ? (
             <PaginationControls
@@ -112,7 +114,7 @@ export default function OrdersPage({
               totalPages={meta.totalPages}
             />
           ) : null}
-        </>
+        </div>
       )}
     </section>
   );

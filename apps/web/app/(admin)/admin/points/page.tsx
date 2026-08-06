@@ -161,25 +161,27 @@ export default function AdminPointsPage({
               title="还没有倍率历史"
             />
           ) : (
-            <>
-              <div className="config-history-list">
-                {history.map((config) => (
-                  <Card className="config-history-item" key={config.id}>
-                    <strong>{config.multiplier}×</strong>
-                    <div>
-                      <span>
-                        <UserRound aria-hidden="true" />
-                        {config.updater?.username ?? "系统默认"}
-                      </span>
-                      {config.createdAt ? (
-                        <time dateTime={config.createdAt}>
-                          <Clock3 aria-hidden="true" />
-                          {formatter.format(new Date(config.createdAt))}
-                        </time>
-                      ) : null}
-                    </div>
-                  </Card>
-                ))}
+            <div className="paginated-panel">
+              <div className="paginated-panel__body">
+                <div className="config-history-list">
+                  {history.map((config) => (
+                    <Card className="config-history-item" key={config.id}>
+                      <strong>{config.multiplier}×</strong>
+                      <div>
+                        <span>
+                          <UserRound aria-hidden="true" />
+                          {config.updater?.username ?? "系统默认"}
+                        </span>
+                        {config.createdAt ? (
+                          <time dateTime={config.createdAt}>
+                            <Clock3 aria-hidden="true" />
+                            {formatter.format(new Date(config.createdAt))}
+                          </time>
+                        ) : null}
+                      </div>
+                    </Card>
+                  ))}
+                </div>
               </div>
               {meta ? (
                 <Pagination
@@ -189,7 +191,7 @@ export default function AdminPointsPage({
                   totalPages={meta.totalPages}
                 />
               ) : null}
-            </>
+            </div>
           )}
         </>
       ) : null}

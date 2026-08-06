@@ -316,94 +316,96 @@ export default function AdminAiModelsPage({
           title="还没有 AI 模型配置"
         />
       ) : (
-        <>
-          <div className="admin-table-wrap">
-            <table className="admin-table">
-              <caption className="sr-only">AI 模型配置列表</caption>
-              <thead>
-                <tr>
-                  <th scope="col">模型名称</th>
-                  <th scope="col">调用地址</th>
-                  <th scope="col">API Key</th>
-                  <th scope="col">状态</th>
-                  <th scope="col">更新时间</th>
-                  <th scope="col">操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {models.map((model) => (
-                  <tr key={model.id}>
-                    <td>{model.name}</td>
-                    <td>{model.baseUrl}</td>
-                    <td>{model.apiKeyMasked}</td>
-                    <td>
-                      <span
-                        className={`admin-status admin-status--${
-                          model.isEnabled ? "active" : "inactive"
-                        }`}
-                      >
-                        {model.isEnabled ? (
-                          <CircleCheck aria-hidden="true" />
-                        ) : (
-                          <CircleOff aria-hidden="true" />
-                        )}
-                        {model.isEnabled ? "已启用" : "未启用"}
-                      </span>
-                    </td>
-                    <td>{formatter.format(new Date(model.updatedAt))}</td>
-                    <td>
-                      <div className="admin-table__actions">
-                        <Button
-                          disabled={busyId === model.id}
-                          onClick={() => setEditing(model)}
-                          variant="secondary"
-                        >
-                          <Pencil aria-hidden="true" />
-                          编辑
-                        </Button>
-                        <Button
-                          disabled={busyId === model.id}
-                          onClick={() => {
-                            if (model.isEnabled) {
-                              openConfirm({
-                                kind: "disable",
-                                target: model,
-                              });
-                              return;
-                            }
-                            void (async () => {
-                              const error = await toggleEnabled(model);
-                              if (error) setActionMessage(error);
-                            })();
-                          }}
-                          variant="secondary"
-                        >
-                          {model.isEnabled ? "停用" : "启用"}
-                        </Button>
-                        <Button
-                          disabled={busyId === model.id}
-                          onClick={() => void testModel(model)}
-                          variant="secondary"
-                        >
-                          <Wifi aria-hidden="true" />
-                          测试
-                        </Button>
-                        <Button
-                          disabled={busyId === model.id}
-                          onClick={() =>
-                            openConfirm({ kind: "delete", target: model })
-                          }
-                          variant="secondary"
-                        >
-                          <Trash2 aria-hidden="true" />
-                          删除
-                        </Button>
-                      </div>
-                    </td>
+        <div className="paginated-panel">
+          <div className="paginated-panel__body">
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <caption className="sr-only">AI 模型配置列表</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">模型名称</th>
+                    <th scope="col">调用地址</th>
+                    <th scope="col">API Key</th>
+                    <th scope="col">状态</th>
+                    <th scope="col">更新时间</th>
+                    <th scope="col">操作</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {models.map((model) => (
+                    <tr key={model.id}>
+                      <td>{model.name}</td>
+                      <td>{model.baseUrl}</td>
+                      <td>{model.apiKeyMasked}</td>
+                      <td>
+                        <span
+                          className={`admin-status admin-status--${
+                            model.isEnabled ? "active" : "inactive"
+                          }`}
+                        >
+                          {model.isEnabled ? (
+                            <CircleCheck aria-hidden="true" />
+                          ) : (
+                            <CircleOff aria-hidden="true" />
+                          )}
+                          {model.isEnabled ? "已启用" : "未启用"}
+                        </span>
+                      </td>
+                      <td>{formatter.format(new Date(model.updatedAt))}</td>
+                      <td>
+                        <div className="admin-table__actions">
+                          <Button
+                            disabled={busyId === model.id}
+                            onClick={() => setEditing(model)}
+                            variant="secondary"
+                          >
+                            <Pencil aria-hidden="true" />
+                            编辑
+                          </Button>
+                          <Button
+                            disabled={busyId === model.id}
+                            onClick={() => {
+                              if (model.isEnabled) {
+                                openConfirm({
+                                  kind: "disable",
+                                  target: model,
+                                });
+                                return;
+                              }
+                              void (async () => {
+                                const error = await toggleEnabled(model);
+                                if (error) setActionMessage(error);
+                              })();
+                            }}
+                            variant="secondary"
+                          >
+                            {model.isEnabled ? "停用" : "启用"}
+                          </Button>
+                          <Button
+                            disabled={busyId === model.id}
+                            onClick={() => void testModel(model)}
+                            variant="secondary"
+                          >
+                            <Wifi aria-hidden="true" />
+                            测试
+                          </Button>
+                          <Button
+                            disabled={busyId === model.id}
+                            onClick={() =>
+                              openConfirm({ kind: "delete", target: model })
+                            }
+                            variant="secondary"
+                          >
+                            <Trash2 aria-hidden="true" />
+                            删除
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
           {meta ? (
             <Pagination
@@ -413,7 +415,7 @@ export default function AdminAiModelsPage({
               totalPages={meta.totalPages}
             />
           ) : null}
-        </>
+        </div>
       )}
     </section>
   );

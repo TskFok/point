@@ -151,42 +151,45 @@ export default function ProfilePage({
               title="还没有积分流水"
             />
           ) : (
-            <Card className="ledger-list">
-              {ledger.map((entry) => (
-                <article className="ledger-row" key={entry.id}>
-                  <span
-                    className={`ledger-row__icon ledger-row__icon--${
-                      entry.delta >= 0 ? "income" : "expense"
-                    }`}
-                  >
-                    <Coins aria-hidden="true" />
-                  </span>
-                  <div>
-                    <h3>{ledgerLabels[entry.type]}</h3>
-                    <time dateTime={entry.createdAt}>
-                      {dateTimeFormatter.format(new Date(entry.createdAt))}
-                    </time>
-                  </div>
-                  <div className="ledger-row__amount">
-                    <strong>
-                      {entry.delta > 0 ? "+" : ""}
-                      {entry.delta}
-                    </strong>
-                    <span>余额 {entry.balanceAfter}</span>
-                  </div>
-                </article>
-              ))}
-            </Card>
+            <div className="paginated-panel">
+              <div className="paginated-panel__body">
+                <Card className="ledger-list">
+                  {ledger.map((entry) => (
+                    <article className="ledger-row" key={entry.id}>
+                      <span
+                        className={`ledger-row__icon ledger-row__icon--${
+                          entry.delta >= 0 ? "income" : "expense"
+                        }`}
+                      >
+                        <Coins aria-hidden="true" />
+                      </span>
+                      <div>
+                        <h3>{ledgerLabels[entry.type]}</h3>
+                        <time dateTime={entry.createdAt}>
+                          {dateTimeFormatter.format(new Date(entry.createdAt))}
+                        </time>
+                      </div>
+                      <div className="ledger-row__amount">
+                        <strong>
+                          {entry.delta > 0 ? "+" : ""}
+                          {entry.delta}
+                        </strong>
+                        <span>余额 {entry.balanceAfter}</span>
+                      </div>
+                    </article>
+                  ))}
+                </Card>
+              </div>
+              {meta ? (
+                <PaginationControls
+                  disabled={loading}
+                  onPageChange={setPage}
+                  page={meta.page}
+                  totalPages={meta.totalPages}
+                />
+              ) : null}
+            </div>
           )}
-
-          {meta ? (
-            <PaginationControls
-              disabled={loading}
-              onPageChange={setPage}
-              page={meta.page}
-              totalPages={meta.totalPages}
-            />
-          ) : null}
         </>
       ) : null}
     </section>

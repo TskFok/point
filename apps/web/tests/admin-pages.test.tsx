@@ -119,6 +119,36 @@ describe("管理员运营页面", () => {
     expect(mockPush).toHaveBeenCalledWith("/admin/questions");
   });
 
+  it("题库分页在 paginated-panel 底栏且不在滚动体内", async () => {
+    window.history.replaceState(null, "", "/admin/questions");
+    const { container } = render(
+      <AdminQuestionsPage
+        api={{
+          createAdminQuestion: jest.fn(),
+          batchAdminQuestions: jest.fn(),
+          deleteAdminQuestion: jest.fn(),
+          getAdminQuestion: jest.fn(),
+          listAdminQuestions: jest.fn().mockResolvedValue({
+            data: [question],
+            meta: { ...meta, total: 21, totalPages: 2 },
+          }),
+          updateAdminQuestion: jest.fn(),
+        }}
+      />,
+    );
+
+    await screen.findByRole("navigation", { name: "分页" });
+
+    const panel = container.querySelector(".paginated-panel");
+    const body = panel?.querySelector(":scope > .paginated-panel__body");
+    const nav = panel?.querySelector(':scope > nav[aria-label="分页"]');
+    expect(panel).not.toBeNull();
+    expect(body).not.toBeNull();
+    expect(nav).not.toBeNull();
+    expect(body?.contains(nav as Node)).toBe(false);
+    expect(body?.querySelector(".admin-table-wrap")).not.toBeNull();
+  });
+
   it("题库搜索、状态与分页写入 URL 并使用按钮编辑", async () => {
     const user = userEvent.setup();
     const api = {

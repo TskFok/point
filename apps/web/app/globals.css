@@ -824,8 +824,10 @@ svg {
 }
 
 .student-page {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: clamp(1.25rem, 2.4vw, 2rem);
+  min-height: calc(100vh - 5rem);
 }
 
 .page-heading--split,
@@ -1419,6 +1421,28 @@ svg {
   color: var(--color-text-muted);
   text-align: center;
   font-size: 0.82rem;
+}
+
+.paginated-panel {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  gap: 0;
+}
+
+.paginated-panel__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.paginated-panel > .pagination {
+  flex-shrink: 0;
+  margin-top: 0;
+  border-top: 1px solid var(--color-border);
+  padding: 0.75rem 0.5rem;
+  background: var(--surface-card);
 }
 
 .wrong-grid {
@@ -2085,6 +2109,10 @@ svg {
     padding-top: 3.75rem;
   }
 
+  .app-shell--admin .admin-page {
+    min-height: calc(100vh - 5rem - 2.5rem);
+  }
+
   .admin-drawer-layer {
     display: block;
   }
@@ -2101,6 +2129,10 @@ svg {
 @media (max-width: 900px) {
   .app-shell--student .app-content {
     padding-bottom: 6.5rem;
+  }
+
+  .app-shell--student .paginated-panel > .pagination {
+    padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
   }
 
   .mobile-bottom-nav {
@@ -2301,10 +2333,12 @@ svg {
 
 /* Admin operations */
 .admin-page {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 1.5rem;
   width: min(100%, 92rem);
   margin-inline: auto;
+  min-height: calc(100vh - 5rem);
 }
 
 .page-heading__stat,

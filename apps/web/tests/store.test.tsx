@@ -362,6 +362,29 @@ describe("积分商城页面", () => {
     ).toBeVisible();
   });
 
+  it("商城分页在 paginated-panel 底栏且不在滚动体内", async () => {
+    const api = createApi();
+    api.listProducts.mockResolvedValue({
+      data: [productOne],
+      meta: { ...pageMeta, page: 1, total: 2, totalPages: 2 },
+    });
+
+    const { container } = render(
+      <StorePage api={api} initialBalance={200} />,
+    );
+
+    await screen.findByRole("navigation", { name: "分页" });
+
+    const panel = container.querySelector(".paginated-panel");
+    const body = panel?.querySelector(":scope > .paginated-panel__body");
+    const nav = panel?.querySelector(':scope > nav[aria-label="分页"]');
+    expect(panel).not.toBeNull();
+    expect(body).not.toBeNull();
+    expect(nav).not.toBeNull();
+    expect(body?.contains(nav as Node)).toBe(false);
+    expect(body?.querySelector(".product-grid")).not.toBeNull();
+  });
+
   it("失效商品使末页越界时回退并重新加载最后一个有效页", async () => {
     const user = userEvent.setup();
     const api = createApi();

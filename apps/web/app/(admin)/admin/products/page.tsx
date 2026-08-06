@@ -292,73 +292,75 @@ export default function AdminProductsPage({
           title="没有匹配的商品"
         />
       ) : (
-        <>
-          <div className="admin-product-grid">
-            {products.map((product) => (
-              <Card className="admin-product-card" key={product.id}>
-                <div className="admin-product-card__image">
-                  <ProductImage
-                    alt={product.name}
-                    height={360}
-                    imageKey={product.imageKey}
-                    sizes="(max-width: 700px) 100vw, 33vw"
-                    width={480}
-                  />
-                  <span
-                    className={`admin-status admin-status--${
-                      product.isActive ? "active" : "inactive"
-                    }`}
-                  >
-                    {product.isActive ? (
-                      <CircleCheck aria-label="已上架状态图标" role="img" />
-                    ) : (
-                      <CircleOff aria-label="已下架状态图标" role="img" />
-                    )}
-                    {product.isActive ? "已上架" : "已下架"}
-                  </span>
-                </div>
-                <div className="admin-product-card__body">
-                  <div>
-                    <h2>{product.name}</h2>
-                    <p>{product.description}</p>
-                  </div>
-                  <div className="admin-product-card__facts">
-                    <span>
-                      <Package aria-hidden="true" />
-                      库存 {product.stock}
-                    </span>
-                    <span>
-                      <Coins aria-hidden="true" />
-                      {product.pointsCost} 积分
-                    </span>
-                  </div>
-                  <div className="admin-product-card__actions">
-                    <Button
-                      disabled={busyId === product.id}
-                      fullWidth
-                      onClick={() => setEditing(product)}
-                      variant="secondary"
+        <div className="paginated-panel">
+          <div className="paginated-panel__body">
+            <div className="admin-product-grid">
+              {products.map((product) => (
+                <Card className="admin-product-card" key={product.id}>
+                  <div className="admin-product-card__image">
+                    <ProductImage
+                      alt={product.name}
+                      height={360}
+                      imageKey={product.imageKey}
+                      sizes="(max-width: 700px) 100vw, 33vw"
+                      width={480}
+                    />
+                    <span
+                      className={`admin-status admin-status--${
+                        product.isActive ? "active" : "inactive"
+                      }`}
                     >
-                      <Pencil aria-hidden="true" />
-                      编辑商品
-                    </Button>
-                    {!product.isActive ? (
+                      {product.isActive ? (
+                        <CircleCheck aria-label="已上架状态图标" role="img" />
+                      ) : (
+                        <CircleOff aria-label="已下架状态图标" role="img" />
+                      )}
+                      {product.isActive ? "已上架" : "已下架"}
+                    </span>
+                  </div>
+                  <div className="admin-product-card__body">
+                    <div>
+                      <h2>{product.name}</h2>
+                      <p>{product.description}</p>
+                    </div>
+                    <div className="admin-product-card__facts">
+                      <span>
+                        <Package aria-hidden="true" />
+                        库存 {product.stock}
+                      </span>
+                      <span>
+                        <Coins aria-hidden="true" />
+                        {product.pointsCost} 积分
+                      </span>
+                    </div>
+                    <div className="admin-product-card__actions">
                       <Button
                         disabled={busyId === product.id}
                         fullWidth
-                        onClick={() =>
-                          openConfirm({ kind: "delete", target: product })
-                        }
+                        onClick={() => setEditing(product)}
                         variant="secondary"
                       >
-                        <Trash2 aria-hidden="true" />
-                        删除
+                        <Pencil aria-hidden="true" />
+                        编辑商品
                       </Button>
-                    ) : null}
+                      {!product.isActive ? (
+                        <Button
+                          disabled={busyId === product.id}
+                          fullWidth
+                          onClick={() =>
+                            openConfirm({ kind: "delete", target: product })
+                          }
+                          variant="secondary"
+                        >
+                          <Trash2 aria-hidden="true" />
+                          删除
+                        </Button>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-              </Card>
-            ))}
+                </Card>
+              ))}
+            </div>
           </div>
           {meta ? (
             <Pagination
@@ -368,7 +370,7 @@ export default function AdminProductsPage({
               totalPages={meta.totalPages}
             />
           ) : null}
-        </>
+        </div>
       )}
     </section>
   );

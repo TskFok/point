@@ -267,17 +267,19 @@ export default function StorePage({
           title="商城正在补充奖励"
         />
       ) : (
-        <>
-          <div className="product-grid">
-            {products.map((product) => (
-              <ProductCard
-                balance={balance ?? 0}
-                deficit={deficits[product.id]}
-                key={product.id}
-                onRedeem={beginRedemption}
-                product={product}
-              />
-            ))}
+        <div className="paginated-panel">
+          <div className="paginated-panel__body">
+            <div className="product-grid">
+              {products.map((product) => (
+                <ProductCard
+                  balance={balance ?? 0}
+                  deficit={deficits[product.id]}
+                  key={product.id}
+                  onRedeem={beginRedemption}
+                  product={product}
+                />
+              ))}
+            </div>
           </div>
           {meta ? (
             <PaginationControls
@@ -287,7 +289,7 @@ export default function StorePage({
               totalPages={meta.totalPages}
             />
           ) : null}
-        </>
+        </div>
       )}
 
       {redemption && balance !== null ? (

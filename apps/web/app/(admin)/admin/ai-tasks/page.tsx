@@ -454,129 +454,135 @@ export default function AdminAiTasksPage({
       ) : null}
 
       {!loading && !error && tasks.length > 0 ? (
-        <div className="admin-table-wrap">
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>名称</th>
-                <th>模型</th>
-                <th>数量</th>
-                <th>crontab</th>
-                <th>游标</th>
-                <th>启用</th>
-                <th>最近执行</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tasks.map((task) => (
-                <tr key={task.id}>
-                  <td>{task.name}</td>
-                  <td>{task.aiModelName}</td>
-                  <td>
-                    {task.questionCount} 题 / {task.optionCount} 选项 /{" "}
-                    {task.basePoints} 分
-                  </td>
-                  <td>
-                    <code>{task.cronExpression}</code>
-                  </td>
-                  <td>{task.lastEntryId ?? "—"}</td>
-                  <td>{task.isEnabled ? "已启用" : "未启用"}</td>
-                  <td>
-                    {task.latestRun
-                      ? `${task.latestRun.status} · ${formatter.format(new Date(task.latestRun.startedAt))}`
-                      : "—"}
-                  </td>
-                  <td>
-                    <div className="admin-table__actions">
-                      <Button
-                        disabled={busyId === task.id}
-                        onClick={() => {
-                          setEditing(task);
-                          setActionMessage(null);
-                        }}
-                        type="button"
-                        variant="secondary"
-                      >
-                        <Pencil aria-hidden="true" />
-                        编辑
-                      </Button>
-                      <Button
-                        disabled={busyId === task.id}
-                        onClick={() => {
-                          if (task.isEnabled) {
-                            openConfirm({
-                              kind: "disable",
-                              target: task,
-                            });
-                            return;
-                          }
-                          void (async () => {
-                            const error = await toggleEnabled(task);
-                            if (error) setActionMessage(error);
-                          })();
-                        }}
-                        type="button"
-                        variant="secondary"
-                      >
-                        {task.isEnabled ? (
-                          <CircleOff aria-hidden="true" />
-                        ) : (
-                          <CircleCheck aria-hidden="true" />
-                        )}
-                        {task.isEnabled ? "停用" : "启用"}
-                      </Button>
-                      <Button
-                        disabled={busyId === task.id}
-                        onClick={() =>
-                          openConfirm({ kind: "run", target: task })
-                        }
-                        type="button"
-                        variant="secondary"
-                      >
-                        {busyId === task.id ? (
-                          <LoaderCircle aria-hidden="true" className="spin" />
-                        ) : (
-                          <Play aria-hidden="true" />
-                        )}
-                        立即执行
-                      </Button>
-                      <Button
-                        disabled={busyId === task.id}
-                        onClick={() => void loadRuns(task)}
-                        type="button"
-                        variant="secondary"
-                      >
-                        <History aria-hidden="true" />
-                        执行记录
-                      </Button>
-                      <Button
-                        disabled={busyId === task.id}
-                        onClick={() =>
-                          openConfirm({ kind: "delete", target: task })
-                        }
-                        type="button"
-                        variant="secondary"
-                      >
-                        <Trash2 aria-hidden="true" />
-                        删除
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="paginated-panel">
+          <div className="paginated-panel__body">
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>名称</th>
+                    <th>模型</th>
+                    <th>数量</th>
+                    <th>crontab</th>
+                    <th>游标</th>
+                    <th>启用</th>
+                    <th>最近执行</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tasks.map((task) => (
+                    <tr key={task.id}>
+                      <td>{task.name}</td>
+                      <td>{task.aiModelName}</td>
+                      <td>
+                        {task.questionCount} 题 / {task.optionCount} 选项 /{" "}
+                        {task.basePoints} 分
+                      </td>
+                      <td>
+                        <code>{task.cronExpression}</code>
+                      </td>
+                      <td>{task.lastEntryId ?? "—"}</td>
+                      <td>{task.isEnabled ? "已启用" : "未启用"}</td>
+                      <td>
+                        {task.latestRun
+                          ? `${task.latestRun.status} · ${formatter.format(new Date(task.latestRun.startedAt))}`
+                          : "—"}
+                      </td>
+                      <td>
+                        <div className="admin-table__actions">
+                          <Button
+                            disabled={busyId === task.id}
+                            onClick={() => {
+                              setEditing(task);
+                              setActionMessage(null);
+                            }}
+                            type="button"
+                            variant="secondary"
+                          >
+                            <Pencil aria-hidden="true" />
+                            编辑
+                          </Button>
+                          <Button
+                            disabled={busyId === task.id}
+                            onClick={() => {
+                              if (task.isEnabled) {
+                                openConfirm({
+                                  kind: "disable",
+                                  target: task,
+                                });
+                                return;
+                              }
+                              void (async () => {
+                                const error = await toggleEnabled(task);
+                                if (error) setActionMessage(error);
+                              })();
+                            }}
+                            type="button"
+                            variant="secondary"
+                          >
+                            {task.isEnabled ? (
+                              <CircleOff aria-hidden="true" />
+                            ) : (
+                              <CircleCheck aria-hidden="true" />
+                            )}
+                            {task.isEnabled ? "停用" : "启用"}
+                          </Button>
+                          <Button
+                            disabled={busyId === task.id}
+                            onClick={() =>
+                              openConfirm({ kind: "run", target: task })
+                            }
+                            type="button"
+                            variant="secondary"
+                          >
+                            {busyId === task.id ? (
+                              <LoaderCircle
+                                aria-hidden="true"
+                                className="spin"
+                              />
+                            ) : (
+                              <Play aria-hidden="true" />
+                            )}
+                            立即执行
+                          </Button>
+                          <Button
+                            disabled={busyId === task.id}
+                            onClick={() => void loadRuns(task)}
+                            type="button"
+                            variant="secondary"
+                          >
+                            <History aria-hidden="true" />
+                            执行记录
+                          </Button>
+                          <Button
+                            disabled={busyId === task.id}
+                            onClick={() =>
+                              openConfirm({ kind: "delete", target: task })
+                            }
+                            type="button"
+                            variant="secondary"
+                          >
+                            <Trash2 aria-hidden="true" />
+                            删除
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          {meta ? (
+            <Pagination
+              disabled={loading}
+              onPageChange={setPage}
+              page={meta.page}
+              totalPages={meta.totalPages}
+            />
+          ) : null}
         </div>
-      ) : null}
-
-      {meta ? (
-        <Pagination
-          disabled={loading}
-          onPageChange={setPage}
-          page={meta.page}
-          totalPages={meta.totalPages}
-        />
       ) : null}
     </section>
   );
