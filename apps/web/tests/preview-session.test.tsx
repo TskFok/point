@@ -51,7 +51,7 @@ describe("预习会话", () => {
       data: [previewQuestionOne, previewQuestionTwo],
     });
 
-    render(<PreviewSession api={api} />);
+    const { container } = render(<PreviewSession api={api} />);
 
     await user.click(screen.getByRole("button", { name: "5 道" }));
     await user.click(screen.getByRole("button", { name: "开始预习" }));
@@ -68,6 +68,16 @@ describe("预习会话", () => {
     const correctOption = screen.getByRole("radio", { name: /A.*had left/ });
     expect(correctOption).toBeChecked();
     expect(correctOption).toBeDisabled();
+
+    expect(container.querySelector(".preview-explanation")).toBeTruthy();
+    expect(
+      container.querySelector(".preview-explanation__answer"),
+    ).toBeTruthy();
+    const css = readFileSync(
+      path.join(__dirname, "../app/globals.css"),
+      "utf8",
+    );
+    expect(css).toMatch(/\.preview-explanation\s*\{[^}]*padding:\s*[^;]+;/s);
   });
 
   it("自定义数量超出范围时禁用开始预习", async () => {
