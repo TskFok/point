@@ -87,6 +87,7 @@ model Question {
   stem        String
   explanation String
   basePoints  Int
+  langCode    String             @default("en")
   isActive    Boolean            @default(true)
   createdBy   String
   createdAt   DateTime           @default(now())
@@ -97,6 +98,7 @@ model Question {
   attempts    AnswerAttempt[]
 
   @@index([isActive])
+  @@index([langCode, isActive])
 }
 
 model QuestionOption {
@@ -235,6 +237,7 @@ model AiModelConfig {
 model AiTask {
   id              String       @id @default(cuid())
   name            String       @unique
+  langCode        String       @default("en")
   aiModelConfigId String
   questionCount   Int
   optionCount     Int
