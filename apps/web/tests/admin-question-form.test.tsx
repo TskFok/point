@@ -58,6 +58,17 @@ describe("管理员题目表单", () => {
     expect(scroll?.contains(actions as Node)).toBe(false);
   });
 
+  it("启用题目选项占据单独一行", () => {
+    render(
+      <QuestionForm
+        api={createApi()}
+        mode="create"
+      />,
+    );
+    const enable = screen.getByRole("checkbox", { name: "启用题目" });
+    expect(enable.closest("label")).toHaveClass("admin-field--wide");
+  });
+
   it("已有答题记录时字段只读且停用只发送 isActive false", async () => {
     const user = userEvent.setup();
     const api = createApi();

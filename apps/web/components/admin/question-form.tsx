@@ -297,7 +297,7 @@ export function QuestionForm({
             />
             <small>1–1000 的整数</small>
           </label>
-          <label className="admin-switch">
+          <label className="admin-switch admin-field--wide">
             <input
               checked={isActive}
               disabled={readOnly}
