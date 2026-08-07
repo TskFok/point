@@ -12,7 +12,6 @@ import {
   BookOpenCheck,
   Check,
   Coins,
-  Lightbulb,
   LoaderCircle,
   RefreshCw,
   Sparkles,
@@ -35,7 +34,7 @@ type AnswerResult = Schemas["AnswerResultDto"];
 
 type PreviewApi = Pick<ApiClient, "answerQuestion" | "getPreviewQuestions">;
 
-type Phase = "setup" | "preview" | "quiz" | "summary";
+type Phase = "setup" | "quiz" | "summary";
 
 type QuizItem = {
   question: PreviewQuestion;
@@ -93,7 +92,7 @@ export function PreviewSession({
       const response = await api.getPreviewQuestions(count);
       setItems(response.data.map((question) => ({ question })));
       setCurrentIndex(0);
-      setPhase("preview");
+      setPhase("quiz");
     } catch (error) {
       if (isEmptyQuestionPool(error)) {
         setEmptyPool(true);
@@ -111,11 +110,6 @@ export function PreviewSession({
     setCurrentIndex(0);
     setLoadError(null);
     setEmptyPool(false);
-  }
-
-  function startQuiz() {
-    setCurrentIndex(0);
-    setPhase("quiz");
   }
 
   function selectOption(optionId: string) {
@@ -223,7 +217,7 @@ export function PreviewSession({
           <div>
             <h2>选择预习题目数量</h2>
             <p>
-              随机抽取未作答的新题，先看题解学习，再回到题目中作答赚积分。
+              随机抽取未作答的新题，作答后查看解析并获得积分。
             </p>
           </div>
         </div>
@@ -273,69 +267,6 @@ export function PreviewSession({
           {loading ? "正在抽取预习题目" : "开始预习"}
         </Button>
       </Card>
-    );
-  }
-
-  if (phase === "preview" && currentItem) {
-    const correctOption = currentItem.question.options.find(
-      (option) => option.id === currentItem.question.correctOptionId,
-    );
-    return (
-      <section className="practice-session">
-        <div className="practice-progress">
-          <span>
-            预习第 {currentIndex + 1} / {items.length} 题
-          </span>
-          <span>题解已展示，放心学习</span>
-        </div>
-
-        <QuestionCard
-          disabled
-          onSelect={() => undefined}
-          question={currentItem.question}
-          selectedOptionId={currentItem.question.correctOptionId}
-        />
-
-        <Card aria-live="polite" className="preview-explanation" role="status">
-          {correctOption ? (
-            <p className="preview-explanation__answer">
-              <Check aria-hidden="true" />
-              正确答案：{correctOption.label}. {correctOption.content}
-            </p>
-          ) : null}
-          <div className="answer-feedback__explanation">
-            <Lightbulb aria-hidden="true" />
-            <div>
-              <strong>答案解析</strong>
-              <p>{currentItem.question.explanation}</p>
-            </div>
-          </div>
-        </Card>
-
-        <nav aria-label="预习题目切换" className="practice-navigation">
-          <Button
-            disabled={currentIndex === 0}
-            onClick={() => setCurrentIndex((index) => index - 1)}
-            variant="secondary"
-          >
-            <ArrowLeft aria-hidden="true" />
-            上一题
-          </Button>
-          <Button
-            disabled={currentIndex >= items.length - 1}
-            onClick={() => setCurrentIndex((index) => index + 1)}
-            variant="secondary"
-          >
-            <ArrowRight aria-hidden="true" />
-            下一题
-          </Button>
-        </nav>
-
-        <Button className="practice-submit" onClick={startQuiz}>
-          <BookOpenCheck aria-hidden="true" />
-          完成预习，开始答题
-        </Button>
-      </section>
     );
   }
 
@@ -398,24 +329,7 @@ export function PreviewSession({
             question={currentItem.question}
             result={currentItem.result}
           />
-        ) : currentItem.submitError || currentItem.alreadyAnswered ? null : (
-          <Button
-            className="practice-submit"
-            disabled={!currentItem.selectedOptionId || submitting}
-            onClick={() => void submitCurrent()}
-          >
-            {submitting ? (
-              <LoaderCircle aria-hidden="true" className="spin" />
-            ) : (
-              <Check aria-hidden="true" />
-            )}
-            {submitting
-              ? "正在提交"
-              : currentItem.submission
-                ? "重试提交"
-                : "提交答案"}
-          </Button>
-        )}
+        ) : null}
 
         <nav aria-label="答题题目切换" className="practice-navigation">
           <Button
@@ -426,6 +340,28 @@ export function PreviewSession({
             <ArrowLeft aria-hidden="true" />
             上一题
           </Button>
+
+          {currentItem.result ||
+          currentItem.submitError ||
+          currentItem.alreadyAnswered ? null : (
+            <Button
+              className="practice-submit"
+              disabled={!currentItem.selectedOptionId || submitting}
+              onClick={() => void submitCurrent()}
+            >
+              {submitting ? (
+                <LoaderCircle aria-hidden="true" className="spin" />
+              ) : (
+                <Check aria-hidden="true" />
+              )}
+              {submitting
+                ? "正在提交"
+                : currentItem.submission
+                  ? "重试提交"
+                  : "提交答案"}
+            </Button>
+          )}
+
           {isLast ? (
             <Button
               disabled={answeredCount < items.length}

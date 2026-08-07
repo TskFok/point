@@ -1,5 +1,5 @@
 import { ApiClientError, ApiNetworkError } from "@point-quest/api-client";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
 
@@ -59,16 +59,23 @@ describe("随机练习队列", () => {
     await user.click(
       await screen.findByRole("radio", { name: /A.*had left/ }),
     );
-    await user.click(screen.getByRole("button", { name: "提交答案" }));
+    const nav = screen.getByRole("navigation", { name: "题目切换" });
+    expect(within(nav).getByRole("button", { name: "上一题" })).toBeVisible();
+    expect(within(nav).getByRole("button", { name: "提交答案" })).toBeVisible();
+    expect(within(nav).getByRole("button", { name: "下一题" })).toBeVisible();
 
+    await user.click(within(nav).getByRole("button", { name: "提交答案" }));
     expect(await screen.findByText("回答正确")).toBeVisible();
+    expect(
+      within(nav).queryByRole("button", { name: "提交答案" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("radio", { name: /A.*had left/ }),
     ).toBeDisabled();
 
-    await user.click(screen.getByRole("button", { name: "下一题" }));
+    await user.click(within(nav).getByRole("button", { name: "下一题" }));
     expect(await screen.findByText(questionTwo.stem)).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "上一题" }));
+    await user.click(within(nav).getByRole("button", { name: "上一题" }));
     expect(screen.getByText("回答正确")).toBeVisible();
   });
 

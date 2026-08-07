@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { ApiClientError, ApiNetworkError } from "@point-quest/api-client";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { PreviewSession } from "@/components/preview/preview-session";
@@ -44,40 +44,37 @@ describe("预习会话", () => {
     expect(css).toMatch(/\.preview-setup\s*\{[^}]*padding:\s*[^;]+;/s);
   });
 
-  it("选择预设数量后开始预习，展示正确答案与题解", async () => {
+  it("选择预设数量后开始预习，直接进入答题且提交前不展示答案", async () => {
     const user = userEvent.setup();
     const api = createApi();
     api.getPreviewQuestions.mockResolvedValue({
       data: [previewQuestionOne, previewQuestionTwo],
     });
 
-    const { container } = render(<PreviewSession api={api} />);
+    render(<PreviewSession api={api} />);
 
     await user.click(screen.getByRole("button", { name: "5 道" }));
     await user.click(screen.getByRole("button", { name: "开始预习" }));
 
-    expect(
-      await screen.findByText(previewQuestionOne.stem),
-    ).toBeVisible();
+    expect(await screen.findByText(previewQuestionOne.stem)).toBeVisible();
     expect(api.getPreviewQuestions).toHaveBeenCalledWith(5);
-    expect(screen.getByText("预习第 1 / 2 题")).toBeVisible();
-    expect(screen.getByText("正确答案：A. had left")).toBeVisible();
+    expect(screen.getByText("答题第 1 / 2 题")).toBeVisible();
+    expect(screen.queryByText("正确答案：A. had left")).not.toBeInTheDocument();
     expect(
-      screen.getByText(previewQuestionOne.explanation),
-    ).toBeVisible();
-    const correctOption = screen.getByRole("radio", { name: /A.*had left/ });
-    expect(correctOption).toBeChecked();
-    expect(correctOption).toBeDisabled();
+      screen.queryByText(previewQuestionOne.explanation),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "完成预习，开始答题" }),
+    ).not.toBeInTheDocument();
 
-    expect(container.querySelector(".preview-explanation")).toBeTruthy();
-    expect(
-      container.querySelector(".preview-explanation__answer"),
-    ).toBeTruthy();
-    const css = readFileSync(
-      path.join(__dirname, "../app/globals.css"),
-      "utf8",
-    );
-    expect(css).toMatch(/\.preview-explanation\s*\{[^}]*padding:\s*[^;]+;/s);
+    const option = screen.getByRole("radio", { name: /A.*had left/ });
+    expect(option).toBeEnabled();
+    expect(option).not.toBeChecked();
+
+    const nav = screen.getByRole("navigation", { name: "答题题目切换" });
+    expect(within(nav).getByRole("button", { name: "上一题" })).toBeDisabled();
+    expect(within(nav).getByRole("button", { name: "提交答案" })).toBeDisabled();
+    expect(within(nav).getByRole("button", { name: "下一题" })).toBeDisabled();
   });
 
   it("自定义数量超出范围时禁用开始预习", async () => {
@@ -100,38 +97,6 @@ describe("预习会话", () => {
     expect(api.getPreviewQuestions).toHaveBeenCalledWith(3);
   });
 
-  it("预习可前后切换，完成预习后进入答题并从第一题开始", async () => {
-    const user = userEvent.setup();
-    const api = createApi();
-    api.getPreviewQuestions.mockResolvedValue({
-      data: [previewQuestionOne, previewQuestionTwo],
-    });
-
-    render(<PreviewSession api={api} />);
-
-    await user.click(screen.getByRole("button", { name: "开始预习" }));
-    expect(
-      await screen.findByText(previewQuestionOne.stem),
-    ).toBeVisible();
-    expect(screen.getByRole("button", { name: "上一题" })).toBeDisabled();
-
-    await user.click(screen.getByRole("button", { name: "下一题" }));
-    expect(screen.getByText(previewQuestionTwo.stem)).toBeVisible();
-    expect(screen.getByRole("button", { name: "下一题" })).toBeDisabled();
-
-    await user.click(
-      screen.getByRole("button", { name: "完成预习，开始答题" }),
-    );
-    expect(screen.getByText("答题第 1 / 2 题")).toBeVisible();
-    expect(screen.getByText(previewQuestionOne.stem)).toBeVisible();
-    expect(
-      screen.queryByText(previewQuestionOne.explanation),
-    ).not.toBeInTheDocument();
-    const option = screen.getByRole("radio", { name: /A.*had left/ });
-    expect(option).toBeEnabled();
-    expect(option).not.toBeChecked();
-  });
-
   it("按预习范围逐题作答并在总结中展示成绩和积分", async () => {
     const user = userEvent.setup();
     const api = createApi();
@@ -145,22 +110,24 @@ describe("预习会话", () => {
     render(<PreviewSession api={api} />);
 
     await user.click(screen.getByRole("button", { name: "开始预习" }));
-    await user.click(
-      await screen.findByRole("button", { name: "完成预习，开始答题" }),
-    );
+    expect(await screen.findByText("答题第 1 / 2 题")).toBeVisible();
 
     await user.click(screen.getByRole("radio", { name: /A.*had left/ }));
-    await user.click(screen.getByRole("button", { name: "提交答案" }));
+    const nav = screen.getByRole("navigation", { name: "答题题目切换" });
+    await user.click(within(nav).getByRole("button", { name: "提交答案" }));
     expect(await screen.findByText("回答正确")).toBeVisible();
+    expect(
+      within(nav).queryByRole("button", { name: "提交答案" }),
+    ).not.toBeInTheDocument();
     expect(api.answerQuestion).toHaveBeenCalledWith(
       previewQuestionOne.id,
       expect.objectContaining({ selectedOptionId: "option-1-a" }),
     );
 
-    await user.click(screen.getByRole("button", { name: "下一题" }));
+    await user.click(within(nav).getByRole("button", { name: "下一题" }));
     expect(screen.getByText(previewQuestionTwo.stem)).toBeVisible();
     await user.click(screen.getByRole("radio", { name: /A.*has lived/ }));
-    await user.click(screen.getByRole("button", { name: "提交答案" }));
+    await user.click(within(nav).getByRole("button", { name: "提交答案" }));
     expect(await screen.findByText("回答正确")).toBeVisible();
 
     await user.click(screen.getByRole("button", { name: "查看本次成绩" }));
@@ -182,10 +149,7 @@ describe("预习会话", () => {
     render(<PreviewSession api={api} />);
 
     await user.click(screen.getByRole("button", { name: "开始预习" }));
-    await user.click(
-      await screen.findByRole("button", { name: "完成预习，开始答题" }),
-    );
-
+    expect(await screen.findByText("答题第 1 / 2 题")).toBeVisible();
     expect(screen.getByRole("button", { name: "下一题" })).toBeDisabled();
   });
 
@@ -206,13 +170,12 @@ describe("预习会话", () => {
     render(<PreviewSession api={api} />);
 
     await user.click(screen.getByRole("button", { name: "开始预习" }));
-    await user.click(
-      await screen.findByRole("button", { name: "完成预习，开始答题" }),
-    );
+    expect(await screen.findByText("答题第 1 / 1 题")).toBeVisible();
 
     const selected = screen.getByRole("radio", { name: /A.*had left/ });
     await user.click(selected);
-    await user.click(screen.getByRole("button", { name: "提交答案" }));
+    const nav = screen.getByRole("navigation", { name: "答题题目切换" });
+    await user.click(within(nav).getByRole("button", { name: "提交答案" }));
 
     expect(
       await screen.findByText("网络连接失败，请检查网络后重试"),
@@ -247,19 +210,18 @@ describe("预习会话", () => {
     render(<PreviewSession api={api} />);
 
     await user.click(screen.getByRole("button", { name: "开始预习" }));
-    await user.click(
-      await screen.findByRole("button", { name: "完成预习，开始答题" }),
-    );
+    expect(await screen.findByText("答题第 1 / 2 题")).toBeVisible();
 
     await user.click(screen.getByRole("radio", { name: /A.*had left/ }));
-    await user.click(screen.getByRole("button", { name: "提交答案" }));
+    const nav = screen.getByRole("navigation", { name: "答题题目切换" });
+    await user.click(within(nav).getByRole("button", { name: "提交答案" }));
     expect(
       await screen.findByText("该题已在其他地方完成首次作答，本轮跳过"),
     ).toBeVisible();
 
-    await user.click(screen.getByRole("button", { name: "下一题" }));
+    await user.click(within(nav).getByRole("button", { name: "下一题" }));
     await user.click(screen.getByRole("radio", { name: /A.*has lived/ }));
-    await user.click(screen.getByRole("button", { name: "提交答案" }));
+    await user.click(within(nav).getByRole("button", { name: "提交答案" }));
     expect(await screen.findByText("回答正确")).toBeVisible();
 
     await user.click(screen.getByRole("button", { name: "查看本次成绩" }));
@@ -324,11 +286,10 @@ describe("预习会话", () => {
     render(<PreviewSession api={api} />);
 
     await user.click(screen.getByRole("button", { name: "开始预习" }));
-    await user.click(
-      await screen.findByRole("button", { name: "完成预习，开始答题" }),
-    );
+    expect(await screen.findByText("答题第 1 / 1 题")).toBeVisible();
     await user.click(screen.getByRole("radio", { name: /A.*had left/ }));
-    await user.click(screen.getByRole("button", { name: "提交答案" }));
+    const nav = screen.getByRole("navigation", { name: "答题题目切换" });
+    await user.click(within(nav).getByRole("button", { name: "提交答案" }));
     await user.click(
       await screen.findByRole("button", { name: "查看本次成绩" }),
     );

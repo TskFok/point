@@ -12,7 +12,7 @@ const questions = [
   },
 ];
 
-test("预习抽题展示题解，预习结束后在范围内答题并获得积分", async ({
+test("预习抽题后直接作答，提交见解析并获得积分", async ({
   database,
   studentPage,
 }) => {
@@ -59,40 +59,29 @@ test("预习抽题展示题解，预习结束后在范围内答题并获得积�
   await studentPage.getByRole("button", { name: "开始预习" }).click();
 
   await expect(
-    studentPage.getByText("预习第 1 / 2 题", { exact: true }),
+    studentPage.getByText("答题第 1 / 2 题", { exact: true }),
   ).toBeVisible();
   await expect(
     studentPage.getByText("正确答案：A. went", { exact: true }),
-  ).toBeVisible();
-  await expect(studentPage.getByText(explanation, { exact: true })).toBeVisible();
-  await expect(
-    studentPage.getByRole("radio", { name: /A.*went/ }),
-  ).toBeDisabled();
+  ).toHaveCount(0);
+  await expect(studentPage.getByText(explanation, { exact: true })).toHaveCount(
+    0,
+  );
 
-  await studentPage.getByRole("button", { name: "下一题" }).click();
-  await expect(
-    studentPage.getByText("预习第 2 / 2 题", { exact: true }),
-  ).toBeVisible();
-
-  await studentPage
-    .getByRole("button", { name: "完成预习，开始答题" })
-    .click();
-  await expect(
-    studentPage.getByText("答题第 1 / 2 题", { exact: true }),
-  ).toBeVisible();
-
+  const nav = studentPage.getByRole("navigation", { name: "答题题目切换" });
   await studentPage.getByRole("radio", { name: /A.*went/ }).check();
-  await studentPage.getByRole("button", { name: "提交答案" }).click();
+  await nav.getByRole("button", { name: "提交答案" }).click();
   await expect(
     studentPage.getByText("回答正确", { exact: true }),
   ).toBeVisible();
+  await expect(studentPage.getByText(explanation, { exact: true })).toBeVisible();
 
-  await studentPage.getByRole("button", { name: "下一题" }).click();
+  await nav.getByRole("button", { name: "下一题" }).click();
   await expect(
     studentPage.getByText("答题第 2 / 2 题", { exact: true }),
   ).toBeVisible();
   await studentPage.getByRole("radio", { name: /A.*went/ }).check();
-  await studentPage.getByRole("button", { name: "提交答案" }).click();
+  await nav.getByRole("button", { name: "提交答案" }).click();
   await expect(
     studentPage.getByText("回答正确", { exact: true }),
   ).toBeVisible();

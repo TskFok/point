@@ -360,7 +360,11 @@ export function PracticeSession({
           question={currentItem.question}
           result={currentItem.result}
         />
-      ) : currentItem.submitError ? null : (
+      ) : null}
+
+      {mode === "WRONG_RETRY" &&
+      !currentItem.result &&
+      !currentItem.submitError ? (
         <Button
           className="practice-submit"
           disabled={!currentItem.selectedOptionId || submitting}
@@ -375,11 +379,9 @@ export function PracticeSession({
             ? "正在提交"
             : currentItem.submission
               ? "重试提交"
-            : mode === "WRONG_RETRY"
-              ? "提交重练答案"
-              : "提交答案"}
+              : "提交重练答案"}
         </Button>
-      )}
+      ) : null}
 
       {mode === "FIRST" ? (
         <nav aria-label="题目切换" className="practice-navigation">
@@ -391,6 +393,26 @@ export function PracticeSession({
             <ArrowLeft aria-hidden="true" />
             上一题
           </Button>
+
+          {currentItem.result || currentItem.submitError ? null : (
+            <Button
+              className="practice-submit"
+              disabled={!currentItem.selectedOptionId || submitting}
+              onClick={() => void submitCurrent()}
+            >
+              {submitting ? (
+                <LoaderCircle aria-hidden="true" className="spin" />
+              ) : (
+                <Check aria-hidden="true" />
+              )}
+              {submitting
+                ? "正在提交"
+                : currentItem.submission
+                  ? "重试提交"
+                  : "提交答案"}
+            </Button>
+          )}
+
           <Button
             disabled={
               loadingNext ||
