@@ -812,6 +812,12 @@ export class AiTaskDto {
   @ApiProperty()
   isEnabled!: boolean;
 
+  @ApiProperty({ ...int32, minimum: 0, maximum: 100 })
+  maxConsecutiveFailures!: number;
+
+  @ApiProperty({ ...int32, minimum: 0 })
+  consecutiveFailureCount!: number;
+
   @ApiProperty({ type: () => WordMatchRulesDto })
   wordMatchRules!: WordMatchRulesDto;
 
@@ -862,6 +868,9 @@ export class CreateAiTaskRequestDto {
   @ApiPropertyOptional()
   isEnabled?: boolean;
 
+  @ApiPropertyOptional({ ...int32, minimum: 0, maximum: 100 })
+  maxConsecutiveFailures?: number;
+
   @ApiPropertyOptional({ type: () => WordMatchRulesDto })
   wordMatchRules?: WordMatchRulesDto;
 }
@@ -887,6 +896,9 @@ export class UpdateAiTaskRequestDto {
 
   @ApiPropertyOptional()
   isEnabled?: boolean;
+
+  @ApiPropertyOptional({ ...int32, minimum: 0, maximum: 100 })
+  maxConsecutiveFailures?: number;
 
   @ApiPropertyOptional({ type: () => WordMatchRulesDto })
   wordMatchRules?: WordMatchRulesDto;

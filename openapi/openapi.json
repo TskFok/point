@@ -308,6 +308,11 @@
             "minimum": 1,
             "type": "integer"
           },
+          "consecutiveFailureCount": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string"
@@ -334,6 +339,12 @@
             ],
             "nullable": true,
             "type": "object"
+          },
+          "maxConsecutiveFailures": {
+            "format": "int32",
+            "maximum": 100,
+            "minimum": 0,
+            "type": "integer"
           },
           "name": {
             "type": "string"
@@ -368,6 +379,8 @@
           "basePoints",
           "cronExpression",
           "isEnabled",
+          "maxConsecutiveFailures",
+          "consecutiveFailureCount",
           "wordMatchRules",
           "createdAt",
           "updatedAt"
@@ -722,6 +735,12 @@
           },
           "isEnabled": {
             "type": "boolean"
+          },
+          "maxConsecutiveFailures": {
+            "format": "int32",
+            "maximum": 100,
+            "minimum": 0,
+            "type": "integer"
           },
           "name": {
             "maxLength": 100,
@@ -1627,6 +1646,12 @@
           },
           "isEnabled": {
             "type": "boolean"
+          },
+          "maxConsecutiveFailures": {
+            "format": "int32",
+            "maximum": 100,
+            "minimum": 0,
+            "type": "integer"
           },
           "name": {
             "maxLength": 100,

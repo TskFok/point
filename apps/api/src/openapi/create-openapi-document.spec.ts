@@ -448,6 +448,15 @@ describe('OpenAPI 契约', () => {
       type: 'string',
       nullable: true,
     });
+    expect(aiTask.properties?.maxConsecutiveFailures).toMatchObject({
+      type: 'integer',
+      minimum: 0,
+      maximum: 100,
+    });
+    expect(aiTask.properties?.consecutiveFailureCount).toMatchObject({
+      type: 'integer',
+      minimum: 0,
+    });
     expect(latestRun.properties?.finishedAt).toMatchObject({
       type: 'string',
       format: 'date-time',

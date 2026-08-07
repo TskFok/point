@@ -796,6 +796,8 @@ export interface components {
             aiModelName: string;
             /** Format: int32 */
             basePoints: number;
+            /** Format: int32 */
+            consecutiveFailureCount: number;
             /** Format: date-time */
             createdAt: string;
             cronExpression: string;
@@ -804,6 +806,8 @@ export interface components {
             /** @description entry.id 游标 */
             lastEntryId?: string | null;
             latestRun?: components["schemas"]["AiTaskLatestRunDto"] | null;
+            /** Format: int32 */
+            maxConsecutiveFailures: number;
             name: string;
             /** Format: int32 */
             optionCount: number;
@@ -912,6 +916,8 @@ export interface components {
             /** @example 0 8 * * * */
             cronExpression: string;
             isEnabled?: boolean;
+            /** Format: int32 */
+            maxConsecutiveFailures?: number;
             name: string;
             /** Format: int32 */
             optionCount: number;
@@ -1177,6 +1183,8 @@ export interface components {
             basePoints?: number;
             cronExpression?: string;
             isEnabled?: boolean;
+            /** Format: int32 */
+            maxConsecutiveFailures?: number;
             name?: string;
             /** Format: int32 */
             optionCount?: number;
