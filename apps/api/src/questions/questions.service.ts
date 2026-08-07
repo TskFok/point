@@ -441,6 +441,18 @@ export class QuestionsService {
     return { success: true };
   }
 
+  async clearAll(): Promise<{ deleted: number }> {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.pointLedger.updateMany({
+        where: { answerAttemptId: { not: null } },
+        data: { answerAttemptId: null },
+      });
+      await tx.answerAttempt.deleteMany({});
+      const result = await tx.question.deleteMany({});
+      return { deleted: result.count };
+    });
+  }
+
   async batch(input: BatchQuestionsDto): Promise<BatchQuestionsResult> {
     const uniqueIds = [...new Set(input.ids)];
     if (uniqueIds.length === 0) {

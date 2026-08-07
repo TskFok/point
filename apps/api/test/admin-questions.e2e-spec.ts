@@ -189,6 +189,9 @@ describe('管理员题库与积分倍率 API', () => {
         select: { id: true },
       })
     ).map(({ id }) => id);
+    await prisma.pointLedger.deleteMany({
+      where: { userId: { in: [adminId, studentId] } },
+    });
     await prisma.answerAttempt.deleteMany({
       where: {
         OR: [{ userId: studentId }, { questionId: { in: taskQuestionIds } }],
@@ -484,6 +487,84 @@ describe('管理员题库与积分倍率 API', () => {
       .expect(404)
       .expect((response) => {
         expectErrorContract(response, 'QUESTION_NOT_FOUND');
+      });
+  });
+
+  it('清空题库：强制删除含答题记录的题目并保留积分流水', async () => {
+    const created = await request(server)
+      .post('/api/v1/admin/questions')
+      .set('Authorization', adminBearer)
+      .send(validQuestion({ stem: `Clear-all active ${testRunId}` }))
+      .expect(201);
+    const question = created.body as unknown as QuestionBody;
+
+    const attempt = await prisma.answerAttempt.create({
+      data: {
+        id: `clear-attempt-${testRunId}`,
+        userId: studentId,
+        questionId: question.id,
+        selectedOptionId: question.options[0].id,
+        mode: 'FIRST_ATTEMPT',
+        isCorrect: true,
+        basePointsSnapshot: question.basePoints,
+        multiplierSnapshot: 1,
+        pointsAwarded: question.basePoints,
+        balanceAfterSnapshot: question.basePoints,
+        errorCountSnapshot: 0,
+        idempotencyKey: `clear-answer-${testRunId}`,
+      },
+    });
+
+    await prisma.pointLedger.create({
+      data: {
+        id: `clear-ledger-${testRunId}`,
+        userId: studentId,
+        type: 'ANSWER_REWARD',
+        delta: question.basePoints,
+        balanceAfter: question.basePoints,
+        answerAttemptId: attempt.id,
+      },
+    });
+
+    const clearResponse = await request(server)
+      .post('/api/v1/admin/questions/clear')
+      .set('Authorization', adminBearer)
+      .expect(200);
+
+    expect(clearResponse.body).toEqual(
+      expect.objectContaining({
+        deleted: expect.any(Number),
+      }),
+    );
+    expect(
+      (clearResponse.body as { deleted: number }).deleted,
+    ).toBeGreaterThanOrEqual(1);
+
+    await request(server)
+      .get(`/api/v1/admin/questions/${question.id}`)
+      .set('Authorization', adminBearer)
+      .expect(404);
+
+    expect(
+      await prisma.answerAttempt.findUnique({ where: { id: attempt.id } }),
+    ).toBeNull();
+
+    const ledger = await prisma.pointLedger.findUnique({
+      where: { id: `clear-ledger-${testRunId}` },
+    });
+    expect(ledger).toMatchObject({
+      delta: question.basePoints,
+      answerAttemptId: null,
+    });
+  });
+
+  it('学员清空题库返回稳定 403', async () => {
+    await request(server)
+      .post('/api/v1/admin/questions/clear')
+      .set('Authorization', studentBearer)
+      .expect(403)
+      .expect((response) => {
+        expectErrorContract(response, 'FORBIDDEN');
       });
   });
 

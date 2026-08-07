@@ -105,6 +105,10 @@ export const operationRegistry = {
     path: "/api/v1/admin/questions/batch",
     method: "POST",
   },
+  adminClearQuestions: {
+    path: "/api/v1/admin/questions/clear",
+    method: "POST",
+  },
   adminGetQuestion: {
     path: "/api/v1/admin/questions/{questionId}",
     method: "GET",
@@ -540,6 +544,10 @@ export function createApiClient(options: ApiClientOptions) {
       request("adminBatchQuestions", {
         authMode: "authenticated",
         body: input,
+      }),
+    clearAdminQuestions: () =>
+      request("adminClearQuestions", {
+        authMode: "authenticated",
       }),
     getAdminQuestion: (questionId: string) =>
       request("adminGetQuestion", {

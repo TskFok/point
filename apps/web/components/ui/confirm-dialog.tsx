@@ -15,6 +15,7 @@ import { createPortal } from "react-dom";
 export type ConfirmDialogProps = {
   title: string;
   description?: string;
+  challengePhrase?: string;
   confirmLabel?: string;
   cancelLabel?: string;
   confirmVariant?: "primary" | "danger";
@@ -29,6 +30,7 @@ export type ConfirmDialogProps = {
 export function ConfirmDialog({
   title,
   description,
+  challengePhrase,
   confirmLabel = "确认",
   cancelLabel = "取消",
   confirmVariant = "primary",
@@ -41,9 +43,13 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   const titleId = useId();
   const [portalHost, setPortalHost] = useState<HTMLElement | null>(null);
+  const [challengeValue, setChallengeValue] = useState("");
   const dialogRef = useRef<HTMLDivElement>(null);
   const latestCancel = useRef(onCancel);
   const pendingRef = useRef(pending);
+  const challengeMet =
+    !challengePhrase || challengeValue.trim() === challengePhrase;
+  const confirmDisabled = pending || !challengeMet;
 
   useEffect(() => {
     latestCancel.current = onCancel;
@@ -205,12 +211,24 @@ export function ConfirmDialog({
             {error}
           </p>
         ) : null}
+        {challengePhrase ? (
+          <label className="confirm-dialog__challenge">
+            <span>请输入「{challengePhrase}」以确认</span>
+            <input
+              aria-label="确认文案"
+              autoComplete="off"
+              disabled={pending}
+              onChange={(event) => setChallengeValue(event.target.value)}
+              value={challengeValue}
+            />
+          </label>
+        ) : null}
         <div className="dialog-actions">
           <Button disabled={pending} onClick={requestCancel} variant="secondary">
             {cancelLabel}
           </Button>
           <Button
-            disabled={pending}
+            disabled={confirmDisabled}
             onClick={onConfirm}
             variant={confirmVariant}
           >

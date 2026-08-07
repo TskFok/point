@@ -751,6 +751,71 @@ describe('QuestionsService.remove', () => {
   });
 });
 
+describe('QuestionsService.clearAll', () => {
+  function createClearService(questionCount: number) {
+    const pointLedgerUpdateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const answerAttemptDeleteMany = jest.fn().mockResolvedValue({ count: 1 });
+    const questionDeleteMany = jest
+      .fn()
+      .mockResolvedValue({ count: questionCount });
+    const callOrder: string[] = [];
+
+    pointLedgerUpdateMany.mockImplementation(async () => {
+      callOrder.push('ledger');
+      return { count: 1 };
+    });
+    answerAttemptDeleteMany.mockImplementation(async () => {
+      callOrder.push('attempts');
+      return { count: 1 };
+    });
+    questionDeleteMany.mockImplementation(async () => {
+      callOrder.push('questions');
+      return { count: questionCount };
+    });
+
+    const tx = {
+      pointLedger: { updateMany: pointLedgerUpdateMany },
+      answerAttempt: { deleteMany: answerAttemptDeleteMany },
+      question: { deleteMany: questionDeleteMany },
+    };
+    const prisma = {
+      $transaction: <T>(callback: (client: typeof tx) => Promise<T>) =>
+        callback(tx),
+    };
+    return {
+      service: new QuestionsService(prisma as unknown as PrismaService),
+      pointLedgerUpdateMany,
+      answerAttemptDeleteMany,
+      questionDeleteMany,
+      callOrder,
+    };
+  }
+
+  it('按顺序断开流水、删答题、删题目并返回 deleted', async () => {
+    const {
+      service,
+      pointLedgerUpdateMany,
+      answerAttemptDeleteMany,
+      questionDeleteMany,
+      callOrder,
+    } = createClearService(3);
+
+    await expect(service.clearAll()).resolves.toEqual({ deleted: 3 });
+    expect(callOrder).toEqual(['ledger', 'attempts', 'questions']);
+    expect(pointLedgerUpdateMany).toHaveBeenCalledWith({
+      where: { answerAttemptId: { not: null } },
+      data: { answerAttemptId: null },
+    });
+    expect(answerAttemptDeleteMany).toHaveBeenCalledWith({});
+    expect(questionDeleteMany).toHaveBeenCalledWith({});
+  });
+
+  it('空库返回 deleted: 0', async () => {
+    const { service } = createClearService(0);
+    await expect(service.clearAll()).resolves.toEqual({ deleted: 0 });
+  });
+});
+
 describe('题目 DTO 显式 null 校验', () => {
   it('create 的可选 isActive 显式 null 仍产生验证错误', async () => {
     const dto = plainToInstance(CreateQuestionDto, {

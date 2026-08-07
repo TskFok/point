@@ -72,6 +72,7 @@ function createApi(
     deleteAdminQuestion: jest.Mock;
     updateAdminQuestion: jest.Mock;
     batchAdminQuestions: jest.Mock;
+    clearAdminQuestions: jest.Mock;
   }> = {},
 ) {
   return {
@@ -83,6 +84,7 @@ function createApi(
     }),
     updateAdminQuestion: jest.fn(),
     deleteAdminQuestion: jest.fn().mockResolvedValue({ success: true }),
+    clearAdminQuestions: jest.fn().mockResolvedValue({ deleted: 3 }),
     batchAdminQuestions: jest.fn().mockResolvedValue({
       succeeded: 1,
       skipped: 0,
@@ -349,6 +351,65 @@ describe("AdminQuestionsPage 批量操作", () => {
     );
     expect(
       screen.getByRole("dialog", { name: "确认停用选中的 1 道题目？" }),
+    ).toBeVisible();
+  });
+});
+
+describe("AdminQuestionsPage 清理题库", () => {
+  beforeEach(() => {
+    window.history.replaceState(null, "", "/admin/questions");
+  });
+
+  it("展示清理题库按钮", async () => {
+    render(<AdminQuestionsPage api={createApi()} />);
+    await screen.findByText("启用中的题目");
+    expect(screen.getByRole("button", { name: "清理题库" })).toBeVisible();
+  });
+
+  it("须输入清空题库后才调用 clearAdminQuestions", async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    render(<AdminQuestionsPage api={api} />);
+    await screen.findByText("启用中的题目");
+    await user.click(screen.getByRole("button", { name: "清理题库" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "确认清理题库？",
+    });
+    const confirm = within(dialog).getByRole("button", { name: "清理题库" });
+    expect(confirm).toBeDisabled();
+    expect(api.clearAdminQuestions).not.toHaveBeenCalled();
+    await user.type(within(dialog).getByLabelText("确认文案"), "清空题库");
+    await user.click(confirm);
+    await waitFor(() => {
+      expect(api.clearAdminQuestions).toHaveBeenCalledTimes(1);
+      expect(screen.getByText("已清理 3 道题目")).toBeVisible();
+    });
+  });
+
+  it("清理失败保留弹窗并展示错误", async () => {
+    const user = userEvent.setup();
+    const api = createApi({
+      clearAdminQuestions: jest
+        .fn()
+        .mockRejectedValue(
+          new ApiNetworkError("/api/v1/admin/questions/clear", "offline"),
+        ),
+    });
+    render(<AdminQuestionsPage api={api} />);
+    await screen.findByText("启用中的题目");
+    await user.click(screen.getByRole("button", { name: "清理题库" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "确认清理题库？",
+    });
+    await user.type(within(dialog).getByLabelText("确认文案"), "清空题库");
+    await user.click(
+      within(dialog).getByRole("button", { name: "清理题库" }),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "网络连接失败，请检查网络后重试",
+    );
+    expect(
+      screen.getByRole("dialog", { name: "确认清理题库？" }),
     ).toBeVisible();
   });
 });

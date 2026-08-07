@@ -35,4 +35,15 @@ describe('AdminQuestionsController', () => {
     await expect(controller.batch(body)).resolves.toEqual(result);
     expect(questionsService.batch).toHaveBeenCalledWith(body);
   });
+
+  it('clear 委托 QuestionsService.clearAll', async () => {
+    const questionsService = {
+      clearAll: jest.fn().mockResolvedValue({ deleted: 2 }),
+    };
+    const controller = new AdminQuestionsController(
+      questionsService as never,
+    );
+    await expect(controller.clear()).resolves.toEqual({ deleted: 2 });
+    expect(questionsService.clearAll).toHaveBeenCalledWith();
+  });
 });

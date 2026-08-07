@@ -122,4 +122,46 @@ describe("ConfirmDialog", () => {
       expect(dialog.contains(document.activeElement)).toBe(true);
     });
   });
+
+  it("challengePhrase 未匹配时禁用确认按钮", async () => {
+    const user = userEvent.setup();
+    const onConfirm = jest.fn();
+    render(
+      <ConfirmDialog
+        challengePhrase="清空题库"
+        confirmLabel="清理题库"
+        confirmVariant="danger"
+        onCancel={() => undefined}
+        onConfirm={onConfirm}
+        title="确认清理题库？"
+      />,
+    );
+    await screen.findByRole("dialog", { name: "确认清理题库？" });
+    const confirm = screen.getByRole("button", { name: "清理题库" });
+    expect(confirm).toBeDisabled();
+    await user.type(screen.getByLabelText("确认文案"), "错");
+    expect(confirm).toBeDisabled();
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it("challengePhrase 匹配后可确认", async () => {
+    const user = userEvent.setup();
+    const onConfirm = jest.fn();
+    render(
+      <ConfirmDialog
+        challengePhrase="清空题库"
+        confirmLabel="清理题库"
+        confirmVariant="danger"
+        onCancel={() => undefined}
+        onConfirm={onConfirm}
+        title="确认清理题库？"
+      />,
+    );
+    await screen.findByRole("dialog", { name: "确认清理题库？" });
+    await user.type(screen.getByLabelText("确认文案"), "清空题库");
+    const confirm = screen.getByRole("button", { name: "清理题库" });
+    expect(confirm).toBeEnabled();
+    await user.click(confirm);
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+  });
 });

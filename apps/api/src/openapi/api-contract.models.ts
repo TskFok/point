@@ -289,6 +289,11 @@ export class BatchQuestionsResponseDto {
   skippedByReason!: BatchQuestionsSkippedByReasonDto;
 }
 
+export class ClearQuestionsResponseDto {
+  @ApiProperty({ ...int32, minimum: 0 })
+  deleted!: number;
+}
+
 export class LearnerQuestionOptionDto {
   @ApiProperty()
   id!: string;

@@ -13,6 +13,7 @@ describe("createApiClient", () => {
         "answerQuestion",
         "batchAdminQuestions",
         "cancelAdminOrder",
+        "clearAdminQuestions",
         "completeAdminOrder",
         "createAdminAiModel",
         "createAdminAiTask",

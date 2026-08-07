@@ -129,6 +129,7 @@ describe("管理员运营页面", () => {
         api={{
           createAdminQuestion: jest.fn(),
           batchAdminQuestions: jest.fn(),
+          clearAdminQuestions: jest.fn(),
           deleteAdminQuestion: jest.fn(),
           getAdminQuestion: jest.fn(),
           listAdminQuestions: jest.fn().mockResolvedValue({
@@ -168,6 +169,7 @@ describe("管理员运营页面", () => {
     const api = {
       createAdminQuestion: jest.fn(),
       batchAdminQuestions: jest.fn(),
+      clearAdminQuestions: jest.fn(),
       deleteAdminQuestion: jest.fn(),
       getAdminQuestion: jest.fn(),
       listAdminQuestions: jest.fn().mockResolvedValue({
@@ -202,6 +204,7 @@ describe("管理员运营页面", () => {
     const api = {
       createAdminQuestion: jest.fn(),
       batchAdminQuestions: jest.fn(),
+      clearAdminQuestions: jest.fn(),
       deleteAdminQuestion: jest.fn(),
       getAdminQuestion: jest.fn(),
       listAdminQuestions: jest.fn().mockResolvedValue({
@@ -225,6 +228,7 @@ describe("管理员运营页面", () => {
     const api = {
       createAdminQuestion: jest.fn(),
       batchAdminQuestions: jest.fn(),
+      clearAdminQuestions: jest.fn(),
       deleteAdminQuestion: jest.fn(),
       getAdminQuestion: jest.fn(),
       listAdminQuestions: jest
@@ -265,6 +269,7 @@ describe("管理员运营页面", () => {
     const api = {
       createAdminQuestion: jest.fn(),
       batchAdminQuestions: jest.fn(),
+      clearAdminQuestions: jest.fn(),
       deleteAdminQuestion: jest.fn(),
       getAdminQuestion: jest.fn(),
       listAdminQuestions: jest.fn().mockResolvedValue({
@@ -304,6 +309,7 @@ describe("管理员运营页面", () => {
     const api = {
       createAdminQuestion: jest.fn(),
       batchAdminQuestions: jest.fn(),
+      clearAdminQuestions: jest.fn(),
       deleteAdminQuestion: jest.fn(),
       getAdminQuestion: jest.fn(),
       listAdminQuestions: jest
@@ -356,6 +362,7 @@ describe("管理员运营页面", () => {
     const api = {
       createAdminQuestion: jest.fn(),
       batchAdminQuestions: jest.fn(),
+      clearAdminQuestions: jest.fn(),
       deleteAdminQuestion: jest.fn(),
       getAdminQuestion: jest.fn(),
       listAdminQuestions: jest.fn().mockResolvedValue({

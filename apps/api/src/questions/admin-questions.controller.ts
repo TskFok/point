@@ -22,6 +22,7 @@ import {
   AdminQuestionDto,
   BatchQuestionsRequestDto,
   BatchQuestionsResponseDto,
+  ClearQuestionsResponseDto,
   CreateQuestionRequestDto,
   QuestionListResponseDto,
   SuccessResponseDto,
@@ -78,6 +79,20 @@ export class AdminQuestionsController {
   })
   batch(@Body() body: BatchQuestionsDto) {
     return this.questionsService.batch(body);
+  }
+
+  @Post('clear')
+  @HttpCode(200)
+  @ApiContract({
+    operationId: 'adminClearQuestions',
+    summary: '清空题库全部题目',
+    responseType: ClearQuestionsResponseDto,
+    responseStatus: 200,
+    authenticated: true,
+    mutation: true,
+  })
+  clear() {
+    return this.questionsService.clearAll();
   }
 
   @Get(':questionId')

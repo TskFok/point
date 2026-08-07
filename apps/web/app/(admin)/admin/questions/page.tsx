@@ -24,7 +24,10 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useConfirmAction } from "@/hooks/use-confirm-action";
 import { browserApiClient } from "@/lib/api/browser-client";
 import { getApiErrorMessage } from "@/lib/api/error-message";
-import { ADMIN_QUESTIONS_OPEN_CREATE_KEY } from "@/lib/admin/questions-ui";
+import {
+  ADMIN_QUESTIONS_OPEN_CREATE_KEY,
+  CLEAR_QUESTION_BANK_CHALLENGE,
+} from "@/lib/admin/questions-ui";
 
 type Schemas = ApiComponents["schemas"];
 type Question = Schemas["AdminQuestionDto"];
@@ -33,6 +36,7 @@ type BatchAction = "enable" | "disable" | "delete";
 type QuestionsApi = Pick<
   ApiClient,
   | "batchAdminQuestions"
+  | "clearAdminQuestions"
   | "createAdminQuestion"
   | "deleteAdminQuestion"
   | "getAdminQuestion"
@@ -41,6 +45,7 @@ type QuestionsApi = Pick<
 >;
 type Filters = { search: string; isActive: string };
 type ConfirmAction =
+  | { kind: "clear" }
   | { kind: "disable"; target: Question }
   | { kind: "delete"; target: Question }
   | { kind: "batch-disable"; ids: string[]; count: number }
@@ -235,10 +240,29 @@ export default function AdminQuestionsPage({
     }
   }
 
+  async function clearQuestionBank(): Promise<string | null> {
+    if (busy) return "请等待当前操作完成";
+    setMutatingBatch(true);
+    setMutationError(null);
+    setActionMessage(null);
+    try {
+      const result = await api.clearAdminQuestions();
+      setActionMessage(`已清理 ${result.deleted} 道题目`);
+      setSelectedIds([]);
+      await load();
+      return null;
+    } catch (error) {
+      return getApiErrorMessage(error);
+    } finally {
+      setMutatingBatch(false);
+    }
+  }
+
   const { confirmAction, confirmError, openConfirm, closeConfirm, handleConfirm } =
     useConfirmAction<ConfirmAction>({
       blocked: busy,
       execute: async (action) => {
+        if (action.kind === "clear") return clearQuestionBank();
         if (action.kind === "delete") return removeQuestion(action.target);
         if (action.kind === "disable") return toggleStatus(action.target);
         if (action.kind === "batch-delete") {
@@ -267,27 +291,34 @@ export default function AdminQuestionsPage({
   }
 
   const confirmTitle =
-    confirmAction?.kind === "delete"
-      ? `确认删除题目「${stemPreview(confirmAction.target.stem)}」？`
-      : confirmAction?.kind === "disable"
-        ? "确认停用该题目？"
-        : confirmAction?.kind === "batch-delete"
-          ? `确认删除选中的 ${confirmAction.count} 道题目？`
-          : confirmAction?.kind === "batch-disable"
-            ? `确认停用选中的 ${confirmAction.count} 道题目？`
-            : "";
+    confirmAction?.kind === "clear"
+      ? "确认清理题库？"
+      : confirmAction?.kind === "delete"
+        ? `确认删除题目「${stemPreview(confirmAction.target.stem)}」？`
+        : confirmAction?.kind === "disable"
+          ? "确认停用该题目？"
+          : confirmAction?.kind === "batch-delete"
+            ? `确认删除选中的 ${confirmAction.count} 道题目？`
+            : confirmAction?.kind === "batch-disable"
+              ? `确认停用选中的 ${confirmAction.count} 道题目？`
+              : "";
 
   const confirmDescription =
-    confirmAction?.kind === "delete"
-      ? "此操作不可撤销。仅已停用且无答题记录的题目可删除。"
-      : confirmAction?.kind === "batch-delete"
-        ? "此操作不可撤销。仅已停用且无答题记录的题目会被删除，其余将跳过。"
-        : "停用后该题目将不再进入练习池。";
+    confirmAction?.kind === "clear"
+      ? "将永久删除全部题目及答题记录；积分流水与余额保留；此操作不可恢复。请输入「清空题库」以确认。"
+      : confirmAction?.kind === "delete"
+        ? "此操作不可撤销。仅已停用且无答题记录的题目可删除。"
+        : confirmAction?.kind === "batch-delete"
+          ? "此操作不可撤销。仅已停用且无答题记录的题目会被删除，其余将跳过。"
+          : "停用后该题目将不再进入练习池。";
 
   const confirmLabel =
-    confirmAction?.kind === "delete" || confirmAction?.kind === "batch-delete"
-      ? "删除"
-      : "停用题目";
+    confirmAction?.kind === "clear"
+      ? "清理题库"
+      : confirmAction?.kind === "delete" ||
+          confirmAction?.kind === "batch-delete"
+        ? "删除"
+        : "停用题目";
 
   return (
     <section className="admin-page list-page">
@@ -336,6 +367,15 @@ export default function AdminQuestionsPage({
             <Button onClick={() => setEditing("create")} type="button">
               <Plus aria-hidden="true" />
               添加题目
+            </Button>
+            <Button
+              disabled={busy || loading}
+              onClick={() => openConfirm({ kind: "clear" })}
+              type="button"
+              variant="danger"
+            >
+              <Trash2 aria-hidden="true" />
+              清理题库
             </Button>
           </form>
         </Card>
@@ -422,6 +462,11 @@ export default function AdminQuestionsPage({
       {confirmAction ? (
         <ConfirmDialog
           cancelLabel="取消"
+          challengePhrase={
+            confirmAction.kind === "clear"
+              ? CLEAR_QUESTION_BANK_CHALLENGE
+              : undefined
+          }
           confirmLabel={confirmLabel}
           confirmVariant="danger"
           description={confirmDescription}
@@ -429,6 +474,7 @@ export default function AdminQuestionsPage({
           onCancel={closeConfirm}
           onConfirm={() => void handleConfirm()}
           pending={
+            confirmAction.kind === "clear" ||
             confirmAction.kind === "batch-disable" ||
             confirmAction.kind === "batch-delete"
               ? mutatingBatch
