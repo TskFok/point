@@ -631,6 +631,7 @@ describe('PracticeService', () => {
     const question = {
       id: 'question-1',
       stem: 'Choose one.',
+      langCode: 'en',
       explanation: 'Must stay hidden.',
       basePoints: 10,
       options: [
@@ -646,6 +647,7 @@ describe('PracticeService', () => {
     expect(mapLearnerQuestion(question)).toEqual({
       id: 'question-1',
       stem: 'Choose one.',
+      langCode: 'en',
       basePoints: 10,
       options: [
         {
@@ -708,6 +710,7 @@ describe('PracticeService', () => {
           {
             id: 'question-1',
             stem: 'Stem 1',
+            langCode: 'en',
             explanation: 'Explanation 1',
             basePoints: 5,
             options: [
@@ -730,6 +733,7 @@ describe('PracticeService', () => {
           {
             id: 'question-2',
             stem: 'Stem 2',
+            langCode: 'ja',
             explanation: 'Explanation 2',
             basePoints: 8,
             options: [
@@ -762,6 +766,7 @@ describe('PracticeService', () => {
       {
         id: 'question-2',
         stem: 'Stem 2',
+        langCode: 'ja',
         basePoints: 8,
         options: [
           { id: 'option-2a', label: 'A', content: 'Wrong', position: 0 },
@@ -773,6 +778,7 @@ describe('PracticeService', () => {
       {
         id: 'question-1',
         stem: 'Stem 1',
+        langCode: 'en',
         basePoints: 5,
         options: [
           { id: 'option-1a', label: 'A', content: 'Right', position: 0 },
@@ -803,6 +809,7 @@ describe('PracticeService', () => {
           {
             id: 'question-bad',
             stem: 'Bad',
+            langCode: 'en',
             explanation: 'Bad',
             basePoints: 5,
             options: [
@@ -825,6 +832,7 @@ describe('PracticeService', () => {
           {
             id: 'question-ok',
             stem: 'Ok',
+            langCode: 'fr',
             explanation: 'Ok explanation',
             basePoints: 3,
             options: [
@@ -901,6 +909,7 @@ describe('PracticeService', () => {
     const question = {
       id: 'question-1',
       stem: 'Choose one.',
+      langCode: 'en',
       explanation: 'Preview explanation',
       basePoints: 10,
       options: [
@@ -923,6 +932,7 @@ describe('PracticeService', () => {
     expect(mapPreviewQuestion(question)).toEqual({
       id: 'question-1',
       stem: 'Choose one.',
+      langCode: 'en',
       basePoints: 10,
       options: [
         { id: 'option-1', label: 'A', content: 'Right', position: 0 },

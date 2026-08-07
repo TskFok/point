@@ -1,6 +1,7 @@
 type LearnerQuestionInput = {
   id: string;
   stem: string;
+  langCode: string;
   basePoints: number;
   options: Array<{
     id: string;
@@ -24,6 +25,7 @@ export function mapLearnerQuestion(question: LearnerQuestionInput) {
   return {
     id: question.id,
     stem: question.stem,
+    langCode: question.langCode,
     basePoints: question.basePoints,
     options: question.options.map((option) => ({
       id: option.id,

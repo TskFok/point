@@ -309,6 +309,7 @@ export class PracticeService {
       select: {
         id: true,
         stem: true,
+        langCode: true,
         basePoints: true,
         options: {
           select: {
@@ -371,6 +372,7 @@ export class PracticeService {
         id: true,
         stem: true,
         explanation: true,
+        langCode: true,
         basePoints: true,
         options: {
           select: {
@@ -632,6 +634,7 @@ export class PracticeService {
             select: {
               id: true,
               stem: true,
+              langCode: true,
               basePoints: true,
               options: {
                 select: {
