@@ -201,16 +201,19 @@ export function readWordMatchRules(value: unknown): WordMatchRules {
   return parsed.rules;
 }
 
-export function formatWordMatchRulesForPrompt(rules: WordMatchRules): string {
+export function formatWordMatchRulesForPrompt(
+  rules: WordMatchRules,
+  languageNameEn = 'English',
+): string {
   const hasSuffixes = rules.suffixes.length > 0;
   const irregularEntries = Object.entries(rules.irregulars);
   if (!hasSuffixes && irregularEntries.length === 0) {
     return (
-      'Stem must be a complete English example sentence that MUST INCLUDE the target word in its EXACT spelling (case-insensitive word boundary). Do NOT use inflected or alternate forms.'
+      `Stem must be a complete ${languageNameEn} example sentence that MUST INCLUDE the target word in its EXACT spelling (case-insensitive word boundary). Do NOT use inflected or alternate forms.`
     );
   }
   const parts: string[] = [
-    'Stem must be a complete English example sentence that MUST INCLUDE the target word (case-insensitive word boundary)',
+    `Stem must be a complete ${languageNameEn} example sentence that MUST INCLUDE the target word (case-insensitive word boundary)`,
   ];
   if (hasSuffixes) {
     parts.push(

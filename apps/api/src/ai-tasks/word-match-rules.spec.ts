@@ -64,11 +64,22 @@ describe('word-match-rules', () => {
   it('prompt 摘要在无规则时要求 exact form', () => {
     const text = formatWordMatchRulesForPrompt(EMPTY_WORD_MATCH_RULES);
     expect(text.toLowerCase()).toMatch(/exact/);
+    expect(text).toContain('complete English example sentence');
   });
 
   it('prompt 摘要列出配置后缀', () => {
     const text = formatWordMatchRulesForPrompt(DEFAULT_WORD_MATCH_RULES);
     expect(text).toContain('"s"');
+    expect(text).toContain('complete English example sentence');
     expect(text.toLowerCase()).toMatch(/suffix/);
+  });
+
+  it('prompt 摘要使用传入的语言名', () => {
+    expect(
+      formatWordMatchRulesForPrompt(EMPTY_WORD_MATCH_RULES, 'Japanese'),
+    ).toContain('complete Japanese example sentence');
+    expect(
+      formatWordMatchRulesForPrompt(DEFAULT_WORD_MATCH_RULES, 'German'),
+    ).toContain('complete German example sentence');
   });
 });

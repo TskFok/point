@@ -123,7 +123,7 @@ export function buildGeneratePrompt(input: {
     'Use ONLY the words listed above. Never invent, replace, skip or repeat words.',
     'Each question must test the word as the given part of speech; the example sentence must use the word as that part of speech (if several are listed, pick the most common one).',
     `Each question must have exactly ${input.optionCount} options.`,
-    formatWordMatchRulesForPrompt(input.wordMatchRules),
+    formatWordMatchRulesForPrompt(input.wordMatchRules, profile.languageNameEn),
     'Each question\'s "word" field MUST match the listed word exactly. Never substitute a near-form or different word (e.g. "when" for "why", "catch" for "cat").',
     'Do NOT use blanks, underscores (___), ellipsis placeholders, or [blank] in the stem.',
     `Stem format is REQUIRED and MUST follow: one complete ${profile.languageNameEn} example sentence that uses the target word, then a space, then ${profile.askSuffixInstruction}.`,

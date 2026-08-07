@@ -562,6 +562,8 @@ describe('generate-questions parse', () => {
       langCode: 'ja',
     });
     expect(p).toMatch(/Japanese|日語|日语|日本語|target language/i);
+    expect(p).toContain('complete Japanese example sentence');
+    expect(p).not.toContain('complete English example sentence');
     expect(p).toContain('「WORD」はどういう意味ですか？');
     expect(p).not.toMatch(/What does \\"WORD\\" mean\?/);
   });
