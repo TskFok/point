@@ -61,4 +61,11 @@ describe("紧凑表单控件尺寸（globals.css）", () => {
       /\.admin-field textarea\s*\{\s*min-height:\s*7rem/,
     );
   });
+
+  it("题库「正确答案」控件为紧凑规格", () => {
+    const correct = ruleBody(".question-option-editor__correct");
+    expect(correct).toMatch(/min-height:\s*2\.25rem/);
+    expect(correct).toMatch(/padding:\s*0\.45rem\s+0\.75rem/);
+    expect(correct).toMatch(/font-size:\s*0\.85rem/);
+  });
 });

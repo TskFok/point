@@ -48,11 +48,12 @@
 3. `.admin-field input`、`.admin-field select`、`.input-with-icon` 及其内部 `input` — 对齐
 4. `.sidebar-logout__button` — 作为按钮对齐
 5. 其它显式「按钮型」控件若仍使用 `2.75rem`/`2.9rem` 作为可点击控件高度（如 `.admin-menu-button`、`.toast button`、`.admin-drawer__header button`），一并改为 `2.25rem`，避免局部偏大
+6. `.question-option-editor__correct` — 题库选项行「正确答案」控件对齐
 
 ### 不对齐的选择器（明确排除）
 
 - `.sidebar-nav__link`
-- `.practice-progress`、`.profile-link`、`.back-link`、`.admin-switch`、`.question-option-editor__correct`、`.point-chip` 等非「按钮/输入/选择框」容器
+- `.practice-progress`、`.profile-link`、`.back-link`、`.admin-switch`、`.point-chip` 等非「按钮/输入/选择框」容器
 - `.admin-field textarea` 的 `min-height: 7rem`（保留）；仅在与 input 共享规则时避免把 textarea 压成单行高度
 
 ## 测试
@@ -67,3 +68,4 @@
 - 登录/注册输入框与提交按钮为紧凑规格
 - 学员端主 CTA（`pq-button` / `Link.pq-button`）为紧凑规格
 - 侧栏退出按钮紧凑；侧栏导航链接高度不变
+- 题库表单选项行「正确答案」与同行输入框高度一致
