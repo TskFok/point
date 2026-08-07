@@ -353,6 +353,9 @@
           "updatedAt": {
             "format": "date-time",
             "type": "string"
+          },
+          "wordMatchRules": {
+            "$ref": "#/components/schemas/WordMatchRulesDto"
           }
         },
         "required": [
@@ -365,6 +368,7 @@
           "basePoints",
           "cronExpression",
           "isEnabled",
+          "wordMatchRules",
           "createdAt",
           "updatedAt"
         ],
@@ -734,6 +738,9 @@
             "maximum": 50,
             "minimum": 1,
             "type": "integer"
+          },
+          "wordMatchRules": {
+            "$ref": "#/components/schemas/WordMatchRulesDto"
           }
         },
         "required": [
@@ -1636,6 +1643,9 @@
             "maximum": 50,
             "minimum": 1,
             "type": "integer"
+          },
+          "wordMatchRules": {
+            "$ref": "#/components/schemas/WordMatchRulesDto"
           }
         },
         "type": "object"
@@ -1744,6 +1754,32 @@
         },
         "required": [
           "user"
+        ],
+        "type": "object"
+      },
+      "WordMatchRulesDto": {
+        "properties": {
+          "irregulars": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "description": "不规则变形：原词 → 允许出现在 stem 中的形式",
+            "type": "object"
+          },
+          "suffixes": {
+            "description": "允许的屈折后缀白名单",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "suffixes",
+          "irregulars"
         ],
         "type": "object"
       },

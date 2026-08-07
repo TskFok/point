@@ -28,6 +28,11 @@ import {
   type DictionaryWord,
   type GenerateQuestionsResult,
 } from './generate-questions';
+import {
+  parseWordMatchRules,
+  readWordMatchRules,
+  type WordMatchRules,
+} from './word-match-rules';
 
 const INTERRUPTED_RUN_MESSAGE = '服务中断，执行未完成';
 /** AI 调用超时 60s；超过该阈值的 RUNNING 视为陈旧锁，可被后续调度释放 */
@@ -52,6 +57,7 @@ export type AiTaskView = {
   basePoints: number;
   cronExpression: string;
   isEnabled: boolean;
+  wordMatchRules: WordMatchRules;
   lastEntryId: string | null;
   createdAt: string;
   updatedAt: string;
@@ -200,6 +206,7 @@ function toTaskView(row: TaskWithModelAndLatestRun): AiTaskView {
     basePoints: row.basePoints,
     cronExpression: row.cronExpression,
     isEnabled: row.isEnabled,
+    wordMatchRules: readWordMatchRules(row.wordMatchRules),
     lastEntryId: row.lastEntryId?.toString() ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -214,6 +221,14 @@ function toTaskView(row: TaskWithModelAndLatestRun): AiTaskView {
         }
       : null,
   };
+}
+
+function resolveWordMatchRulesInput(value: unknown): WordMatchRules {
+  const parsed = parseWordMatchRules(value);
+  if (!parsed.ok) {
+    throw validationFailed(parsed.message);
+  }
+  return parsed.rules;
 }
 
 const taskInclude = {
@@ -381,6 +396,7 @@ export class AiTasksService implements OnModuleInit {
       input.isEnabled === undefined
         ? true
         : normalizeBoolean(input.isEnabled, '启用状态');
+    const wordMatchRules = resolveWordMatchRulesInput(input.wordMatchRules);
     await this.requireEnabledModel(aiModelConfigId);
     try {
       const row = await this.prisma.aiTask.create({
@@ -392,6 +408,7 @@ export class AiTasksService implements OnModuleInit {
           basePoints,
           cronExpression,
           isEnabled,
+          wordMatchRules,
           createdBy: userId,
           updatedBy: userId,
         },
@@ -449,6 +466,9 @@ export class AiTasksService implements OnModuleInit {
     }
     if (input.isEnabled !== undefined) {
       data.isEnabled = normalizeBoolean(input.isEnabled, '启用状态');
+    }
+    if (input.wordMatchRules !== undefined) {
+      data.wordMatchRules = resolveWordMatchRulesInput(input.wordMatchRules);
     }
     try {
       const row = await this.prisma.aiTask.update({
@@ -614,6 +634,7 @@ export class AiTasksService implements OnModuleInit {
         modelName: task.aiModelConfig.name,
         words,
         optionCount: task.optionCount,
+        wordMatchRules: readWordMatchRules(task.wordMatchRules),
       });
 
       const aiResponseBody =

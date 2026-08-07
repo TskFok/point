@@ -1,4 +1,4 @@
-import { Transform, type TransformFnParams } from 'class-transformer';
+import { Transform, Type, type TransformFnParams } from 'class-transformer';
 import {
   IsBoolean,
   IsInt,
@@ -9,7 +9,10 @@ import {
   MaxLength,
   Min,
   ValidateIf,
+  ValidateNested,
 } from 'class-validator';
+
+import { WordMatchRulesDto } from './word-match-rules.dto';
 
 function trimText({ value }: TransformFnParams): unknown {
   return typeof value === 'string' ? value.trim() : (value as unknown);
@@ -57,4 +60,9 @@ export class UpdateAiTaskDto {
   @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsBoolean()
   isEnabled?: boolean;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => WordMatchRulesDto)
+  wordMatchRules?: WordMatchRulesDto;
 }

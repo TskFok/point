@@ -1,3 +1,15 @@
+import {
+  formatWordMatchRulesForPrompt,
+  stemIncludesWord,
+  type WordMatchRules,
+} from './word-match-rules';
+
+export type { WordMatchRules } from './word-match-rules';
+export {
+  DEFAULT_WORD_MATCH_RULES,
+  EMPTY_WORD_MATCH_RULES,
+} from './word-match-rules';
+
 export type GeneratedQuestionOption = {
   label: string;
   content: string;
@@ -24,6 +36,7 @@ export type GenerateQuestionsInput = {
   modelName: string;
   words: DictionaryWord[];
   optionCount: number;
+  wordMatchRules: WordMatchRules;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
 };
@@ -47,6 +60,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function buildGeneratePrompt(input: {
   words: DictionaryWord[];
   optionCount: number;
+  wordMatchRules: WordMatchRules;
 }): string {
   const wordList = input.words
     .map(
@@ -60,7 +74,7 @@ export function buildGeneratePrompt(input: {
     'Use ONLY the words listed above. Never invent, replace, skip or repeat words.',
     'Each question must test the word as the given part of speech; the example sentence must use the word as that part of speech (if several are listed, pick the most common one).',
     `Each question must have exactly ${input.optionCount} options.`,
-    'Stem must be a complete English example sentence that MUST INCLUDE the target word (case-insensitive word boundary), OR a common inflection/plural of it (e.g. "whys" for "why", "abandoned" for "abandon").',
+    formatWordMatchRulesForPrompt(input.wordMatchRules),
     'Each question\'s "word" field MUST match the listed word exactly. Never substitute a near-form or different word (e.g. "when" for "why", "catch" for "cat").',
     'Do NOT use blanks, underscores (___), ellipsis placeholders, or [blank] in the stem.',
     'End the stem by naming the word to test, e.g. What does \\"abhor\\" mean?',
@@ -123,36 +137,21 @@ function normalizeWord(value: unknown): string | null {
   return word || null;
 }
 
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 function stemHasBlankPlaceholder(stem: string): boolean {
   return /\b_{2,}\b|___+|\[\s*blank\s*\]|\[\s*\]/i.test(stem);
-}
-
-/** 常见屈折/复数后缀；不含任意字母延长，避免 cat→catch 误匹配 */
-const WORD_INFLECTION_SUFFIX =
-  '(?:s|es|ed|ing|er|est|ies|ied|ying|\'s)?';
-
-function stemIncludesWord(stem: string, word: string): boolean {
-  const wordInStem = new RegExp(
-    `(^|[^A-Za-z])${escapeRegExp(word)}${WORD_INFLECTION_SUFFIX}(?![A-Za-z])`,
-    'i',
-  );
-  return wordInStem.test(stem);
 }
 
 /**
  * 校验一道生成的题目结构，并与期望词（本批 entry.word）1:1 对齐。
  * - 入库 word 强制为 expectedWord（trim+小写）
- * - stem 必须包含 expectedWord
+ * - stem 必须包含 expectedWord（按 wordMatchRules 允许变形）
  * - AI 回传 word 不一致时 wordMismatch=true（不因此失败）
  */
 export function validateOneGeneratedQuestion(
   value: unknown,
   optionCount: number,
   expectedWord: string,
+  wordMatchRules: WordMatchRules,
 ):
   | {
       ok: true;
@@ -177,7 +176,7 @@ export function validateOneGeneratedQuestion(
   if (stemHasBlankPlaceholder(stem)) {
     return { ok: false, message: `题目 ${expected} stem 禁止挖空占位` };
   }
-  if (!stemIncludesWord(stem, expected)) {
+  if (!stemIncludesWord(stem, expected, wordMatchRules)) {
     return { ok: false, message: `题目 ${expected} stem 未包含目标词` };
   }
   if (typeof value.explanation !== 'string' || !value.explanation.trim()) {
@@ -234,6 +233,7 @@ export function alignGeneratedQuestions(
   items: unknown[],
   optionCount: number,
   words: DictionaryWord[],
+  wordMatchRules: WordMatchRules,
 ): {
   accepted: GeneratedQuestion[];
   skipMessages: string[];
@@ -249,6 +249,7 @@ export function alignGeneratedQuestions(
       items[i],
       optionCount,
       expected.word,
+      wordMatchRules,
     );
     if (!validated.ok) {
       skipMessages.push(
@@ -275,6 +276,7 @@ export function parseGeneratedQuestionsJson(
   raw: string,
   optionCount: number,
   words: DictionaryWord[],
+  wordMatchRules: WordMatchRules,
   rng: () => number = Math.random,
 ):
   | {
@@ -295,6 +297,7 @@ export function parseGeneratedQuestionsJson(
     array,
     optionCount,
     words,
+    wordMatchRules,
   );
   if (accepted.length === 0) {
     return {
@@ -395,6 +398,7 @@ export async function generateQuestionsWithChatCompletions(
   const prompt = buildGeneratePrompt({
     words: input.words,
     optionCount: input.optionCount,
+    wordMatchRules: input.wordMatchRules,
   });
   let response: Response;
   try {
@@ -502,6 +506,7 @@ export async function generateQuestionsWithChatCompletions(
     content,
     input.optionCount,
     input.words,
+    input.wordMatchRules,
   );
   return {
     ...parsed,

@@ -7,6 +7,12 @@ import { useEffect, useState } from "react";
 
 import { browserApiClient } from "@/lib/api/browser-client";
 import { getApiErrorMessage } from "@/lib/api/error-message";
+import {
+  DEFAULT_WORD_MATCH_SUFFIXES,
+  buildWordMatchRulesFromInputs,
+  irregularsToInput,
+  suffixesToInput,
+} from "@/lib/ai-task-word-match-rules";
 
 type Schemas = ApiComponents["schemas"];
 type AiTask = Schemas["AiTaskDto"];
@@ -29,6 +35,18 @@ type AiTaskFormProps = {
   onPendingChange?: (pending: boolean) => void;
   onSaved?: (task: AiTask) => void;
 };
+
+function initialSuffixesText(task?: AiTask): string {
+  const suffixes = task?.wordMatchRules?.suffixes;
+  if (suffixes) return suffixesToInput(suffixes);
+  return suffixesToInput([...DEFAULT_WORD_MATCH_SUFFIXES]);
+}
+
+function initialIrregularsText(task?: AiTask): string {
+  const irregulars = task?.wordMatchRules?.irregulars;
+  if (!irregulars) return "";
+  return irregularsToInput(irregulars);
+}
 
 export function AiTaskForm({
   api = browserApiClient,
@@ -56,6 +74,12 @@ export function AiTaskForm({
     initialTask?.cronExpression ?? "0 8 * * *",
   );
   const [isEnabled, setIsEnabled] = useState(initialTask?.isEnabled ?? true);
+  const [suffixesText, setSuffixesText] = useState(() =>
+    initialSuffixesText(initialTask),
+  );
+  const [irregularsText, setIrregularsText] = useState(() =>
+    initialIrregularsText(initialTask),
+  );
   const [errors, setErrors] = useState<string[]>([]);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -86,6 +110,8 @@ export function AiTaskForm({
       next.push("基础积分必须是 1–1000 的整数");
     }
     if (!cronExpression.trim()) next.push("请输入 crontab 表达式");
+    const rules = buildWordMatchRulesFromInputs(suffixesText, irregularsText);
+    if (!rules.ok) next.push(rules.message);
     return next;
   }
 
@@ -97,6 +123,12 @@ export function AiTaskForm({
     setSubmitError(null);
     if (validationErrors.length > 0) return;
 
+    const rules = buildWordMatchRulesFromInputs(suffixesText, irregularsText);
+    if (!rules.ok) {
+      setErrors([rules.message]);
+      return;
+    }
+
     setSaving(true);
     try {
       const payload = {
@@ -107,6 +139,7 @@ export function AiTaskForm({
         basePoints: Number(basePoints),
         cronExpression: cronExpression.trim(),
         isEnabled,
+        wordMatchRules: rules.rules,
       };
       const task =
         mode === "create"
@@ -194,6 +227,25 @@ export function AiTaskForm({
               onChange={(event) => setCronExpression(event.target.value)}
               placeholder="0 8 * * *"
               value={cronExpression}
+            />
+          </label>
+          <label className="admin-field admin-field--wide">
+            <span>允许的屈折后缀（逗号分隔，清空则仅接受原词）</span>
+            <input
+              aria-label="允许的屈折后缀"
+              onChange={(event) => setSuffixesText(event.target.value)}
+              placeholder="s, es, ed, ing"
+              value={suffixesText}
+            />
+          </label>
+          <label className="admin-field admin-field--wide">
+            <span>不规则变形（每行 base=form1,form2）</span>
+            <textarea
+              aria-label="不规则变形"
+              onChange={(event) => setIrregularsText(event.target.value)}
+              placeholder={"go=went,gone\nchild=children"}
+              rows={3}
+              value={irregularsText}
             />
           </label>
           {mode === "edit" ? (

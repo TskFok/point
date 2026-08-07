@@ -811,6 +811,7 @@ export interface components {
             questionCount: number;
             /** Format: date-time */
             updatedAt: string;
+            wordMatchRules: components["schemas"]["WordMatchRulesDto"];
         };
         AiTaskLatestRunDto: {
             /** Format: date-time */
@@ -916,6 +917,7 @@ export interface components {
             optionCount: number;
             /** Format: int32 */
             questionCount: number;
+            wordMatchRules?: components["schemas"]["WordMatchRulesDto"];
         };
         CreateOrderRequestDto: {
             productId: string;
@@ -1180,6 +1182,7 @@ export interface components {
             optionCount?: number;
             /** Format: int32 */
             questionCount?: number;
+            wordMatchRules?: components["schemas"]["WordMatchRulesDto"];
         };
         UpdatePointConfigRequestDto: {
             /** Format: int32 */
@@ -1209,6 +1212,14 @@ export interface components {
         };
         WebSessionResponseDto: {
             user: components["schemas"]["PublicUserDto"];
+        };
+        WordMatchRulesDto: {
+            /** @description 不规则变形：原词 → 允许出现在 stem 中的形式 */
+            irregulars: {
+                [key: string]: string[];
+            };
+            /** @description 允许的屈折后缀白名单 */
+            suffixes: string[];
         };
         WrongQuestionItemDto: {
             /** Format: int32 */

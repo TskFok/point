@@ -2,6 +2,12 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { AiTaskForm } from "@/components/admin/ai-task-form";
+import { DEFAULT_WORD_MATCH_SUFFIXES } from "@/lib/ai-task-word-match-rules";
+
+const defaultRules = {
+  suffixes: [...DEFAULT_WORD_MATCH_SUFFIXES],
+  irregulars: {} as Record<string, string[]>,
+};
 
 describe("AiTaskForm", () => {
   it("保存期间通过 onPendingChange 上报 pending，完成后恢复 false", async () => {
@@ -16,6 +22,7 @@ describe("AiTaskForm", () => {
       basePoints: number;
       cronExpression: string;
       isEnabled: boolean;
+      wordMatchRules: typeof defaultRules;
       lastEntryId: null;
       createdAt: string;
       updatedAt: string;
@@ -51,6 +58,7 @@ describe("AiTaskForm", () => {
       basePoints: 10,
       cronExpression: "0 8 * * *",
       isEnabled: true,
+      wordMatchRules: defaultRules,
       lastEntryId: null,
       createdAt: "2026-08-03T00:00:00.000Z",
       updatedAt: "2026-08-03T00:00:00.000Z",
@@ -60,7 +68,7 @@ describe("AiTaskForm", () => {
     });
   });
 
-  it("提交包含模型、数量、crontab、启用", async () => {
+  it("新建默认预填屈折后缀，提交含 wordMatchRules", async () => {
     const user = userEvent.setup();
     const createAdminAiTask = jest.fn().mockResolvedValue({
       id: "task-1",
@@ -72,6 +80,7 @@ describe("AiTaskForm", () => {
       basePoints: 10,
       cronExpression: "0 8 * * *",
       isEnabled: true,
+      wordMatchRules: defaultRules,
       lastEntryId: null,
       createdAt: "2026-08-03T00:00:00.000Z",
       updatedAt: "2026-08-03T00:00:00.000Z",
@@ -85,6 +94,10 @@ describe("AiTaskForm", () => {
       />,
     );
 
+    expect(screen.getByLabelText("允许的屈折后缀")).toHaveValue(
+      DEFAULT_WORD_MATCH_SUFFIXES.join(", "),
+    );
+
     await user.clear(screen.getByLabelText("任务名称"));
     await user.type(screen.getByLabelText("任务名称"), "每日词汇");
     await user.selectOptions(screen.getByLabelText("AI 模型"), "m1");
@@ -96,6 +109,7 @@ describe("AiTaskForm", () => {
     await user.type(screen.getByLabelText("基础积分"), "10");
     await user.clear(screen.getByLabelText("crontab"));
     await user.type(screen.getByLabelText("crontab"), "0 8 * * *");
+    await user.type(screen.getByLabelText("不规则变形"), "go=went,gone");
     await user.click(screen.getByRole("button", { name: "保存" }));
 
     await waitFor(() => {
@@ -107,6 +121,10 @@ describe("AiTaskForm", () => {
         basePoints: 10,
         cronExpression: "0 8 * * *",
         isEnabled: true,
+        wordMatchRules: {
+          suffixes: [...DEFAULT_WORD_MATCH_SUFFIXES],
+          irregulars: { go: ["went", "gone"] },
+        },
       });
     });
   });

@@ -242,6 +242,8 @@ model AiTask {
   cronExpression  String
   isEnabled       Boolean      @default(true)
   lastEntryId     BigInt?
+  /// { suffixes: string[], irregulars: Record<string, string[]> }
+  wordMatchRules  Json         @default("{\"suffixes\":[\"s\",\"es\",\"ed\",\"ing\",\"er\",\"est\",\"ies\",\"ied\",\"ying\",\"'s\"],\"irregulars\":{}}")
   createdBy       String
   updatedBy       String
   createdAt       DateTime     @default(now())

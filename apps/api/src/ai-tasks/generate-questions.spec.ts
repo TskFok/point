@@ -9,6 +9,10 @@ import {
   validateOneGeneratedQuestion,
   type DictionaryWord,
 } from './generate-questions';
+import {
+  DEFAULT_WORD_MATCH_RULES,
+  EMPTY_WORD_MATCH_RULES,
+} from './word-match-rules';
 
 const abandonWords: DictionaryWord[] = [
   { id: '1', word: 'abandon', pos: 'verb' },
@@ -65,14 +69,18 @@ describe('generate-questions parse', () => {
   ]);
 
   it('解析合法 JSON', () => {
-    const result = parseGeneratedQuestionsJson(sample, 2, abandonWords);
+    const result = parseGeneratedQuestionsJson(sample, 2, abandonWords,
+      DEFAULT_WORD_MATCH_RULES,
+    );
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.questions[0]?.word).toBe('abandon');
   });
 
   it('非 JSON 数组时附带返回内容', () => {
     const raw = '{"error":"I cannot generate questions"}';
-    const result = parseGeneratedQuestionsJson(raw, 2, abandonWords);
+    const result = parseGeneratedQuestionsJson(raw, 2, abandonWords,
+      DEFAULT_WORD_MATCH_RULES,
+    );
     expect(result).toEqual({
       ok: false,
       message: `AI 返回不是 JSON 数组：${raw}`,
@@ -81,7 +89,9 @@ describe('generate-questions parse', () => {
 
   it('无法提取数组时附带返回内容并截断过长文本', () => {
     const raw = `Sorry, here is prose. ${'x'.repeat(520)}`;
-    const result = parseGeneratedQuestionsJson(raw, 2, abandonWords);
+    const result = parseGeneratedQuestionsJson(raw, 2, abandonWords,
+      DEFAULT_WORD_MATCH_RULES,
+    );
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.message.startsWith('AI 返回不是 JSON 数组：')).toBe(true);
@@ -103,7 +113,9 @@ describe('generate-questions parse', () => {
         ],
       },
     ]);
-    const result = parseGeneratedQuestionsJson(raw, 2, abandonWords);
+    const result = parseGeneratedQuestionsJson(raw, 2, abandonWords,
+      DEFAULT_WORD_MATCH_RULES,
+    );
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.questions[0]?.word).toBe('abandon');
@@ -129,6 +141,7 @@ describe('generate-questions parse', () => {
       JSON.stringify([item, item]),
       2,
       words,
+      DEFAULT_WORD_MATCH_RULES,
     );
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -148,6 +161,7 @@ describe('generate-questions parse', () => {
         { id: '3', word: 'cater', pos: 'verb' },
       ],
       optionCount: 4,
+      wordMatchRules: DEFAULT_WORD_MATCH_RULES,
     });
     expect(p).toMatch(/"cat" \(noun\)/);
     expect(p).toMatch(/"catch" \(verb\)/);
@@ -160,6 +174,7 @@ describe('generate-questions parse', () => {
     const p = buildGeneratePrompt({
       words: abandonWords,
       optionCount: 4,
+      wordMatchRules: DEFAULT_WORD_MATCH_RULES,
     });
     const lower = p.toLowerCase();
     expect(lower).toMatch(/only the words/);
@@ -170,6 +185,7 @@ describe('generate-questions parse', () => {
     const p = buildGeneratePrompt({
       words: abandonWords,
       optionCount: 4,
+      wordMatchRules: DEFAULT_WORD_MATCH_RULES,
     });
     const lower = p.toLowerCase();
     expect(lower).toMatch(/part of speech/);
@@ -190,6 +206,7 @@ describe('generate-questions parse', () => {
       },
       2,
       'able',
+      DEFAULT_WORD_MATCH_RULES,
     );
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -211,6 +228,7 @@ describe('generate-questions parse', () => {
       },
       2,
       'Dictionary',
+      DEFAULT_WORD_MATCH_RULES,
     );
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -224,26 +242,39 @@ describe('generate-questions parse', () => {
     const p = buildGeneratePrompt({
       words: abandonWords,
       optionCount: 4,
+      wordMatchRules: DEFAULT_WORD_MATCH_RULES,
     });
     expect(p.toLowerCase()).toMatch(/must include/);
     expect(p.toLowerCase()).toMatch(/blank|___|placeholder/);
     expect(p.toLowerCase()).toMatch(/what does/);
   });
 
-  it('prompt 要求目标词原样或常见变形且禁止换词', () => {
+  it('prompt 要求按配置后缀允许变形且禁止换词', () => {
     const p = buildGeneratePrompt({
       words: abandonWords,
       optionCount: 4,
+      wordMatchRules: DEFAULT_WORD_MATCH_RULES,
     });
     const lower = p.toLowerCase();
-    expect(lower).toMatch(/exact spelling|exact form|inflect|inflection|plural|variant/);
+    expect(lower).toMatch(/suffix/);
+    expect(p).toContain('"s"');
     expect(lower).toMatch(/substitut|replace|near[- ]?form|look[- ]?alike/);
+  });
+
+  it('空规则时 prompt 要求 exact form', () => {
+    const p = buildGeneratePrompt({
+      words: abandonWords,
+      optionCount: 4,
+      wordMatchRules: { suffixes: [], irregulars: {} },
+    });
+    expect(p.toLowerCase()).toMatch(/exact/);
   });
 
   it('prompt 要求 explanation 含整句译文与词义说明', () => {
     const p = buildGeneratePrompt({
       words: abandonWords,
       optionCount: 4,
+      wordMatchRules: DEFAULT_WORD_MATCH_RULES,
     });
     const lower = p.toLowerCase();
     expect(lower).toMatch(/explanation/);
@@ -255,6 +286,7 @@ describe('generate-questions parse', () => {
     const p = buildGeneratePrompt({
       words: abandonWords,
       optionCount: 4,
+      wordMatchRules: DEFAULT_WORD_MATCH_RULES,
     });
     expect(p).toMatch(/escape/i);
     expect(p).toContain('What does \\"abhor\\" mean?');
@@ -274,6 +306,7 @@ describe('generate-questions parse', () => {
       },
       2,
       'abhor',
+      DEFAULT_WORD_MATCH_RULES,
     );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.message).toMatch(/挖空|blank|___/i);
@@ -292,6 +325,7 @@ describe('generate-questions parse', () => {
       },
       2,
       'abhor',
+      DEFAULT_WORD_MATCH_RULES,
     );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.message).toMatch(/未包含|不包含|word/i);
@@ -310,9 +344,46 @@ describe('generate-questions parse', () => {
       },
       2,
       'why',
+      DEFAULT_WORD_MATCH_RULES,
     );
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.question.word).toBe('why');
+  });
+
+  it('空规则时拒绝 stem 仅含变形 whys', () => {
+    const result = validateOneGeneratedQuestion(
+      {
+        word: 'why',
+        stem: 'She whys at every decision, which annoys her boss.',
+        explanation: '问为什么',
+        options: [
+          { label: 'A', content: '问为什么', isCorrect: true },
+          { label: 'B', content: '解释', isCorrect: false },
+        ],
+      },
+      2,
+      'why',
+      EMPTY_WORD_MATCH_RULES,
+    );
+    expect(result.ok).toBe(false);
+  });
+
+  it('不规则映射接受 went 作为 go', () => {
+    const result = validateOneGeneratedQuestion(
+      {
+        word: 'go',
+        stem: 'He went home early. What does "go" mean?',
+        explanation: '他早早回家了。「go」是动词，表示去。',
+        options: [
+          { label: 'A', content: '去', isCorrect: true },
+          { label: 'B', content: '来', isCorrect: false },
+        ],
+      },
+      2,
+      'go',
+      { suffixes: [], irregulars: { go: ['went', 'gone'] } },
+    );
+    expect(result.ok).toBe(true);
   });
 
   it('接受 stem 含复数变形 whys 的整批解析', () => {
@@ -340,7 +411,9 @@ describe('generate-questions parse', () => {
         ],
       },
     ]);
-    const result = parseGeneratedQuestionsJson(raw, 2, words);
+    const result = parseGeneratedQuestionsJson(raw, 2, words,
+      DEFAULT_WORD_MATCH_RULES,
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.questions).toHaveLength(2);
@@ -360,6 +433,7 @@ describe('generate-questions parse', () => {
       },
       2,
       'cat',
+      DEFAULT_WORD_MATCH_RULES,
     );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.message).toMatch(/未包含目标词/);
@@ -380,7 +454,9 @@ describe('generate-questions parse', () => {
         ],
       },
     ]);
-    const result = parseGeneratedQuestionsJson(raw, 2, words);
+    const result = parseGeneratedQuestionsJson(raw, 2, words,
+      DEFAULT_WORD_MATCH_RULES,
+    );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.message).toMatch(/未包含目标词/);
   });
@@ -398,6 +474,7 @@ describe('generate-questions parse', () => {
       },
       2,
       'abhor',
+      DEFAULT_WORD_MATCH_RULES,
     );
     expect(result.ok).toBe(true);
   });
@@ -416,6 +493,7 @@ describe('generate-questions parse', () => {
       },
       2,
       'self-aware',
+      DEFAULT_WORD_MATCH_RULES,
     );
     expect(result.ok).toBe(true);
   });
@@ -462,6 +540,7 @@ describe('shuffleQuestionOptions', () => {
       raw,
       4,
       abandonWords,
+      DEFAULT_WORD_MATCH_RULES,
       () => values[i++] ?? 0,
     );
     expect(result.ok).toBe(true);
@@ -512,6 +591,7 @@ describe('generateQuestionsWithChatCompletions', () => {
       words: abandonWords,
       optionCount: 2,
       fetchImpl: fetchImpl as unknown as typeof fetch,
+      wordMatchRules: DEFAULT_WORD_MATCH_RULES,
     });
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -559,6 +639,7 @@ describe('generateQuestionsWithChatCompletions', () => {
       words: abandonWords,
       optionCount: 2,
       fetchImpl: fetchImpl as unknown as typeof fetch,
+      wordMatchRules: DEFAULT_WORD_MATCH_RULES,
     });
     const init = fetchImpl.mock.calls[0]?.[1] as { body: string };
     const body = JSON.parse(init.body) as {
@@ -583,6 +664,7 @@ describe('generateQuestionsWithChatCompletions', () => {
       words: abandonWords,
       optionCount: 2,
       fetchImpl: fetchImpl as unknown as typeof fetch,
+      wordMatchRules: DEFAULT_WORD_MATCH_RULES,
     });
     expect(result).toEqual({
       ok: false,
@@ -605,6 +687,7 @@ describe('generateQuestionsWithChatCompletions', () => {
       words: abandonWords,
       optionCount: 2,
       fetchImpl: fetchImpl as unknown as typeof fetch,
+      wordMatchRules: DEFAULT_WORD_MATCH_RULES,
     });
     expect(result).toEqual({
       ok: false,
@@ -624,6 +707,7 @@ describe('generateQuestionsWithChatCompletions', () => {
       words: abandonWords,
       optionCount: 2,
       fetchImpl: fetchImpl as unknown as typeof fetch,
+      wordMatchRules: DEFAULT_WORD_MATCH_RULES,
     });
     expect(result).toEqual({
       ok: false,
@@ -644,6 +728,7 @@ describe('generateQuestionsWithChatCompletions', () => {
       words: abandonWords,
       optionCount: 2,
       fetchImpl: fetchImpl as unknown as typeof fetch,
+      wordMatchRules: DEFAULT_WORD_MATCH_RULES,
     });
     expect(result).toEqual({
       ok: false,
@@ -666,6 +751,7 @@ describe('generateQuestionsWithChatCompletions', () => {
       words: abandonWords,
       optionCount: 2,
       fetchImpl: fetchImpl as unknown as typeof fetch,
+      wordMatchRules: DEFAULT_WORD_MATCH_RULES,
     });
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -691,6 +777,7 @@ describe('generateQuestionsWithChatCompletions', () => {
       words: abandonWords,
       optionCount: 2,
       fetchImpl: fetchImpl as unknown as typeof fetch,
+      wordMatchRules: DEFAULT_WORD_MATCH_RULES,
     });
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -714,6 +801,7 @@ describe('generateQuestionsWithChatCompletions', () => {
       words: abandonWords,
       optionCount: 2,
       fetchImpl: fetchImpl as unknown as typeof fetch,
+      wordMatchRules: DEFAULT_WORD_MATCH_RULES,
     });
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -738,6 +826,7 @@ describe('generateQuestionsWithChatCompletions', () => {
       words: abandonWords,
       optionCount: 2,
       fetchImpl: fetchImpl as unknown as typeof fetch,
+      wordMatchRules: DEFAULT_WORD_MATCH_RULES,
     });
     expect(result).toEqual({
       ok: false,
@@ -760,6 +849,7 @@ describe('generateQuestionsWithChatCompletions', () => {
       words: abandonWords,
       optionCount: 2,
       fetchImpl: fetchImpl as unknown as typeof fetch,
+      wordMatchRules: DEFAULT_WORD_MATCH_RULES,
     });
     expect(result.ok).toBe(false);
     if (!result.ok) {

@@ -772,6 +772,18 @@ export class AiTaskLatestRunDto {
   questionsCreated!: number;
 }
 
+export class WordMatchRulesDto {
+  @ApiProperty({ type: [String], description: '允许的屈折后缀白名单' })
+  suffixes!: string[];
+
+  @ApiProperty({
+    type: 'object',
+    additionalProperties: { type: 'array', items: { type: 'string' } },
+    description: '不规则变形：原词 → 允许出现在 stem 中的形式',
+  })
+  irregulars!: Record<string, string[]>;
+}
+
 export class AiTaskDto {
   @ApiProperty()
   id!: string;
@@ -799,6 +811,9 @@ export class AiTaskDto {
 
   @ApiProperty()
   isEnabled!: boolean;
+
+  @ApiProperty({ type: () => WordMatchRulesDto })
+  wordMatchRules!: WordMatchRulesDto;
 
   @ApiPropertyOptional({
     type: String,
@@ -846,6 +861,9 @@ export class CreateAiTaskRequestDto {
 
   @ApiPropertyOptional()
   isEnabled?: boolean;
+
+  @ApiPropertyOptional({ type: () => WordMatchRulesDto })
+  wordMatchRules?: WordMatchRulesDto;
 }
 
 export class UpdateAiTaskRequestDto {
@@ -869,6 +887,9 @@ export class UpdateAiTaskRequestDto {
 
   @ApiPropertyOptional()
   isEnabled?: boolean;
+
+  @ApiPropertyOptional({ type: () => WordMatchRulesDto })
+  wordMatchRules?: WordMatchRulesDto;
 }
 
 export class AiTaskRunDto {

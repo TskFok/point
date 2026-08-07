@@ -30,6 +30,22 @@ function makeModel(overrides: Record<string, unknown> = {}) {
   };
 }
 
+const defaultWordMatchRules = {
+  suffixes: [
+    's',
+    'es',
+    'ed',
+    'ing',
+    'er',
+    'est',
+    'ies',
+    'ied',
+    'ying',
+    "'s",
+  ],
+  irregulars: {} as Record<string, string[]>,
+};
+
 function makeTask(overrides: Record<string, unknown> = {}) {
   return {
     id: 'task-1',
@@ -41,6 +57,7 @@ function makeTask(overrides: Record<string, unknown> = {}) {
     cronExpression: '0 8 * * *',
     isEnabled: true,
     lastEntryId: null as bigint | null,
+    wordMatchRules: { ...defaultWordMatchRules, irregulars: {} },
     createdBy: 'admin-1',
     updatedBy: 'admin-1',
     createdAt: new Date('2026-08-03T00:00:00.000Z'),
@@ -150,6 +167,9 @@ function createService(options?: {
         }
         if (typeof data.cronExpression === 'string') {
           taskState.cronExpression = data.cronExpression;
+        }
+        if (data.wordMatchRules && typeof data.wordMatchRules === 'object') {
+          taskState.wordMatchRules = data.wordMatchRules;
         }
         if (data.aiModelConfig && typeof data.aiModelConfig === 'object') {
           const connect = (data.aiModelConfig as { connect?: { id: string } })
@@ -332,6 +352,40 @@ describe('AiTasksService CRUD', () => {
     );
     expect(created.aiModelName).toBe('gpt-test');
     expect(created.cronExpression).toBe('0 8 * * *');
+    expect(created.wordMatchRules.suffixes).toContain('s');
+  });
+
+  it('create 可写入自定义 wordMatchRules，空规则表示仅原词', async () => {
+    const { service } = createService();
+    const created = await service.create(
+      {
+        name: '严格原词',
+        aiModelConfigId: 'model-1',
+        questionCount: 2,
+        optionCount: 2,
+        basePoints: 10,
+        cronExpression: '0 8 * * *',
+        wordMatchRules: { suffixes: [], irregulars: { go: ['went'] } },
+      },
+      'admin-1',
+    );
+    expect(created.wordMatchRules).toEqual({
+      suffixes: [],
+      irregulars: { go: ['went'] },
+    });
+  });
+
+  it('update 可清空屈折后缀', async () => {
+    const { service } = createService();
+    const updated = await service.update(
+      'task-1',
+      { wordMatchRules: { suffixes: [], irregulars: {} } },
+      'admin-1',
+    );
+    expect(updated.wordMatchRules).toEqual({
+      suffixes: [],
+      irregulars: {},
+    });
   });
 
   it('模型未启用时创建失败', async () => {
@@ -478,6 +532,29 @@ describe('AiTasksService runTask', () => {
     expect(result.errorMessage).toMatch(/词库|entry/);
     expect(taskState?.lastEntryId).toBe(999n);
     expect(questionCreates).toHaveLength(0);
+  });
+
+  it('runTask 将任务 wordMatchRules 传给 generate', async () => {
+    const rules = {
+      suffixes: ['ed'],
+      irregulars: { go: ['went'] },
+    };
+    const { service } = createService({
+      task: makeTask({ wordMatchRules: rules }),
+    });
+    let seen: unknown;
+    await service.runTask('task-1', {
+      trigger: 'MANUAL',
+      actorUserId: 'admin-1',
+      generate: (input) => {
+        seen = input.wordMatchRules;
+        return Promise.resolve({
+          ok: true as const,
+          questions: sampleQuestions,
+        });
+      },
+    });
+    expect(seen).toEqual(rules);
   });
 
   it('按顺序 1:1 对齐：AI word 不一致仍写入期望词并记监控', async () => {
