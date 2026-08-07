@@ -60,6 +60,8 @@ export function buildGeneratePrompt(input: {
     'Each question must test the word as the given part of speech; the example sentence must use the word as that part of speech (if several are listed, pick the most common one).',
     `Each question must have exactly ${input.optionCount} options.`,
     'Stem must be a complete English example sentence that MUST INCLUDE the target word itself (case-insensitive word boundary).',
+    'Stem must INCLUDE the target word in its EXACT spelling (case-insensitive word boundary). Do NOT use only an inflected/conjugated/plural/variant form instead (e.g. "whys" for "why", "running" for "run").',
+    'Each question\'s "word" field and the tested word in the stem MUST match the listed word exactly. Never substitute a near-form or different word (e.g. "when" for "why").',
     'Do NOT use blanks, underscores (___), ellipsis placeholders, or [blank] in the stem.',
     'End the stem by naming the word to test, e.g. What does \\"abhor\\" mean?',
     'In JSON string values, every double quote MUST be escaped as \\". Never write raw " inside a string (invalid JSON).',

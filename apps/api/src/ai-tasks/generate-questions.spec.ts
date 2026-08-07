@@ -230,6 +230,17 @@ describe('generate-questions parse', () => {
     expect(p.toLowerCase()).toMatch(/what does/);
   });
 
+  it('prompt 要求目标词原样拼写且禁止变形与换词', () => {
+    const p = buildGeneratePrompt({
+      words: abandonWords,
+      optionCount: 4,
+    });
+    const lower = p.toLowerCase();
+    expect(lower).toMatch(/exact spelling|exact form/);
+    expect(lower).toMatch(/inflect|inflection|conjugated|plural|variant/);
+    expect(lower).toMatch(/substitut|replace|near[- ]?form|look[- ]?alike/);
+  });
+
   it('prompt 要求 explanation 含整句译文与词义说明', () => {
     const p = buildGeneratePrompt({
       words: abandonWords,
