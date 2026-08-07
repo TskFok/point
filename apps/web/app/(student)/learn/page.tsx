@@ -94,6 +94,13 @@ export default function LearnPage({
                 <span>未回答 {summary.unansweredCount} 题</span>
               </div>
             </div>
+            <Link
+              className="pq-button pq-button--primary"
+              href="/learn/practice"
+            >
+              开始随机练习
+              <ArrowRight aria-hidden="true" />
+            </Link>
             <div className="hero-progress__bar">
               <span
                 style={{
@@ -109,13 +116,6 @@ export default function LearnPage({
                 }}
               />
             </div>
-            <Link
-              className="pq-button pq-button--primary"
-              href="/learn/practice"
-            >
-              开始随机练习
-              <ArrowRight aria-hidden="true" />
-            </Link>
           </Card>
 
           <div className="summary-grid">

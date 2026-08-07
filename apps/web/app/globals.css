@@ -1016,6 +1016,12 @@ svg {
   font-weight: 700;
 }
 
+.hero-progress > .pq-button {
+  justify-self: end;
+  width: max-content;
+  max-width: 100%;
+}
+
 .hero-progress__bar {
   height: 0.6rem;
   grid-column: 1 / -1;
@@ -1231,8 +1237,10 @@ svg {
 
 .practice-navigation .practice-submit {
   justify-self: unset;
+  flex: 0 1 auto;
+  width: max-content;
+  max-width: 100%;
   min-width: 0;
-  flex: 1 1 auto;
 }
 
 .practice-navigation .pq-button {
@@ -2237,6 +2245,10 @@ svg {
     grid-column: 1;
   }
 
+  .hero-progress > .pq-button {
+    justify-self: start;
+  }
+
   .hero-progress__copy {
     align-items: flex-start;
   }
@@ -2273,7 +2285,8 @@ svg {
   }
 
   .practice-navigation .practice-submit {
-    width: auto;
+    width: max-content;
+    max-width: 100%;
   }
 
   .practice-navigation .pq-button {
