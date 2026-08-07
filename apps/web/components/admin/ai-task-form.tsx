@@ -13,6 +13,12 @@ import {
   irregularsToInput,
   suffixesToInput,
 } from "@/lib/ai-task-word-match-rules";
+import {
+  DEFAULT_LANG_CODE,
+  LANG_CODE_LABELS,
+  LANG_CODES,
+  type LangCode,
+} from "@/lib/lang-code";
 
 type Schemas = ApiComponents["schemas"];
 type AiTask = Schemas["AiTaskDto"];
@@ -60,6 +66,9 @@ export function AiTaskForm({
   const [name, setName] = useState(initialTask?.name ?? "");
   const [aiModelConfigId, setAiModelConfigId] = useState(
     initialTask?.aiModelConfigId ?? models[0]?.id ?? "",
+  );
+  const [langCode, setLangCode] = useState<LangCode>(
+    initialTask?.langCode ?? DEFAULT_LANG_CODE,
   );
   const [questionCount, setQuestionCount] = useState(
     String(initialTask?.questionCount ?? 5),
@@ -156,6 +165,7 @@ export function AiTaskForm({
       const payload = {
         name: name.trim(),
         aiModelConfigId,
+        langCode,
         questionCount: Number(questionCount),
         optionCount: Number(optionCount),
         basePoints: Number(basePoints),
@@ -217,6 +227,22 @@ export function AiTaskForm({
               {models.map((model) => (
                 <option key={model.id} value={model.id}>
                   {model.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="admin-field">
+            <span>语言</span>
+            <select
+              aria-label="语言"
+              onChange={(event) =>
+                setLangCode(event.target.value as LangCode)
+              }
+              value={langCode}
+            >
+              {LANG_CODES.map((code) => (
+                <option key={code} value={code}>
+                  {LANG_CODE_LABELS[code]}
                 </option>
               ))}
             </select>

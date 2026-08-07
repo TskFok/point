@@ -25,6 +25,7 @@ function makeTaskResponse(
     maxConsecutiveFailures: 0,
     consecutiveFailureCount: 0,
     wordMatchRules: defaultRules,
+    langCode: "en",
     lastEntryId: null,
     createdAt: "2026-08-03T00:00:00.000Z",
     updatedAt: "2026-08-03T00:00:00.000Z",
@@ -99,6 +100,7 @@ describe("AiTaskForm", () => {
       expect(createAdminAiTask).toHaveBeenCalledWith({
         name: "每日词汇",
         aiModelConfigId: "m1",
+        langCode: "en",
         questionCount: 5,
         optionCount: 4,
         basePoints: 10,
@@ -110,6 +112,30 @@ describe("AiTaskForm", () => {
           irregulars: { go: ["went", "gone"] },
         },
       });
+    });
+  });
+
+  it("提交包含 langCode", async () => {
+    const user = userEvent.setup();
+    const createAdminAiTask = jest
+      .fn()
+      .mockResolvedValue(makeTaskResponse({ langCode: "ja" }));
+    render(
+      <AiTaskForm
+        api={{ createAdminAiTask, updateAdminAiTask: jest.fn() }}
+        mode="create"
+        models={[{ id: "m1", name: "gpt-test" }]}
+      />,
+    );
+
+    await user.type(screen.getByLabelText("任务名称"), "每日词汇");
+    await user.selectOptions(screen.getByLabelText("语言"), "ja");
+    await user.click(screen.getByRole("button", { name: "保存" }));
+
+    await waitFor(() => {
+      expect(createAdminAiTask).toHaveBeenCalledWith(
+        expect.objectContaining({ langCode: "ja" }),
+      );
     });
   });
 

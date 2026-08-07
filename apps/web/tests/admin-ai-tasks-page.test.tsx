@@ -23,6 +23,7 @@ const task = {
   isEnabled: true,
   maxConsecutiveFailures: 3,
   consecutiveFailureCount: 0,
+  langCode: "ja",
   lastEntryId: "20",
   createdAt: "2026-08-03T00:00:00.000Z",
   updatedAt: "2026-08-03T01:00:00.000Z",
@@ -120,6 +121,16 @@ describe("管理员 AI 任务页", () => {
     expect(screen.getByText("gpt-test")).toBeInTheDocument();
     expect(screen.getByText("0 8 * * *")).toBeInTheDocument();
     expect(screen.getByText("20")).toBeInTheDocument();
+  });
+
+  it("列表展示语言中文标签", async () => {
+    render(<AdminAiTasksPage api={createApi()} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("每日词汇")).toBeInTheDocument();
+    });
+    expect(screen.getByRole("columnheader", { name: "语言" })).toBeInTheDocument();
+    expect(screen.getByText("日语")).toBeInTheDocument();
   });
 
   it("列表展示连续失败计数与阈值", async () => {

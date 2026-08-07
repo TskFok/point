@@ -25,6 +25,7 @@ import { FormDialog } from "@/components/ui/form-dialog";
 import { useConfirmAction } from "@/hooks/use-confirm-action";
 import { browserApiClient } from "@/lib/api/browser-client";
 import { getApiErrorMessage } from "@/lib/api/error-message";
+import { LANG_CODE_LABELS, type LangCode } from "@/lib/lang-code";
 
 type Schemas = ApiComponents["schemas"];
 type AiTask = Schemas["AiTaskDto"];
@@ -456,6 +457,7 @@ export default function AdminAiTasksPage({
                   <tr>
                     <th>名称</th>
                     <th>模型</th>
+                    <th>语言</th>
                     <th>数量</th>
                     <th>crontab</th>
                     <th>游标</th>
@@ -470,6 +472,10 @@ export default function AdminAiTasksPage({
                     <tr key={task.id}>
                       <td>{task.name}</td>
                       <td>{task.aiModelName}</td>
+                      <td>
+                        {LANG_CODE_LABELS[task.langCode as LangCode] ??
+                          task.langCode}
+                      </td>
                       <td>
                         {task.questionCount} 题 / {task.optionCount} 选项 /{" "}
                         {task.basePoints} 分
