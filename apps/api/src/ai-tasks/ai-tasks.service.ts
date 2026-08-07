@@ -161,6 +161,33 @@ function normalizeInt(
   return value;
 }
 
+function normalizeLastEntryId(value: string | null): bigint | null {
+  if (value === null) {
+    return null;
+  }
+  if (typeof value !== 'string') {
+    throw validationFailed(
+      '游标 lastEntryId 须为正整数字符串，或留空以重置',
+    );
+  }
+  const trimmed = value.trim();
+  if (trimmed === '') {
+    return null;
+  }
+  if (!/^\d+$/.test(trimmed)) {
+    throw validationFailed(
+      '游标 lastEntryId 须为正整数字符串，或留空以重置',
+    );
+  }
+  const id = BigInt(trimmed);
+  if (id < 1n) {
+    throw validationFailed(
+      '游标 lastEntryId 须为正整数字符串，或留空以重置',
+    );
+  }
+  return id;
+}
+
 function normalizeBoolean(value: unknown, fieldName: string): boolean {
   if (typeof value !== 'boolean') {
     throw validationFailed(`${fieldName}必须是布尔值`);
@@ -526,6 +553,9 @@ export class AiTasksService implements OnModuleInit {
         0,
         100,
       );
+    }
+    if (input.lastEntryId !== undefined) {
+      data.lastEntryId = normalizeLastEntryId(input.lastEntryId);
     }
     if (input.wordMatchRules !== undefined) {
       data.wordMatchRules = resolveWordMatchRulesInput(input.wordMatchRules);

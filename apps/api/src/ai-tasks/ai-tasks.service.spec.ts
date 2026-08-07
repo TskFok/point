@@ -474,6 +474,64 @@ describe('AiTasksService CRUD', () => {
     });
   });
 
+  it('update 可设置 lastEntryId', async () => {
+    const { service } = createService({
+      task: makeTask({ lastEntryId: 10n }),
+    });
+    const updated = await service.update(
+      'task-1',
+      { lastEntryId: '42' },
+      'admin-1',
+    );
+    expect(updated.lastEntryId).toBe('42');
+  });
+
+  it('update 可用 null 或空串清空 lastEntryId', async () => {
+    const { service: s1 } = createService({
+      task: makeTask({ lastEntryId: 99n }),
+    });
+    const clearedNull = await s1.update(
+      'task-1',
+      { lastEntryId: null },
+      'admin-1',
+    );
+    expect(clearedNull.lastEntryId).toBeNull();
+
+    const { service: s2 } = createService({
+      task: makeTask({ lastEntryId: 99n }),
+    });
+    const clearedEmpty = await s2.update(
+      'task-1',
+      { lastEntryId: '  ' },
+      'admin-1',
+    );
+    expect(clearedEmpty.lastEntryId).toBeNull();
+  });
+
+  it('update 非法 lastEntryId 失败', async () => {
+    const { service } = createService({
+      task: makeTask({ lastEntryId: 10n }),
+    });
+    for (const bad of ['0', '-1', 'abc', '1.5']) {
+      await expect(
+        service.update('task-1', { lastEntryId: bad }, 'admin-1'),
+      ).rejects.toMatchObject({ response: { code: 'VALIDATION_FAILED' } });
+    }
+  });
+
+  it('update 不带 lastEntryId 时游标不变', async () => {
+    const { service } = createService({
+      task: makeTask({ lastEntryId: 77n }),
+    });
+    const updated = await service.update(
+      'task-1',
+      { name: '改名' },
+      'admin-1',
+    );
+    expect(updated.lastEntryId).toBe('77');
+    expect(updated.name).toBe('改名');
+  });
+
   it('模型未启用时创建失败', async () => {
     const { service } = createService({
       model: makeModel({ isEnabled: false }),

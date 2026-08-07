@@ -67,6 +67,13 @@ export class UpdateAiTaskDto {
   @Max(100)
   maxConsecutiveFailures?: number;
 
+  @ValidateIf(
+    (_object, value: unknown) => value !== undefined && value !== null,
+  )
+  @Transform(trimText)
+  @IsString()
+  lastEntryId?: string | null;
+
   @IsOptional()
   @ValidateNested()
   @Type(() => WordMatchRulesDto)
