@@ -459,6 +459,7 @@ export default function AdminAiTasksPage({
                     <th>数量</th>
                     <th>crontab</th>
                     <th>游标</th>
+                    <th>连续失败</th>
                     <th>启用</th>
                     <th>最近执行</th>
                     <th>操作</th>
@@ -477,6 +478,11 @@ export default function AdminAiTasksPage({
                         <code>{task.cronExpression}</code>
                       </td>
                       <td>{task.lastEntryId ?? "—"}</td>
+                      <td>
+                        {task.maxConsecutiveFailures > 0
+                          ? `${task.consecutiveFailureCount}/${task.maxConsecutiveFailures}`
+                          : "未启用"}
+                      </td>
                       <td>{task.isEnabled ? "已启用" : "未启用"}</td>
                       <td>
                         {task.latestRun

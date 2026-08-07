@@ -21,6 +21,8 @@ const task = {
   basePoints: 10,
   cronExpression: "0 8 * * *",
   isEnabled: true,
+  maxConsecutiveFailures: 3,
+  consecutiveFailureCount: 0,
   lastEntryId: "20",
   createdAt: "2026-08-03T00:00:00.000Z",
   updatedAt: "2026-08-03T01:00:00.000Z",
@@ -118,6 +120,40 @@ describe("管理员 AI 任务页", () => {
     expect(screen.getByText("gpt-test")).toBeInTheDocument();
     expect(screen.getByText("0 8 * * *")).toBeInTheDocument();
     expect(screen.getByText("20")).toBeInTheDocument();
+  });
+
+  it("列表展示连续失败计数与阈值", async () => {
+    render(<AdminAiTasksPage api={createApi()} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("每日词汇")).toBeInTheDocument();
+    });
+    expect(screen.getByText("0/3")).toBeInTheDocument();
+  });
+
+  it("阈值未启用时列表显示「未启用」连续失败列", async () => {
+    render(
+      <AdminAiTasksPage
+        api={createApi({
+          listAdminAiTasks: jest.fn().mockResolvedValue({
+            data: [
+              {
+                ...task,
+                maxConsecutiveFailures: 0,
+                consecutiveFailureCount: 2,
+              },
+            ],
+            meta,
+          }),
+        })}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("每日词汇")).toBeInTheDocument();
+    });
+    // 启用列也是「未启用」或「已启用」；连续失败列在阈值为 0 时为「未启用」
+    expect(screen.getAllByText("未启用").length).toBeGreaterThanOrEqual(1);
   });
 
   it("操作列使用 admin-table__actions 布局", async () => {

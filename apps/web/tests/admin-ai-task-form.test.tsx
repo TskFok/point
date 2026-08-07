@@ -9,24 +9,33 @@ const defaultRules = {
   irregulars: {} as Record<string, string[]>,
 };
 
+function makeTaskResponse(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    id: "task-1",
+    name: "每日词汇",
+    aiModelConfigId: "m1",
+    aiModelName: "gpt-test",
+    questionCount: 5,
+    optionCount: 4,
+    basePoints: 10,
+    cronExpression: "0 8 * * *",
+    isEnabled: true,
+    maxConsecutiveFailures: 0,
+    consecutiveFailureCount: 0,
+    wordMatchRules: defaultRules,
+    lastEntryId: null,
+    createdAt: "2026-08-03T00:00:00.000Z",
+    updatedAt: "2026-08-03T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
 describe("AiTaskForm", () => {
   it("保存期间通过 onPendingChange 上报 pending，完成后恢复 false", async () => {
     const user = userEvent.setup();
-    let resolveCreate!: (value: {
-      id: string;
-      name: string;
-      aiModelConfigId: string;
-      aiModelName: string;
-      questionCount: number;
-      optionCount: number;
-      basePoints: number;
-      cronExpression: string;
-      isEnabled: boolean;
-      wordMatchRules: typeof defaultRules;
-      lastEntryId: null;
-      createdAt: string;
-      updatedAt: string;
-    }) => void;
+    let resolveCreate!: (value: Record<string, unknown>) => void;
     const createAdminAiTask = jest.fn().mockReturnValue(
       new Promise((resolve) => {
         resolveCreate = resolve;
@@ -48,21 +57,7 @@ describe("AiTaskForm", () => {
     await waitFor(() => {
       expect(onPendingChange).toHaveBeenLastCalledWith(true);
     });
-    resolveCreate({
-      id: "task-1",
-      name: "每日词汇",
-      aiModelConfigId: "m1",
-      aiModelName: "gpt-test",
-      questionCount: 5,
-      optionCount: 4,
-      basePoints: 10,
-      cronExpression: "0 8 * * *",
-      isEnabled: true,
-      wordMatchRules: defaultRules,
-      lastEntryId: null,
-      createdAt: "2026-08-03T00:00:00.000Z",
-      updatedAt: "2026-08-03T00:00:00.000Z",
-    });
+    resolveCreate(makeTaskResponse());
     await waitFor(() => {
       expect(onPendingChange).toHaveBeenLastCalledWith(false);
     });
@@ -70,21 +65,9 @@ describe("AiTaskForm", () => {
 
   it("新建默认预填屈折后缀，提交含 wordMatchRules", async () => {
     const user = userEvent.setup();
-    const createAdminAiTask = jest.fn().mockResolvedValue({
-      id: "task-1",
-      name: "每日词汇",
-      aiModelConfigId: "m1",
-      aiModelName: "gpt-test",
-      questionCount: 5,
-      optionCount: 4,
-      basePoints: 10,
-      cronExpression: "0 8 * * *",
-      isEnabled: true,
-      wordMatchRules: defaultRules,
-      lastEntryId: null,
-      createdAt: "2026-08-03T00:00:00.000Z",
-      updatedAt: "2026-08-03T00:00:00.000Z",
-    });
+    const createAdminAiTask = jest
+      .fn()
+      .mockResolvedValue(makeTaskResponse());
     render(
       <AiTaskForm
         api={{ createAdminAiTask, updateAdminAiTask: jest.fn() }}
@@ -121,11 +104,55 @@ describe("AiTaskForm", () => {
         basePoints: 10,
         cronExpression: "0 8 * * *",
         isEnabled: true,
+        maxConsecutiveFailures: 0,
         wordMatchRules: {
           suffixes: [...DEFAULT_WORD_MATCH_SUFFIXES],
           irregulars: { go: ["went", "gone"] },
         },
       });
     });
+  });
+
+  it("新建可提交连续失败停用阈值", async () => {
+    const user = userEvent.setup();
+    const createAdminAiTask = jest
+      .fn()
+      .mockResolvedValue(makeTaskResponse({ maxConsecutiveFailures: 3 }));
+    render(
+      <AiTaskForm
+        api={{ createAdminAiTask, updateAdminAiTask: jest.fn() }}
+        mode="create"
+        models={[{ id: "m1", name: "gpt-test" }]}
+      />,
+    );
+
+    await user.type(screen.getByLabelText("任务名称"), "每日词汇");
+    await user.clear(screen.getByLabelText("连续失败停用阈值"));
+    await user.type(screen.getByLabelText("连续失败停用阈值"), "3");
+    await user.click(screen.getByRole("button", { name: "保存" }));
+
+    await waitFor(() => {
+      expect(createAdminAiTask).toHaveBeenCalledWith(
+        expect.objectContaining({ maxConsecutiveFailures: 3 }),
+      );
+    });
+  });
+
+  it("编辑页只读展示当前连续失败次数", () => {
+    render(
+      <AiTaskForm
+        api={{ createAdminAiTask: jest.fn(), updateAdminAiTask: jest.fn() }}
+        initialTask={
+          makeTaskResponse({
+            consecutiveFailureCount: 2,
+            maxConsecutiveFailures: 3,
+          }) as never
+        }
+        mode="edit"
+        models={[{ id: "m1", name: "gpt-test" }]}
+      />,
+    );
+
+    expect(screen.getByLabelText("当前连续失败次数")).toHaveValue("2");
   });
 });

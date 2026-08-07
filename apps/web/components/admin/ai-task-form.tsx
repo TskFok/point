@@ -74,6 +74,9 @@ export function AiTaskForm({
     initialTask?.cronExpression ?? "0 8 * * *",
   );
   const [isEnabled, setIsEnabled] = useState(initialTask?.isEnabled ?? true);
+  const [maxConsecutiveFailures, setMaxConsecutiveFailures] = useState(
+    String(initialTask?.maxConsecutiveFailures ?? 0),
+  );
   const [suffixesText, setSuffixesText] = useState(() =>
     initialSuffixesText(initialTask),
   );
@@ -110,6 +113,14 @@ export function AiTaskForm({
       next.push("基础积分必须是 1–1000 的整数");
     }
     if (!cronExpression.trim()) next.push("请输入 crontab 表达式");
+    const maxFailures = Number(maxConsecutiveFailures);
+    if (
+      !Number.isInteger(maxFailures) ||
+      maxFailures < 0 ||
+      maxFailures > 100
+    ) {
+      next.push("连续失败停用阈值必须是 0–100 的整数");
+    }
     const rules = buildWordMatchRulesFromInputs(suffixesText, irregularsText);
     if (!rules.ok) next.push(rules.message);
     return next;
@@ -139,6 +150,7 @@ export function AiTaskForm({
         basePoints: Number(basePoints),
         cronExpression: cronExpression.trim(),
         isEnabled,
+        maxConsecutiveFailures: Number(maxConsecutiveFailures),
         wordMatchRules: rules.rules,
       };
       const task =
@@ -255,6 +267,27 @@ export function AiTaskForm({
                 aria-label="当前游标"
                 readOnly
                 value={initialTask?.lastEntryId ?? "（空，从最小 entry.id 开始）"}
+              />
+            </label>
+          ) : null}
+          <label className="admin-field">
+            <span>连续失败停用阈值（0 = 不自动停用；仅统计自动调度失败）</span>
+            <input
+              aria-label="连续失败停用阈值"
+              inputMode="numeric"
+              onChange={(event) =>
+                setMaxConsecutiveFailures(event.target.value)
+              }
+              value={maxConsecutiveFailures}
+            />
+          </label>
+          {mode === "edit" ? (
+            <label className="admin-field">
+              <span>当前连续失败次数</span>
+              <input
+                aria-label="当前连续失败次数"
+                readOnly
+                value={String(initialTask?.consecutiveFailureCount ?? 0)}
               />
             </label>
           ) : null}
