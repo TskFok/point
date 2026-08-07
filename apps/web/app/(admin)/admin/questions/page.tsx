@@ -28,6 +28,11 @@ import {
   ADMIN_QUESTIONS_OPEN_CREATE_KEY,
   CLEAR_QUESTION_BANK_CHALLENGE,
 } from "@/lib/admin/questions-ui";
+import {
+  LANG_CODE_LABELS,
+  LANG_CODES,
+  type LangCode,
+} from "@/lib/lang-code";
 
 type Schemas = ApiComponents["schemas"];
 type Question = Schemas["AdminQuestionDto"];
@@ -43,7 +48,7 @@ type QuestionsApi = Pick<
   | "listAdminQuestions"
   | "updateAdminQuestion"
 >;
-type Filters = { search: string; isActive: string };
+type Filters = { search: string; isActive: string; langCode: string };
 type ConfirmAction =
   | { kind: "clear" }
   | { kind: "disable"; target: Question }
@@ -51,7 +56,7 @@ type ConfirmAction =
   | { kind: "batch-disable"; ids: string[]; count: number }
   | { kind: "batch-delete"; ids: string[]; count: number };
 
-const emptyFilters: Filters = { search: "", isActive: "" };
+const emptyFilters: Filters = { search: "", isActive: "", langCode: "" };
 
 function stemPreview(stem: string, max = 40): string {
   const trimmed = stem.trim();
@@ -79,6 +84,7 @@ function readUrlState(): { filters: Filters; page: number } {
     filters: {
       search: params.get("search") ?? "",
       isActive: params.get("isActive") ?? "",
+      langCode: params.get("langCode") ?? "",
     },
   };
 }
@@ -88,6 +94,7 @@ function writeUrl(filters: Filters, page: number) {
   const params = new URLSearchParams();
   if (filters.search.trim()) params.set("search", filters.search.trim());
   if (filters.isActive) params.set("isActive", filters.isActive);
+  if (filters.langCode) params.set("langCode", filters.langCode);
   if (page > 1) params.set("page", String(page));
   const search = params.toString();
   window.history.replaceState(
@@ -154,6 +161,9 @@ export default function AdminQuestionsPage({
           : {}),
         ...(appliedFilters.isActive
           ? { isActive: appliedFilters.isActive === "true" }
+          : {}),
+        ...(appliedFilters.langCode
+          ? { langCode: appliedFilters.langCode as LangCode }
           : {}),
       });
       if (!mounted.current || latestRequest.current !== requestId) return;
@@ -360,6 +370,26 @@ export default function AdminQuestionsPage({
               ]}
               value={filters.isActive}
             />
+            <label className="admin-field">
+              <span>语言</span>
+              <select
+                aria-label="语言"
+                onChange={(event) =>
+                  setFilters((current) => ({
+                    ...current,
+                    langCode: event.target.value,
+                  }))
+                }
+                value={filters.langCode}
+              >
+                <option value="">全部</option>
+                {LANG_CODES.map((code) => (
+                  <option key={code} value={code}>
+                    {LANG_CODE_LABELS[code]}
+                  </option>
+                ))}
+              </select>
+            </label>
             <Button
               disabled={busy || loading}
               onClick={() => openConfirm({ kind: "clear" })}
@@ -523,6 +553,7 @@ export default function AdminQuestionsPage({
                       />
                     </th>
                     <th className="admin-table__primary">题干</th>
+                    <th>语言</th>
                     <th>选项</th>
                     <th>基础积分</th>
                     <th>状态</th>
@@ -546,6 +577,10 @@ export default function AdminQuestionsPage({
                       <td className="admin-table__primary" data-label="题干">
                         <strong>{question.stem}</strong>
                         <small>{question.explanation}</small>
+                      </td>
+                      <td data-label="语言">
+                        {LANG_CODE_LABELS[question.langCode as LangCode] ??
+                          question.langCode}
                       </td>
                       <td data-label="选项">{question.options.length} 项</td>
                       <td data-label="基础积分">{question.basePoints} 分</td>

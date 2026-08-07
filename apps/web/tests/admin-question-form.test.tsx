@@ -344,6 +344,7 @@ describe("管理员题目表单", () => {
       basePoints: 10,
       explanation: "The subject is singular.",
       isActive: true,
+      langCode: "en",
       options: [
         {
           content: "is",
@@ -366,6 +367,26 @@ describe("管理员题目表单", () => {
     );
   });
 
+  it("创建题目提交 langCode", async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    api.createAdminQuestion.mockResolvedValue({
+      id: "q1",
+      langCode: "it",
+    });
+    render(<QuestionForm api={api} mode="create" />);
+    await fillRequiredQuestion(user);
+    await user.selectOptions(screen.getByLabelText("语言"), "it");
+    await user.click(screen.getByLabelText("将选项 A 设为正确答案"));
+
+    await user.click(screen.getByRole("button", { name: "保存题目" }));
+
+    await waitFor(() =>
+      expect(api.createAdminQuestion).toHaveBeenCalledWith(
+        expect.objectContaining({ langCode: "it" }),
+      ),
+    );
+  });
   it("保存期间通知父组件阻止关闭弹窗", async () => {
     const user = userEvent.setup();
     const api = createApi();

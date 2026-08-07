@@ -355,6 +355,45 @@ describe("AdminQuestionsPage 批量操作", () => {
   });
 });
 
+describe("AdminQuestionsPage 语言筛选", () => {
+  beforeEach(() => {
+    window.history.replaceState(null, "", "/admin/questions");
+  });
+
+  it("筛选选择日语后 listAdminQuestions 带 langCode ja", async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    render(<AdminQuestionsPage api={api} />);
+    await screen.findByText("启用中的题目");
+
+    await user.selectOptions(screen.getByLabelText("语言"), "ja");
+    await user.click(screen.getByRole("button", { name: "应用筛选" }));
+
+    await waitFor(() => {
+      expect(api.listAdminQuestions).toHaveBeenCalledWith(
+        expect.objectContaining({ langCode: "ja" }),
+      );
+    });
+  });
+
+  it("列表展示语言中文标签", async () => {
+    const api = createApi({
+      listAdminQuestions: jest.fn().mockResolvedValue({
+        data: [{ ...activeQuestion, langCode: "ja" }],
+        meta,
+      }),
+    });
+    render(<AdminQuestionsPage api={api} />);
+    await screen.findByText("启用中的题目");
+    expect(
+      screen.getByRole("columnheader", { name: "语言" }),
+    ).toBeInTheDocument();
+    const row = screen.getByText("启用中的题目").closest("tr");
+    expect(row).not.toBeNull();
+    expect(within(row as HTMLElement).getByText("日语")).toBeVisible();
+  });
+});
+
 describe("AdminQuestionsPage 清理题库", () => {
   beforeEach(() => {
     window.history.replaceState(null, "", "/admin/questions");

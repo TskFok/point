@@ -12,6 +12,12 @@ import { useEffect, useState } from "react";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { browserApiClient } from "@/lib/api/browser-client";
 import { getApiErrorMessage } from "@/lib/api/error-message";
+import {
+  DEFAULT_LANG_CODE,
+  LANG_CODE_LABELS,
+  LANG_CODES,
+  type LangCode,
+} from "@/lib/lang-code";
 
 type Schemas = ApiComponents["schemas"];
 type AdminQuestion = Schemas["AdminQuestionDto"];
@@ -24,6 +30,7 @@ export type QuestionFormValue = {
   stem: string;
   explanation: string;
   basePoints: number;
+  langCode: LangCode;
   options: Array<{
     label: string;
     content: string;
@@ -116,6 +123,9 @@ export function QuestionForm({
   const [basePoints, setBasePoints] = useState(
     String(initialQuestion?.basePoints ?? 10),
   );
+  const [langCode, setLangCode] = useState<LangCode>(
+    initialQuestion?.langCode ?? DEFAULT_LANG_CODE,
+  );
   const [isActive, setIsActive] = useState(initialQuestion?.isActive ?? true);
   const [options, setOptions] = useState<EditableOption[]>(
     initialQuestion
@@ -172,6 +182,7 @@ export function QuestionForm({
       stem: stem.trim(),
       explanation: explanation.trim(),
       basePoints: Number(basePoints),
+      langCode,
       isActive,
       options: options.map((option, position) => ({
         label: option.label.trim(),
@@ -296,6 +307,23 @@ export function QuestionForm({
               value={basePoints}
             />
             <small>1–1000 的整数</small>
+          </label>
+          <label className="admin-field">
+            <span>语言</span>
+            <select
+              aria-label="语言"
+              disabled={readOnly}
+              onChange={(event) =>
+                setLangCode(event.target.value as LangCode)
+              }
+              value={langCode}
+            >
+              {LANG_CODES.map((code) => (
+                <option key={code} value={code}>
+                  {LANG_CODE_LABELS[code]}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="admin-switch admin-field--wide">
             <input
