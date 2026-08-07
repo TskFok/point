@@ -77,9 +77,11 @@ export function buildGeneratePrompt(input: {
     formatWordMatchRulesForPrompt(input.wordMatchRules),
     'Each question\'s "word" field MUST match the listed word exactly. Never substitute a near-form or different word (e.g. "when" for "why", "catch" for "cat").',
     'Do NOT use blanks, underscores (___), ellipsis placeholders, or [blank] in the stem.',
-    'End the stem by naming the word to test, e.g. What does \\"abhor\\" mean?',
+    'Stem format is REQUIRED and MUST follow: one complete English example sentence that uses the target word, then a space, then Exactly What does \\"WORD\\" mean? (WORD = the listed target word with escaped quotes).',
+    'Forbidden stems: only an interrogative/question that uses the word without the What does \\"WORD\\" mean? suffix (e.g. reject "When did you arrive?"); also forbidden: only What does \\"WORD\\" mean? without a preceding example sentence.',
+    'Good stem example: The scholar claimed to abhor violence in all forms. What does \\"abhor\\" mean?',
     'In JSON string values, every double quote MUST be escaped as \\". Never write raw " inside a string (invalid JSON).',
-    'Example stem JSON fragment: "stem":"What does \\"abhor\\" mean?"',
+    'Example stem JSON fragment: "stem":"The scholar claimed to abhor violence in all forms. What does \\"abhor\\" mean?"',
     'Option contents must be Chinese meanings matching the tested part of speech.',
     'Explanation must be Chinese and MUST include: (1) a full Chinese translation of the entire stem sentence, (2) the part of speech in Chinese (如 名词/动词/形容词), and (3) a brief meaning note for the target word.',
     'Example explanation: 他们决定放弃这个计划。「abandon」是动词，表示放弃、抛弃。',
@@ -141,6 +143,21 @@ function stemHasBlankPlaceholder(stem: string): boolean {
   return /\b_{2,}\b|___+|\[\s*blank\s*\]|\[\s*\]/i.test(stem);
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** stem 是否以 What does "word" mean? 形式点名考查目标词（引号可选） */
+export function stemNamesTargetWord(stem: string, word: string): boolean {
+  const base = word.trim();
+  if (!base) return false;
+  const pattern = new RegExp(
+    `what\\s+does\\s+["'\\u201c\\u201d\\u300c]?${escapeRegExp(base)}["'\\u201c\\u201d\\u300d]?\\s+mean\\s*\\?`,
+    'i',
+  );
+  return pattern.test(stem);
+}
+
 /**
  * 校验一道生成的题目结构，并与期望词（本批 entry.word）1:1 对齐。
  * - 入库 word 强制为 expectedWord（trim+小写）
@@ -178,6 +195,9 @@ export function validateOneGeneratedQuestion(
   }
   if (!stemIncludesWord(stem, expected, wordMatchRules)) {
     return { ok: false, message: `题目 ${expected} stem 未包含目标词` };
+  }
+  if (!stemNamesTargetWord(stem, expected)) {
+    return { ok: false, message: `题目 ${expected} stem 未点名考查目标词` };
   }
   if (typeof value.explanation !== 'string' || !value.explanation.trim()) {
     return { ok: false, message: `题目 ${expected} 缺少 explanation` };

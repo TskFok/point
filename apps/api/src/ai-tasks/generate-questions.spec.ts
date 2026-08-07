@@ -249,6 +249,24 @@ describe('generate-questions parse', () => {
     expect(p.toLowerCase()).toMatch(/what does/);
   });
 
+  it('prompt 强制 stem 格式为例句 + What does "word" mean?', () => {
+    const p = buildGeneratePrompt({
+      words: abandonWords,
+      optionCount: 4,
+      wordMatchRules: DEFAULT_WORD_MATCH_RULES,
+    });
+    expect(p).toMatch(/example sentence.*What does \\?"?\w+\\?"? mean\?/is);
+    expect(p).toContain(
+      'The scholar claimed to abhor violence in all forms. What does \\"abhor\\" mean?',
+    );
+    expect(p.toLowerCase()).toMatch(
+      /must (?:be|follow|use).*example sentence.*what does/i,
+    );
+    expect(p.toLowerCase()).toMatch(
+      /not (?:only|just).*(?:interrogative|question)|forbidden.*stem.*(only|without)/i,
+    );
+  });
+
   it('prompt 要求按配置后缀允许变形且禁止换词', () => {
     const p = buildGeneratePrompt({
       words: abandonWords,
@@ -331,11 +349,48 @@ describe('generate-questions parse', () => {
     if (!result.ok) expect(result.message).toMatch(/未包含|不包含|word/i);
   });
 
+  it('拒绝仅含目标词例句但未点名考查（如 When did you arrive?）', () => {
+    const result = validateOneGeneratedQuestion(
+      {
+        word: 'when',
+        stem: 'When did you arrive?',
+        explanation: '你什么时候到的？「when」是副词，表示何时。',
+        options: [
+          { label: 'A', content: '何时', isCorrect: true },
+          { label: 'B', content: '哪里', isCorrect: false },
+        ],
+      },
+      2,
+      'when',
+      DEFAULT_WORD_MATCH_RULES,
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toMatch(/点名|What does/i);
+  });
+
+  it('接受例句后点名考查目标词', () => {
+    const result = validateOneGeneratedQuestion(
+      {
+        word: 'when',
+        stem: 'When did you arrive? What does "when" mean?',
+        explanation: '你什么时候到的？「when」是副词，表示何时。',
+        options: [
+          { label: 'A', content: '何时', isCorrect: true },
+          { label: 'B', content: '哪里', isCorrect: false },
+        ],
+      },
+      2,
+      'when',
+      DEFAULT_WORD_MATCH_RULES,
+    );
+    expect(result.ok).toBe(true);
+  });
+
   it('接受 stem 含目标词常见变形（如 whys）', () => {
     const result = validateOneGeneratedQuestion(
       {
         word: 'why',
-        stem: 'She whys at every decision, which annoys her boss.',
+        stem: 'She whys at every decision, which annoys her boss. What does "why" mean?',
         explanation: '她对每个决定都问为什么。「why」作动词，表示问为什么。',
         options: [
           { label: 'A', content: '问为什么', isCorrect: true },
@@ -394,7 +449,7 @@ describe('generate-questions parse', () => {
     const raw = JSON.stringify([
       {
         word: 'why',
-        stem: 'She whys at every decision, which annoys her boss.',
+        stem: 'She whys at every decision, which annoys her boss. What does "why" mean?',
         explanation: '问为什么',
         options: [
           { label: 'A', content: '问为什么', isCorrect: true },
@@ -403,7 +458,7 @@ describe('generate-questions parse', () => {
       },
       {
         word: 'why',
-        stem: 'The whys of the accident remain unknown.',
+        stem: 'The whys of the accident remain unknown. What does "why" mean?',
         explanation: '原因',
         options: [
           { label: 'A', content: '原因', isCorrect: true },
