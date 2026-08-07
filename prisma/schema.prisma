@@ -241,6 +241,8 @@ model AiTask {
   basePoints      Int
   cronExpression  String
   isEnabled       Boolean      @default(true)
+  maxConsecutiveFailures  Int  @default(0)
+  consecutiveFailureCount Int  @default(0)
   lastEntryId     BigInt?
   /// { suffixes: string[], irregulars: Record<string, string[]> }
   wordMatchRules  Json         @default("{\"suffixes\":[\"s\",\"es\",\"ed\",\"ing\",\"er\",\"est\",\"ies\",\"ied\",\"ying\",\"'s\"],\"irregulars\":{}}")
