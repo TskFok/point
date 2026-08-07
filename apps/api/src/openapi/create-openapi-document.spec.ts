@@ -452,8 +452,14 @@ describe('OpenAPI 契约', () => {
       ?.AiTaskLatestRunDto as SchemaObject;
     const aiTaskRun = document.components?.schemas
       ?.AiTaskRunDto as SchemaObject;
+    const updateAiTask = document.components?.schemas
+      ?.UpdateAiTaskRequestDto as SchemaObject;
 
     expect(aiTask.properties?.lastEntryId).toMatchObject({
+      type: 'string',
+      nullable: true,
+    });
+    expect(updateAiTask.properties?.lastEntryId).toMatchObject({
       type: 'string',
       nullable: true,
     });

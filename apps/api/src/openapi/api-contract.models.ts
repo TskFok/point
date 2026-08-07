@@ -905,6 +905,13 @@ export class UpdateAiTaskRequestDto {
   @ApiPropertyOptional({ ...int32, minimum: 0, maximum: 100 })
   maxConsecutiveFailures?: number;
 
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'entry.id 游标；null 或空串表示重置',
+  })
+  lastEntryId?: string | null;
+
   @ApiPropertyOptional({ type: () => WordMatchRulesDto })
   wordMatchRules?: WordMatchRulesDto;
 }

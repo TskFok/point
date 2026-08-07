@@ -1204,6 +1204,8 @@ export interface components {
             basePoints?: number;
             cronExpression?: string;
             isEnabled?: boolean;
+            /** @description entry.id 游标；null 或空串表示重置 */
+            lastEntryId?: string | null;
             /** Format: int32 */
             maxConsecutiveFailures?: number;
             name?: string;

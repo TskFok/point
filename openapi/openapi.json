@@ -1660,6 +1660,11 @@
           "isEnabled": {
             "type": "boolean"
           },
+          "lastEntryId": {
+            "description": "entry.id 游标；null 或空串表示重置",
+            "nullable": true,
+            "type": "string"
+          },
           "maxConsecutiveFailures": {
             "format": "int32",
             "maximum": 100,
