@@ -77,6 +77,9 @@ export function AiTaskForm({
   const [maxConsecutiveFailures, setMaxConsecutiveFailures] = useState(
     String(initialTask?.maxConsecutiveFailures ?? 0),
   );
+  const [lastEntryId, setLastEntryId] = useState(
+    initialTask?.lastEntryId ?? "",
+  );
   const [suffixesText, setSuffixesText] = useState(() =>
     initialSuffixesText(initialTask),
   );
@@ -121,6 +124,14 @@ export function AiTaskForm({
     ) {
       next.push("连续失败停用阈值必须是 0–100 的整数");
     }
+    if (mode === "edit") {
+      const cursor = lastEntryId.trim();
+      if (cursor !== "" && !/^\d+$/.test(cursor)) {
+        next.push("游标 lastEntryId 须为正整数字符串，或留空以重置");
+      } else if (cursor !== "" && BigInt(cursor) < 1n) {
+        next.push("游标 lastEntryId 须为正整数字符串，或留空以重置");
+      }
+    }
     const rules = buildWordMatchRulesFromInputs(suffixesText, irregularsText);
     if (!rules.ok) next.push(rules.message);
     return next;
@@ -152,6 +163,12 @@ export function AiTaskForm({
         isEnabled,
         maxConsecutiveFailures: Number(maxConsecutiveFailures),
         wordMatchRules: rules.rules,
+        ...(mode === "edit"
+          ? {
+              lastEntryId:
+                lastEntryId.trim() === "" ? null : lastEntryId.trim(),
+            }
+          : {}),
       };
       const task =
         mode === "create"
@@ -262,11 +279,13 @@ export function AiTaskForm({
           </label>
           {mode === "edit" ? (
             <label className="admin-field">
-              <span>当前游标 lastEntryId</span>
+              <span>当前游标 lastEntryId（留空=从最小 entry.id 开始）</span>
               <input
                 aria-label="当前游标"
-                readOnly
-                value={initialTask?.lastEntryId ?? "（空，从最小 entry.id 开始）"}
+                inputMode="numeric"
+                onChange={(event) => setLastEntryId(event.target.value)}
+                placeholder="留空则从最小 entry.id 开始"
+                value={lastEntryId}
               />
             </label>
           ) : null}

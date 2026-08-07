@@ -155,4 +155,93 @@ describe("AiTaskForm", () => {
 
     expect(screen.getByLabelText("当前连续失败次数")).toHaveValue("2");
   });
+
+  it("新建模式不展示游标字段", () => {
+    render(
+      <AiTaskForm
+        api={{ createAdminAiTask: jest.fn(), updateAdminAiTask: jest.fn() }}
+        mode="create"
+        models={[{ id: "m1", name: "gpt-test" }]}
+      />,
+    );
+    expect(screen.queryByLabelText("当前游标")).not.toBeInTheDocument();
+  });
+
+  it("编辑模式可修改游标并随 update 提交", async () => {
+    const user = userEvent.setup();
+    const updateAdminAiTask = jest
+      .fn()
+      .mockResolvedValue(makeTaskResponse({ lastEntryId: "42" }));
+    render(
+      <AiTaskForm
+        api={{ createAdminAiTask: jest.fn(), updateAdminAiTask }}
+        initialTask={makeTaskResponse({ lastEntryId: "20" }) as never}
+        mode="edit"
+        models={[{ id: "m1", name: "gpt-test" }]}
+      />,
+    );
+
+    const cursor = screen.getByLabelText("当前游标");
+    expect(cursor).toHaveValue("20");
+    expect(cursor).not.toHaveAttribute("readonly");
+
+    await user.clear(cursor);
+    await user.type(cursor, "42");
+    await user.click(screen.getByRole("button", { name: "保存" }));
+
+    await waitFor(() => {
+      expect(updateAdminAiTask).toHaveBeenCalledWith(
+        "task-1",
+        expect.objectContaining({ lastEntryId: "42" }),
+      );
+    });
+  });
+
+  it("编辑模式清空游标时提交 null", async () => {
+    const user = userEvent.setup();
+    const updateAdminAiTask = jest
+      .fn()
+      .mockResolvedValue(makeTaskResponse({ lastEntryId: null }));
+    render(
+      <AiTaskForm
+        api={{ createAdminAiTask: jest.fn(), updateAdminAiTask }}
+        initialTask={makeTaskResponse({ lastEntryId: "20" }) as never}
+        mode="edit"
+        models={[{ id: "m1", name: "gpt-test" }]}
+      />,
+    );
+
+    await user.clear(screen.getByLabelText("当前游标"));
+    await user.click(screen.getByRole("button", { name: "保存" }));
+
+    await waitFor(() => {
+      expect(updateAdminAiTask).toHaveBeenCalledWith(
+        "task-1",
+        expect.objectContaining({ lastEntryId: null }),
+      );
+    });
+  });
+
+  it("编辑模式非法游标不调用 API", async () => {
+    const user = userEvent.setup();
+    const updateAdminAiTask = jest.fn();
+    render(
+      <AiTaskForm
+        api={{ createAdminAiTask: jest.fn(), updateAdminAiTask }}
+        initialTask={makeTaskResponse({ lastEntryId: "20" }) as never}
+        mode="edit"
+        models={[{ id: "m1", name: "gpt-test" }]}
+      />,
+    );
+
+    const cursor = screen.getByLabelText("当前游标");
+    await user.clear(cursor);
+    await user.type(cursor, "abc");
+    await user.click(screen.getByRole("button", { name: "保存" }));
+
+    expect(updateAdminAiTask).not.toHaveBeenCalled();
+    expect(
+      screen.getByText(/游标 lastEntryId 须为正整数字符串/),
+    ).toBeInTheDocument();
+  });
 });
