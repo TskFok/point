@@ -2912,8 +2912,16 @@ svg {
 
 .point-config-card__heading {
   display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.point-config-card__heading-main {
+  display: flex;
   align-items: center;
   gap: 1rem;
+  min-width: 0;
 }
 
 .point-config-card__heading h2,
@@ -2939,9 +2947,11 @@ svg {
 
 .point-config-form {
   display: grid;
-  grid-template-columns: minmax(14rem, 1fr) auto;
-  align-items: end;
-  gap: 1rem;
+  gap: 1.25rem;
+}
+
+.point-config-card__heading > .pq-button {
+  flex: 0 0 auto;
 }
 
 .multiplier-input {
@@ -3172,8 +3182,7 @@ svg {
   .admin-form__grid,
   .admin-filter-grid,
   .admin-filter-grid--questions,
-  .admin-filter-grid--orders,
-  .point-config-form {
+  .admin-filter-grid--orders {
     grid-template-columns: 1fr;
   }
 
@@ -3185,9 +3194,14 @@ svg {
   .admin-section-heading,
   .admin-form__section-heading,
   .point-config-card__heading,
+  .point-config-card__heading-main,
   .admin-image-preview {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .point-config-card__heading > .pq-button {
+    width: 100%;
   }
 
   .admin-quick-actions__links,

@@ -51,16 +51,6 @@ export function PointConfigForm({
 
   return (
     <Card className="point-config-card" tone="reward">
-      <div className="point-config-card__heading">
-        <div className="point-config-card__icon">
-          <Sparkles aria-hidden="true" />
-        </div>
-        <div>
-          <p className="page-kicker">全局奖励规则</p>
-          <h2>积分倍率</h2>
-          <p>答对首答题目时，基础积分会乘以当前倍率。</p>
-        </div>
-      </div>
       <form
         className="point-config-form"
         noValidate
@@ -69,6 +59,26 @@ export function PointConfigForm({
           void submit();
         }}
       >
+        <div className="point-config-card__heading">
+          <div className="point-config-card__heading-main">
+            <div className="point-config-card__icon">
+              <Sparkles aria-hidden="true" />
+            </div>
+            <div>
+              <p className="page-kicker">全局奖励规则</p>
+              <h2>积分倍率</h2>
+              <p>答对首答题目时，基础积分会乘以当前倍率。</p>
+            </div>
+          </div>
+          <Button disabled={saving} type="submit">
+            {saving ? (
+              <LoaderCircle aria-hidden="true" className="spin" />
+            ) : (
+              <Save aria-hidden="true" />
+            )}
+            {saving ? "正在保存" : error ? "重试保存倍率" : "保存倍率"}
+          </Button>
+        </div>
         <label className="admin-field">
           <span>积分倍率</span>
           <div className="multiplier-input">
@@ -90,14 +100,6 @@ export function PointConfigForm({
           </div>
           <small>输入 1–10 的整数，新配置立即对后续答题生效。</small>
         </label>
-        <Button disabled={saving} type="submit">
-          {saving ? (
-            <LoaderCircle aria-hidden="true" className="spin" />
-          ) : (
-            <Save aria-hidden="true" />
-          )}
-          {saving ? "正在保存" : error ? "重试保存倍率" : "保存倍率"}
-        </Button>
       </form>
       {error ? (
         <p className="admin-form__errors" role="alert">
