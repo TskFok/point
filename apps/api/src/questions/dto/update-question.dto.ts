@@ -5,8 +5,10 @@ import {
   ArrayUnique,
   IsArray,
   IsBoolean,
+  IsIn,
   IsInt,
   IsNotEmpty,
+  IsOptional,
   IsString,
   Max,
   MaxLength,
@@ -14,6 +16,7 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
+import { LANG_CODES } from '../../common/lang-code';
 import { QuestionOptionWriteDto } from './create-question.dto';
 
 function trimText({ value }: TransformFnParams): unknown {
@@ -54,4 +57,9 @@ export class UpdateQuestionDto {
   @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @IsIn([...LANG_CODES])
+  langCode?: string;
 }

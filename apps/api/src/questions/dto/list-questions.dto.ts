@@ -1,6 +1,7 @@
 import { Transform, Type, type TransformFnParams } from 'class-transformer';
 import {
   IsBoolean,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -8,6 +9,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { LANG_CODES } from '../../common/lang-code';
 
 function trimText({ value }: TransformFnParams): unknown {
   return typeof value === 'string' ? value.trim() : (value as unknown);
@@ -34,6 +36,11 @@ export class ListQuestionsDto {
   @Transform(parseBoolean)
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @IsIn([...LANG_CODES])
+  langCode?: string;
 
   @IsOptional()
   @Type(() => Number)

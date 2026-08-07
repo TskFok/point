@@ -5,8 +5,10 @@ import {
   ArrayUnique,
   IsArray,
   IsBoolean,
+  IsIn,
   IsInt,
   IsNotEmpty,
+  IsOptional,
   IsString,
   Max,
   MaxLength,
@@ -17,6 +19,7 @@ import {
   ValidatorConstraint,
   type ValidatorConstraintInterface,
 } from 'class-validator';
+import { LANG_CODES } from '../../common/lang-code';
 
 function trimText({ value }: TransformFnParams): unknown {
   return typeof value === 'string' ? value.trim() : (value as unknown);
@@ -95,6 +98,11 @@ export class QuestionWriteDto {
   @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @IsIn([...LANG_CODES])
+  langCode?: string;
 }
 
 export class CreateQuestionDto extends QuestionWriteDto {}

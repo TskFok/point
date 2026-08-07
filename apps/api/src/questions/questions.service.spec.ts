@@ -9,6 +9,7 @@ import { validate } from 'class-validator';
 import { PointsService } from '../points/points.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateQuestionDto } from './dto/create-question.dto';
+import { ListQuestionsDto } from './dto/list-questions.dto';
 import { UpdateQuestionDto } from './dto/update-question.dto';
 import { QuestionsService } from './questions.service';
 
@@ -457,6 +458,114 @@ describe('QuestionsService', () => {
     });
   });
 
+  it('create 可指定 langCode', async () => {
+    const prisma = {
+      question: {
+        create: ({ data }: { data: Record<string, unknown> }) =>
+          Promise.resolve({ ...data, _count: { attempts: 0 } }),
+      },
+    };
+    const service = new QuestionsService(prisma as unknown as PrismaService);
+
+    const created = await service.create(
+      { ...validQuestionInput(), langCode: 'de' },
+      'admin-1',
+    );
+
+    expect(created.langCode).toBe('de');
+  });
+
+  it('create 省略 langCode 默认 en', async () => {
+    const prisma = {
+      question: {
+        create: ({ data }: { data: Record<string, unknown> }) =>
+          Promise.resolve({ ...data, _count: { attempts: 0 } }),
+      },
+    };
+    const service = new QuestionsService(prisma as unknown as PrismaService);
+
+    const created = await service.create(validQuestionInput(), 'admin-1');
+
+    expect(created.langCode).toBe('en');
+  });
+
+  it('create 拒绝非法 langCode', async () => {
+    const prisma = {
+      question: {
+        create: () => Promise.reject(new Error('不应访问 Prisma')),
+      },
+    };
+    const service = new QuestionsService(prisma as unknown as PrismaService);
+
+    await expectValidationFailed(
+      service.create(
+        { ...validQuestionInput(), langCode: 'zh' },
+        'admin-1',
+      ),
+    );
+  });
+
+  it('list 可按 langCode 筛选', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const prisma = {
+      question: {
+        findMany,
+        count: jest.fn().mockResolvedValue(0),
+      },
+      $transaction: (operations: Array<Promise<unknown>>) =>
+        Promise.all(operations),
+    };
+    const service = new QuestionsService(prisma as unknown as PrismaService);
+
+    await service.list({ page: 1, pageSize: 20, langCode: 'ja' });
+
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ langCode: 'ja' }),
+      }),
+    );
+  });
+
+  it('update 可改 langCode', async () => {
+    const transactionClient = {
+      $queryRaw: () => Promise.resolve([{ id: 'question-1' }]),
+      question: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValueOnce({
+            id: 'question-1',
+            _count: { attempts: 0 },
+          })
+          .mockResolvedValueOnce({
+            id: 'question-1',
+            langCode: 'fr',
+            options: [],
+            _count: { attempts: 0 },
+          }),
+        update: jest.fn().mockResolvedValue({ id: 'question-1' }),
+      },
+      questionOption: {
+        deleteMany: jest.fn(),
+        createMany: jest.fn(),
+      },
+    };
+    const prisma = {
+      $transaction: (
+        operation: (tx: typeof transactionClient) => Promise<unknown>,
+      ) => operation(transactionClient),
+    };
+    const service = new QuestionsService(prisma as unknown as PrismaService);
+
+    const updated = await service.update('question-1', { langCode: 'fr' });
+
+    expect(transactionClient.question.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ langCode: 'fr' }),
+      }),
+    );
+    expect(updated.langCode).toBe('fr');
+  });
+
   it('并发答题导致选项外键冲突时返回稳定题目冲突而不是数据库错误', async () => {
     const transactionClient = {
       $queryRaw: () => Promise.resolve([{ id: 'question-1' }]),
@@ -838,6 +947,33 @@ describe('题目 DTO 显式 null 校验', () => {
       expect(errors.map(({ property }) => property)).toContain(field);
     },
   );
+
+  it('create 非法 langCode 产生验证错误', async () => {
+    const dto = plainToInstance(CreateQuestionDto, {
+      ...validQuestionInput(),
+      langCode: 'zh',
+    });
+
+    const errors = await validate(dto);
+
+    expect(errors.map(({ property }) => property)).toContain('langCode');
+  });
+
+  it('update 非法 langCode 产生验证错误', async () => {
+    const dto = plainToInstance(UpdateQuestionDto, { langCode: 'zh' });
+
+    const errors = await validate(dto);
+
+    expect(errors.map(({ property }) => property)).toContain('langCode');
+  });
+
+  it('list 非法 langCode 产生验证错误', async () => {
+    const dto = plainToInstance(ListQuestionsDto, { langCode: 'zh' });
+
+    const errors = await validate(dto);
+
+    expect(errors.map(({ property }) => property)).toContain('langCode');
+  });
 });
 
 describe('PointsService', () => {

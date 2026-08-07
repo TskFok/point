@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { type Prisma } from '@prisma/client';
+import { normalizeLangCode } from '../common/lang-code';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   type BatchQuestionAction,
@@ -112,6 +113,7 @@ type NormalizedQuestionWrite = {
   basePoints: number;
   options: NormalizedQuestionOption[];
   isActive: boolean;
+  langCode: string;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -217,6 +219,7 @@ function normalizeCreateQuestion(
       input.isActive === undefined
         ? true
         : normalizeBoolean(input.isActive, '启用状态'),
+    langCode: normalizeLangCode(input.langCode),
   };
 }
 
@@ -240,6 +243,9 @@ function normalizeUpdateQuestion(
   if (input.isActive !== undefined) {
     normalized.isActive = normalizeBoolean(input.isActive, '启用状态');
   }
+  if (input.langCode !== undefined) {
+    normalized.langCode = normalizeLangCode(input.langCode);
+  }
   if (Object.keys(normalized).length === 0) {
     throw validationFailed('至少需要提供一个待更新字段');
   }
@@ -258,6 +264,7 @@ export class QuestionsService {
         explanation: normalized.explanation,
         basePoints: normalized.basePoints,
         isActive: normalized.isActive,
+        langCode: normalized.langCode,
         createdBy,
         options: {
           createMany: {
@@ -273,6 +280,7 @@ export class QuestionsService {
   async list(query: ListQuestionsDto) {
     const where: Prisma.QuestionWhereInput = {
       ...(query.isActive === undefined ? {} : { isActive: query.isActive }),
+      ...(query.langCode ? { langCode: query.langCode } : {}),
       ...(query.search
         ? {
             OR: [
@@ -380,6 +388,9 @@ export class QuestionsService {
             ...(normalized.isActive === undefined
               ? {}
               : { isActive: normalized.isActive }),
+            ...(normalized.langCode === undefined
+              ? {}
+              : { langCode: normalized.langCode }),
           };
           await tx.question.update({
             where: { id: questionId },
