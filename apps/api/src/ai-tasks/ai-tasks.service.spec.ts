@@ -488,10 +488,10 @@ describe('AiTasksService runTask', () => {
       generate: () =>
         Promise.resolve({
           ok: true as const,
+          // generate 层已强制对齐为期望词，并附带 mismatch 监控
           questions: [
             {
-              // AI 回传错误 word，但 stem 含本批第 1 词 abandon
-              word: 'kindle',
+              word: 'abandon',
               stem: 'They decided to abandon the plan. What does "abandon" mean?',
               explanation: '他们决定放弃这个计划。「abandon」是动词，表示放弃。',
               options: [
@@ -501,6 +501,7 @@ describe('AiTasksService runTask', () => {
             },
             sampleQuestions[1],
           ],
+          wordMismatchNotes: ['abandon: AI返回"kindle"'],
         }),
     });
     expect(result.status).toBe('SUCCESS');
@@ -571,18 +572,8 @@ describe('AiTasksService runTask', () => {
       actorUserId: 'admin-1',
       generate: () =>
         Promise.resolve({
-          ok: true as const,
-          questions: [
-            {
-              word: 'kindle',
-              stem: 'What does this word mean?',
-              explanation: '点燃',
-              options: [
-                { label: 'A', content: '点燃', isCorrect: true },
-                { label: 'B', content: '熄灭', isCorrect: false },
-              ],
-            },
-          ],
+          ok: false as const,
+          message: '题目 affect stem 未包含目标词',
         }),
     });
     expect(result.status).toBe('FAILED');
@@ -590,6 +581,28 @@ describe('AiTasksService runTask', () => {
     expect(result.questionsCreated).toBe(0);
     expect(taskState?.lastEntryId).toBe(50n);
     expect(questionCreates).toHaveLength(0);
+  });
+
+  it('部分题 stem 非法时写入合法题并附带跳过摘要', async () => {
+    const { service, questionCreates, taskState } = createService();
+    const result = await service.runTask('task-1', {
+      trigger: 'MANUAL',
+      actorUserId: 'admin-1',
+      generate: () =>
+        Promise.resolve({
+          ok: true as const,
+          questions: [sampleQuestions[0]],
+          skipMessages: [
+            '第 2 题（ability）：题目 ability stem 未包含目标词',
+          ],
+        }),
+    });
+    expect(result.status).toBe('SUCCESS');
+    expect(result.questionsCreated).toBe(1);
+    expect(result.errorMessage).toMatch(/跳过 1 题/);
+    expect(result.errorMessage).toMatch(/未包含目标词/);
+    expect(questionCreates).toHaveLength(1);
+    expect(taskState?.lastEntryId).toBe(20n);
   });
 
   it('超出本批长度的题目被忽略', async () => {
@@ -603,7 +616,8 @@ describe('AiTasksService runTask', () => {
       generate: () =>
         Promise.resolve({
           ok: true as const,
-          questions: [sampleQuestions[0], sampleQuestions[1]],
+          questions: [sampleQuestions[0]],
+          skipMessages: ['忽略超出本批的 1 题'],
         }),
     });
     expect(result.status).toBe('SUCCESS');

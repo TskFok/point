@@ -34,6 +34,7 @@ export type GenerateQuestionsResult =
       questions: GeneratedQuestion[];
       responseBody?: string;
       wordMismatchNotes?: string[];
+      skipMessages?: string[];
     }
   | { ok: false; message: string; responseBody?: string };
 
@@ -59,9 +60,8 @@ export function buildGeneratePrompt(input: {
     'Use ONLY the words listed above. Never invent, replace, skip or repeat words.',
     'Each question must test the word as the given part of speech; the example sentence must use the word as that part of speech (if several are listed, pick the most common one).',
     `Each question must have exactly ${input.optionCount} options.`,
-    'Stem must be a complete English example sentence that MUST INCLUDE the target word itself (case-insensitive word boundary).',
-    'Stem must INCLUDE the target word in its EXACT spelling (case-insensitive word boundary). Do NOT use only an inflected/conjugated/plural/variant form instead (e.g. "whys" for "why", "running" for "run").',
-    'Each question\'s "word" field and the tested word in the stem MUST match the listed word exactly. Never substitute a near-form or different word (e.g. "when" for "why").',
+    'Stem must be a complete English example sentence that MUST INCLUDE the target word (case-insensitive word boundary), OR a common inflection/plural of it (e.g. "whys" for "why", "abandoned" for "abandon").',
+    'Each question\'s "word" field MUST match the listed word exactly. Never substitute a near-form or different word (e.g. "when" for "why", "catch" for "cat").',
     'Do NOT use blanks, underscores (___), ellipsis placeholders, or [blank] in the stem.',
     'End the stem by naming the word to test, e.g. What does \\"abhor\\" mean?',
     'In JSON string values, every double quote MUST be escaped as \\". Never write raw " inside a string (invalid JSON).',
@@ -131,9 +131,13 @@ function stemHasBlankPlaceholder(stem: string): boolean {
   return /\b_{2,}\b|___+|\[\s*blank\s*\]|\[\s*\]/i.test(stem);
 }
 
+/** 常见屈折/复数后缀；不含任意字母延长，避免 cat→catch 误匹配 */
+const WORD_INFLECTION_SUFFIX =
+  '(?:s|es|ed|ing|er|est|ies|ied|ying|\'s)?';
+
 function stemIncludesWord(stem: string, word: string): boolean {
   const wordInStem = new RegExp(
-    `(^|[^A-Za-z])${escapeRegExp(word)}(?![A-Za-z])`,
+    `(^|[^A-Za-z])${escapeRegExp(word)}${WORD_INFLECTION_SUFFIX}(?![A-Za-z])`,
     'i',
   );
   return wordInStem.test(stem);
@@ -277,6 +281,7 @@ export function parseGeneratedQuestionsJson(
       ok: true;
       questions: GeneratedQuestion[];
       wordMismatchNotes: string[];
+      skipMessages: string[];
     }
   | { ok: false; message: string } {
   const array = extractJsonArray(raw);
@@ -286,30 +291,22 @@ export function parseGeneratedQuestionsJson(
   if (words.length === 0) {
     return { ok: false, message: '本批词表为空' };
   }
-  const questions: GeneratedQuestion[] = [];
-  const wordMismatchNotes: string[] = [];
-  const paired = Math.min(array.length, words.length);
-  for (let i = 0; i < paired; i += 1) {
-    const expected = words[i]!;
-    const validated = validateOneGeneratedQuestion(
-      array[i],
-      optionCount,
-      expected.word,
-    );
-    if (!validated.ok) {
-      return validated;
-    }
-    if (validated.wordMismatch) {
-      wordMismatchNotes.push(
-        `${expected.word}: AI返回"${validated.returnedWord ?? '∅'}"`,
-      );
-    }
-    questions.push({
-      ...validated.question,
-      options: shuffleQuestionOptions(validated.question.options, rng),
-    });
+  const { accepted, skipMessages, wordMismatchNotes } = alignGeneratedQuestions(
+    array,
+    optionCount,
+    words,
+  );
+  if (accepted.length === 0) {
+    return {
+      ok: false,
+      message: skipMessages[0] ?? '未生成任何有效题目',
+    };
   }
-  return { ok: true, questions, wordMismatchNotes };
+  const questions = accepted.map((question) => ({
+    ...question,
+    options: shuffleQuestionOptions(question.options, rng),
+  }));
+  return { ok: true, questions, wordMismatchNotes, skipMessages };
 }
 
 function normalizeBaseUrl(baseUrl: string): string {

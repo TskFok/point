@@ -25,7 +25,6 @@ import { type ListAiTasksDto } from './dto/list-ai-tasks.dto';
 import { type UpdateAiTaskDto } from './dto/update-ai-task.dto';
 import {
   generateQuestionsWithChatCompletions,
-  alignGeneratedQuestions,
   type DictionaryWord,
   type GenerateQuestionsResult,
 } from './generate-questions';
@@ -643,17 +642,10 @@ export class AiTasksService implements OnModuleInit {
         });
       }
 
-      const { accepted, skipMessages, wordMismatchNotes } =
-        alignGeneratedQuestions(
-          generated.questions,
-          task.optionCount,
-          words,
-        );
-      for (const note of generated.wordMismatchNotes ?? []) {
-        if (!wordMismatchNotes.includes(note)) {
-          wordMismatchNotes.push(note);
-        }
-      }
+      // generate 已按本批词表 1:1 对齐并跳过坏题；此处不再二次 align，避免过滤后错位
+      const accepted = generated.questions;
+      const skipMessages = generated.skipMessages ?? [];
+      const wordMismatchNotes = [...(generated.wordMismatchNotes ?? [])];
 
       if (accepted.length === 0) {
         return await finishAfterGenerate('FAILED', {

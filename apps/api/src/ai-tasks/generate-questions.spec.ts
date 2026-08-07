@@ -230,14 +230,13 @@ describe('generate-questions parse', () => {
     expect(p.toLowerCase()).toMatch(/what does/);
   });
 
-  it('prompt 要求目标词原样拼写且禁止变形与换词', () => {
+  it('prompt 要求目标词原样或常见变形且禁止换词', () => {
     const p = buildGeneratePrompt({
       words: abandonWords,
       optionCount: 4,
     });
     const lower = p.toLowerCase();
-    expect(lower).toMatch(/exact spelling|exact form/);
-    expect(lower).toMatch(/inflect|inflection|conjugated|plural|variant/);
+    expect(lower).toMatch(/exact spelling|exact form|inflect|inflection|plural|variant/);
     expect(lower).toMatch(/substitut|replace|near[- ]?form|look[- ]?alike/);
   });
 
@@ -296,6 +295,94 @@ describe('generate-questions parse', () => {
     );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.message).toMatch(/未包含|不包含|word/i);
+  });
+
+  it('接受 stem 含目标词常见变形（如 whys）', () => {
+    const result = validateOneGeneratedQuestion(
+      {
+        word: 'why',
+        stem: 'She whys at every decision, which annoys her boss.',
+        explanation: '她对每个决定都问为什么。「why」作动词，表示问为什么。',
+        options: [
+          { label: 'A', content: '问为什么', isCorrect: true },
+          { label: 'B', content: '解释', isCorrect: false },
+        ],
+      },
+      2,
+      'why',
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.question.word).toBe('why');
+  });
+
+  it('接受 stem 含复数变形 whys 的整批解析', () => {
+    const words: DictionaryWord[] = [
+      { id: '1', word: 'why', pos: 'verb' },
+      { id: '2', word: 'why', pos: 'noun' },
+    ];
+    const raw = JSON.stringify([
+      {
+        word: 'why',
+        stem: 'She whys at every decision, which annoys her boss.',
+        explanation: '问为什么',
+        options: [
+          { label: 'A', content: '问为什么', isCorrect: true },
+          { label: 'B', content: '解释', isCorrect: false },
+        ],
+      },
+      {
+        word: 'why',
+        stem: 'The whys of the accident remain unknown.',
+        explanation: '原因',
+        options: [
+          { label: 'A', content: '原因', isCorrect: true },
+          { label: 'B', content: '结果', isCorrect: false },
+        ],
+      },
+    ]);
+    const result = parseGeneratedQuestionsJson(raw, 2, words);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.questions).toHaveLength(2);
+    expect(result.skipMessages).toEqual([]);
+  });
+
+  it('拒绝无关近形词（如 catch 不能当作 cat）', () => {
+    const result = validateOneGeneratedQuestion(
+      {
+        word: 'cat',
+        stem: 'He tried to catch the ball. What does "catch" mean?',
+        explanation: '抓住',
+        options: [
+          { label: 'A', content: '猫', isCorrect: true },
+          { label: 'B', content: '狗', isCorrect: false },
+        ],
+      },
+      2,
+      'cat',
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toMatch(/未包含目标词/);
+  });
+
+  it('全部 stem 未含目标词时解析失败', () => {
+    const words: DictionaryWord[] = [
+      { id: '1', word: 'why', pos: 'verb' },
+    ];
+    const raw = JSON.stringify([
+      {
+        word: 'why',
+        stem: 'She always questions every decision.',
+        explanation: '问为什么',
+        options: [
+          { label: 'A', content: '问为什么', isCorrect: true },
+          { label: 'B', content: '解释', isCorrect: false },
+        ],
+      },
+    ]);
+    const result = parseGeneratedQuestionsJson(raw, 2, words);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toMatch(/未包含目标词/);
   });
 
   it('接受含完整期望词的例句题干', () => {
