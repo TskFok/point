@@ -16,6 +16,11 @@ import {
   decryptSecret,
   resolveEncryptionKey,
 } from '../ai-models/secret-crypto';
+import {
+  DEFAULT_LANG_CODE,
+  normalizeLangCode,
+  type LangCode,
+} from '../common/lang-code';
 import { PrismaService } from '../prisma/prisma.service';
 import { isAiTaskStoreResponseBodyEnabled } from './ai-response-body-config';
 import { assertCronExpression } from './cron-expression';
@@ -61,6 +66,7 @@ export type AiTaskView = {
   consecutiveFailureCount: number;
   wordMatchRules: WordMatchRules;
   lastEntryId: string | null;
+  langCode: string;
   createdAt: string;
   updatedAt: string;
   latestRun?: AiTaskLatestRunView | null;
@@ -239,6 +245,7 @@ function toTaskView(row: TaskWithModelAndLatestRun): AiTaskView {
     consecutiveFailureCount: row.consecutiveFailureCount,
     wordMatchRules: readWordMatchRules(row.wordMatchRules),
     lastEntryId: row.lastEntryId?.toString() ?? null,
+    langCode: row.langCode,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     latestRun: latest
@@ -472,6 +479,7 @@ export class AiTasksService implements OnModuleInit {
             100,
           );
     const wordMatchRules = resolveWordMatchRulesInput(input.wordMatchRules);
+    const langCode = normalizeLangCode(input.langCode);
     await this.requireEnabledModel(aiModelConfigId);
     try {
       const row = await this.prisma.aiTask.create({
@@ -485,6 +493,7 @@ export class AiTasksService implements OnModuleInit {
           isEnabled,
           maxConsecutiveFailures,
           wordMatchRules,
+          langCode,
           createdBy: userId,
           updatedBy: userId,
         },
@@ -554,8 +563,20 @@ export class AiTasksService implements OnModuleInit {
         100,
       );
     }
+    if (input.langCode !== undefined) {
+      const next = normalizeLangCode(input.langCode);
+      data.langCode = next;
+      if (next !== existing.langCode) {
+        data.lastEntryId = null;
+      }
+    }
     if (input.lastEntryId !== undefined) {
-      data.lastEntryId = normalizeLastEntryId(input.lastEntryId);
+      const langChanging =
+        input.langCode !== undefined &&
+        normalizeLangCode(input.langCode) !== existing.langCode;
+      if (!langChanging) {
+        data.lastEntryId = normalizeLastEntryId(input.lastEntryId);
+      }
     }
     if (input.wordMatchRules !== undefined) {
       data.wordMatchRules = resolveWordMatchRulesInput(input.wordMatchRules);
@@ -712,6 +733,7 @@ export class AiTasksService implements OnModuleInit {
       const words = await this.listNextEntryWords(
         task.lastEntryId,
         task.questionCount,
+        task.langCode as LangCode,
       );
       if (words.length === 0) {
         return await finish('FAILED', {
@@ -728,6 +750,7 @@ export class AiTasksService implements OnModuleInit {
         words,
         optionCount: task.optionCount,
         wordMatchRules: readWordMatchRules(task.wordMatchRules),
+        langCode: task.langCode as LangCode,
       });
 
       const aiResponseBody =
@@ -777,6 +800,7 @@ export class AiTasksService implements OnModuleInit {
                 explanation: question.explanation,
                 basePoints: task.basePoints,
                 isActive: true,
+                langCode: task.langCode,
                 createdBy: options.actorUserId,
                 options: {
                   create: question.options.map((option, index) => ({
@@ -854,19 +878,20 @@ export class AiTasksService implements OnModuleInit {
   }
 
   /**
-   * 从英文词库 entry 表取游标之后的下一批词条（按 id 升序）。
+   * 从词库 entry 表取游标之后的下一批词条（按 id 升序，按 langCode 过滤）。
    * 游标（id > lastEntryId）保证跨轮不重复扫描已取过的行。
    */
   async listNextEntryWords(
     lastEntryId: bigint | null,
     count: number,
+    langCode: LangCode = DEFAULT_LANG_CODE,
   ): Promise<DictionaryWord[]> {
     const rows = await this.prisma.$queryRaw<
       Array<{ id: bigint; word: string; pos: string }>
     >`
       SELECT e.id, e.word, e.pos
       FROM entry e
-      WHERE e.lang_code = 'en'
+      WHERE e.lang_code = ${langCode}
         AND e.pos IS NOT NULL
         AND (${lastEntryId}::bigint IS NULL OR e.id > ${lastEntryId})
       ORDER BY e.id ASC

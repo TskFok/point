@@ -1,6 +1,7 @@
 import { Transform, Type, type TransformFnParams } from 'class-transformer';
 import {
   IsBoolean,
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -11,6 +12,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 
+import { LANG_CODES } from '../../common/lang-code';
 import { WordMatchRulesDto } from './word-match-rules.dto';
 
 function trimText({ value }: TransformFnParams): unknown {
@@ -64,4 +66,9 @@ export class CreateAiTaskDto {
   @ValidateNested()
   @Type(() => WordMatchRulesDto)
   wordMatchRules?: WordMatchRulesDto;
+
+  @IsOptional()
+  @IsString()
+  @IsIn([...LANG_CODES])
+  langCode?: string;
 }

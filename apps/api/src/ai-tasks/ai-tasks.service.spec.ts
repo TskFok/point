@@ -59,6 +59,7 @@ function makeTask(overrides: Record<string, unknown> = {}) {
     maxConsecutiveFailures: 0,
     consecutiveFailureCount: 0,
     lastEntryId: null as bigint | null,
+    langCode: 'en',
     wordMatchRules: { ...defaultWordMatchRules, irregulars: {} },
     createdBy: 'admin-1',
     updatedBy: 'admin-1',
@@ -78,6 +79,11 @@ function createService(options?: {
   questionCreates?: unknown[];
   /** 模拟 entry 表取词结果（$queryRaw 返回行） */
   entryWords?: Array<{ id: bigint; word: string; pos: string }>;
+  /** 捕获 $queryRaw 参数；返回行覆盖 entryWords */
+  onQueryRaw?: (
+    strings: TemplateStringsArray,
+    ...values: unknown[]
+  ) => Array<{ id: bigint; word: string; pos: string }>;
 }) {
   const model = options?.model === undefined ? makeModel() : options.model;
   const task = options?.task === undefined ? makeTask() : options.task;
@@ -206,6 +212,9 @@ function createService(options?: {
         }
         if (data.wordMatchRules && typeof data.wordMatchRules === 'object') {
           taskState.wordMatchRules = data.wordMatchRules;
+        }
+        if (typeof data.langCode === 'string') {
+          taskState.langCode = data.langCode;
         }
         if (data.aiModelConfig && typeof data.aiModelConfig === 'object') {
           const connect = (data.aiModelConfig as { connect?: { id: string } })
@@ -392,7 +401,12 @@ function createService(options?: {
         return Promise.resolve({ id: `q-${questionCreates.length}` });
       },
     },
-    $queryRaw: () => Promise.resolve(entryWords),
+    $queryRaw: (strings: TemplateStringsArray, ...values: unknown[]) => {
+      if (options?.onQueryRaw) {
+        return Promise.resolve(options.onQueryRaw(strings, ...values));
+      }
+      return Promise.resolve(entryWords);
+    },
     $transaction: async (ops: unknown) => {
       if (Array.isArray(ops)) {
         return Promise.all(ops);
@@ -574,6 +588,77 @@ describe('AiTasksService CRUD', () => {
       NotFoundException,
     );
   });
+
+  it('create 可指定 langCode', async () => {
+    const { service } = createService();
+    const created = await service.create(
+      {
+        name: '日语任务',
+        aiModelConfigId: 'model-1',
+        questionCount: 2,
+        optionCount: 2,
+        basePoints: 10,
+        cronExpression: '0 8 * * *',
+        langCode: 'ja',
+      },
+      'admin-1',
+    );
+    expect(created.langCode).toBe('ja');
+  });
+
+  it('create 省略 langCode 默认 en', async () => {
+    const { service } = createService();
+    const created = await service.create(
+      {
+        name: '英语任务',
+        aiModelConfigId: 'model-1',
+        questionCount: 2,
+        optionCount: 2,
+        basePoints: 10,
+        cronExpression: '0 8 * * *',
+      },
+      'admin-1',
+    );
+    expect(created.langCode).toBe('en');
+  });
+
+  it('update 改 langCode 时清空 lastEntryId 并忽略同次游标', async () => {
+    const { service, taskState } = createService({
+      task: makeTask({ langCode: 'en', lastEntryId: 99n }),
+    });
+    const updated = await service.update(
+      'task-1',
+      { langCode: 'ja', lastEntryId: '42' },
+      'admin-1',
+    );
+    expect(updated.langCode).toBe('ja');
+    expect(updated.lastEntryId).toBeNull();
+    expect(taskState?.lastEntryId).toBeNull();
+  });
+
+  it('update 同语言不清空 lastEntryId', async () => {
+    const { service } = createService({
+      task: makeTask({ langCode: 'en', lastEntryId: 77n }),
+    });
+    const updated = await service.update(
+      'task-1',
+      { langCode: 'en', name: '同语言' },
+      'admin-1',
+    );
+    expect(updated.lastEntryId).toBe('77');
+  });
+
+  it('listNextEntryWords 按 langCode 过滤', async () => {
+    const calls: unknown[] = [];
+    const { service } = createService({
+      onQueryRaw: (strings, ...values) => {
+        calls.push({ strings: [...strings], values });
+        return [];
+      },
+    });
+    await service.listNextEntryWords(null, 3, 'ja');
+    expect(JSON.stringify(calls)).toMatch(/ja/);
+  });
 });
 
 describe('AiTasksService runTask', () => {
@@ -658,7 +743,40 @@ describe('AiTasksService runTask', () => {
           { id: '12', word: 'afford', pos: 'verb' },
         ],
         optionCount: 2,
+        langCode: 'en',
       }),
+    );
+  });
+
+  it('成功出题写入 Question.langCode', async () => {
+    const { service, questionCreates } = createService({
+      task: makeTask({ langCode: 'fr' }),
+    });
+    await service.runTask('task-1', {
+      trigger: 'MANUAL',
+      actorUserId: 'admin-1',
+      generate: async () => ({ ok: true, questions: sampleQuestions }),
+    });
+    expect(
+      (questionCreates[0] as { data?: { langCode?: string } })?.data?.langCode,
+    ).toBe('fr');
+  });
+
+  it('runTask 将 task.langCode 传给 generate', async () => {
+    const { service } = createService({
+      task: makeTask({ langCode: 'ja' }),
+    });
+    const generate = jest.fn().mockResolvedValue({
+      ok: false,
+      message: 'stop here',
+    });
+    await service.runTask('task-1', {
+      trigger: 'MANUAL',
+      actorUserId: 'admin-1',
+      generate,
+    });
+    expect(generate).toHaveBeenCalledWith(
+      expect.objectContaining({ langCode: 'ja' }),
     );
   });
 
