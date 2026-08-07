@@ -770,6 +770,11 @@ export interface components {
             hasAttempts: boolean;
             id: string;
             isActive: boolean;
+            /**
+             * @default en
+             * @enum {string}
+             */
+            langCode: "en" | "ja" | "it" | "fr" | "de";
             options: components["schemas"]["AdminQuestionOptionDto"][];
             stem: string;
             /** Format: date-time */
@@ -820,6 +825,11 @@ export interface components {
             cronExpression: string;
             id: string;
             isEnabled: boolean;
+            /**
+             * @default en
+             * @enum {string}
+             */
+            langCode: "en" | "ja" | "it" | "fr" | "de";
             /** @description entry.id 游标 */
             lastEntryId?: string | null;
             latestRun?: components["schemas"]["AiTaskLatestRunDto"] | null;
@@ -937,6 +947,8 @@ export interface components {
             /** @example 0 8 * * * */
             cronExpression: string;
             isEnabled?: boolean;
+            /** @enum {string} */
+            langCode?: "en" | "ja" | "it" | "fr" | "de";
             /** Format: int32 */
             maxConsecutiveFailures?: number;
             name: string;
@@ -967,6 +979,8 @@ export interface components {
             basePoints: number;
             explanation: string;
             isActive?: boolean;
+            /** @enum {string} */
+            langCode?: "en" | "ja" | "it" | "fr" | "de";
             /** @description 标签与位置不可重复，且必须恰好有一个正确选项 */
             options: components["schemas"]["QuestionOptionWriteRequestDto"][];
             stem: string;
@@ -981,6 +995,11 @@ export interface components {
             /** Format: int32 */
             basePoints: number;
             id: string;
+            /**
+             * @default en
+             * @enum {string}
+             */
+            langCode: "en" | "ja" | "it" | "fr" | "de";
             options: components["schemas"]["LearnerQuestionOptionDto"][];
             stem: string;
         };
@@ -1107,6 +1126,11 @@ export interface components {
             correctOptionId: string;
             explanation: string;
             id: string;
+            /**
+             * @default en
+             * @enum {string}
+             */
+            langCode: "en" | "ja" | "it" | "fr" | "de";
             options: components["schemas"]["LearnerQuestionOptionDto"][];
             stem: string;
         };
@@ -1204,6 +1228,8 @@ export interface components {
             basePoints?: number;
             cronExpression?: string;
             isEnabled?: boolean;
+            /** @enum {string} */
+            langCode?: "en" | "ja" | "it" | "fr" | "de";
             /** @description entry.id 游标；null 或空串表示重置 */
             lastEntryId?: string | null;
             /** Format: int32 */
@@ -1234,6 +1260,8 @@ export interface components {
             basePoints?: number;
             explanation?: string;
             isActive?: boolean;
+            /** @enum {string} */
+            langCode?: "en" | "ja" | "it" | "fr" | "de";
             /** @description 标签与位置不可重复，且必须恰好有一个正确选项 */
             options?: components["schemas"]["QuestionOptionWriteRequestDto"][];
             stem?: string;
@@ -3569,6 +3597,7 @@ export interface operations {
             query?: {
                 search?: string;
                 isActive?: boolean;
+                langCode?: "en" | "ja" | "it" | "fr" | "de";
                 page?: number;
                 pageSize?: number;
             };

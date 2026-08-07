@@ -1,10 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { LANG_CODES } from '../common/lang-code';
 import { PRODUCT_IMAGE_KEY_PATTERN } from '../products/dto/create-product.dto';
 
 const int32 = {
   type: 'integer' as const,
   format: 'int32',
 };
+
+const langCodeEnum = [...LANG_CODES] as string[];
 
 export class ApiErrorDto {
   @ApiProperty({ example: 'VALIDATION_FAILED' })
@@ -167,6 +170,9 @@ export class CreateQuestionRequestDto {
 
   @ApiPropertyOptional()
   isActive?: boolean;
+
+  @ApiPropertyOptional({ enum: langCodeEnum })
+  langCode?: string;
 }
 
 export class UpdateQuestionRequestDto {
@@ -189,6 +195,9 @@ export class UpdateQuestionRequestDto {
 
   @ApiPropertyOptional()
   isActive?: boolean;
+
+  @ApiPropertyOptional({ enum: langCodeEnum })
+  langCode?: string;
 }
 
 export class AdminQuestionOptionDto {
@@ -229,6 +238,9 @@ export class AdminQuestionDto {
 
   @ApiProperty()
   hasAttempts!: boolean;
+
+  @ApiProperty({ enum: langCodeEnum, default: 'en' })
+  langCode!: string;
 
   @ApiProperty()
   createdBy!: string;
@@ -318,6 +330,9 @@ export class LearnerQuestionDto {
   @ApiProperty(int32)
   basePoints!: number;
 
+  @ApiProperty({ enum: langCodeEnum, default: 'en' })
+  langCode!: string;
+
   @ApiProperty({ type: () => [LearnerQuestionOptionDto] })
   options!: LearnerQuestionOptionDto[];
 }
@@ -331,6 +346,9 @@ export class PreviewQuestionDto {
 
   @ApiProperty(int32)
   basePoints!: number;
+
+  @ApiProperty({ enum: langCodeEnum, default: 'en' })
+  langCode!: string;
 
   @ApiProperty({ type: () => [LearnerQuestionOptionDto] })
   options!: LearnerQuestionOptionDto[];
@@ -811,6 +829,9 @@ export class AiTaskDto {
   @ApiProperty({ ...int32, minimum: 1, maximum: 1000 })
   basePoints!: number;
 
+  @ApiProperty({ enum: langCodeEnum, default: 'en' })
+  langCode!: string;
+
   @ApiProperty()
   cronExpression!: string;
 
@@ -878,6 +899,9 @@ export class CreateAiTaskRequestDto {
 
   @ApiPropertyOptional({ type: () => WordMatchRulesDto })
   wordMatchRules?: WordMatchRulesDto;
+
+  @ApiPropertyOptional({ enum: langCodeEnum })
+  langCode?: string;
 }
 
 export class UpdateAiTaskRequestDto {
@@ -914,6 +938,9 @@ export class UpdateAiTaskRequestDto {
 
   @ApiPropertyOptional({ type: () => WordMatchRulesDto })
   wordMatchRules?: WordMatchRulesDto;
+
+  @ApiPropertyOptional({ enum: langCodeEnum })
+  langCode?: string;
 }
 
 export class AiTaskRunDto {

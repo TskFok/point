@@ -153,6 +153,17 @@
           "isActive": {
             "type": "boolean"
           },
+          "langCode": {
+            "default": "en",
+            "enum": [
+              "en",
+              "ja",
+              "it",
+              "fr",
+              "de"
+            ],
+            "type": "string"
+          },
           "options": {
             "items": {
               "$ref": "#/components/schemas/AdminQuestionOptionDto"
@@ -174,6 +185,7 @@
           "basePoints",
           "isActive",
           "hasAttempts",
+          "langCode",
           "createdBy",
           "createdAt",
           "updatedAt",
@@ -326,6 +338,17 @@
           "isEnabled": {
             "type": "boolean"
           },
+          "langCode": {
+            "default": "en",
+            "enum": [
+              "en",
+              "ja",
+              "it",
+              "fr",
+              "de"
+            ],
+            "type": "string"
+          },
           "lastEntryId": {
             "description": "entry.id 游标",
             "nullable": true,
@@ -377,6 +400,7 @@
           "questionCount",
           "optionCount",
           "basePoints",
+          "langCode",
           "cronExpression",
           "isEnabled",
           "maxConsecutiveFailures",
@@ -749,6 +773,16 @@
           "isEnabled": {
             "type": "boolean"
           },
+          "langCode": {
+            "enum": [
+              "en",
+              "ja",
+              "it",
+              "fr",
+              "de"
+            ],
+            "type": "string"
+          },
           "maxConsecutiveFailures": {
             "format": "int32",
             "maximum": 100,
@@ -857,6 +891,16 @@
           "isActive": {
             "type": "boolean"
           },
+          "langCode": {
+            "enum": [
+              "en",
+              "ja",
+              "it",
+              "fr",
+              "de"
+            ],
+            "type": "string"
+          },
           "options": {
             "description": "标签与位置不可重复，且必须恰好有一个正确选项",
             "items": {
@@ -910,6 +954,17 @@
           "id": {
             "type": "string"
           },
+          "langCode": {
+            "default": "en",
+            "enum": [
+              "en",
+              "ja",
+              "it",
+              "fr",
+              "de"
+            ],
+            "type": "string"
+          },
           "options": {
             "items": {
               "$ref": "#/components/schemas/LearnerQuestionOptionDto"
@@ -924,6 +979,7 @@
           "id",
           "stem",
           "basePoints",
+          "langCode",
           "options"
         ],
         "type": "object"
@@ -1328,6 +1384,17 @@
           "id": {
             "type": "string"
           },
+          "langCode": {
+            "default": "en",
+            "enum": [
+              "en",
+              "ja",
+              "it",
+              "fr",
+              "de"
+            ],
+            "type": "string"
+          },
           "options": {
             "items": {
               "$ref": "#/components/schemas/LearnerQuestionOptionDto"
@@ -1342,6 +1409,7 @@
           "id",
           "stem",
           "basePoints",
+          "langCode",
           "options",
           "explanation",
           "correctOptionId"
@@ -1660,6 +1728,16 @@
           "isEnabled": {
             "type": "boolean"
           },
+          "langCode": {
+            "enum": [
+              "en",
+              "ja",
+              "it",
+              "fr",
+              "de"
+            ],
+            "type": "string"
+          },
           "lastEntryId": {
             "description": "entry.id 游标；null 或空串表示重置",
             "nullable": true,
@@ -1759,6 +1837,16 @@
           },
           "isActive": {
             "type": "boolean"
+          },
+          "langCode": {
+            "enum": [
+              "en",
+              "ja",
+              "it",
+              "fr",
+              "de"
+            ],
+            "type": "string"
           },
           "options": {
             "description": "标签与位置不可重复，且必须恰好有一个正确选项",
@@ -5125,6 +5213,21 @@
             "required": false,
             "schema": {
               "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "langCode",
+            "required": false,
+            "schema": {
+              "enum": [
+                "en",
+                "ja",
+                "it",
+                "fr",
+                "de"
+              ],
+              "type": "string"
             }
           },
           {

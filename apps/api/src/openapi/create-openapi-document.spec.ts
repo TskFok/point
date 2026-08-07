@@ -208,6 +208,51 @@ describe('OpenAPI 契约', () => {
     expect(schema.required).toContain('hasAttempts');
   });
 
+  it('AI 任务与题目契约暴露 langCode 枚举', () => {
+    const langCodeSchema = {
+      type: 'string',
+      enum: ['en', 'ja', 'it', 'fr', 'de'],
+    };
+    const aiTask = document.components?.schemas?.AiTaskDto as SchemaObject;
+    const adminQuestion = document.components?.schemas
+      ?.AdminQuestionDto as SchemaObject;
+    const learnerQuestion = document.components?.schemas
+      ?.LearnerQuestionDto as SchemaObject;
+    const previewQuestion = document.components?.schemas
+      ?.PreviewQuestionDto as SchemaObject;
+    const createAiTask = document.components?.schemas
+      ?.CreateAiTaskRequestDto as SchemaObject;
+    const updateAiTask = document.components?.schemas
+      ?.UpdateAiTaskRequestDto as SchemaObject;
+    const createQuestion = document.components?.schemas
+      ?.CreateQuestionRequestDto as SchemaObject;
+    const updateQuestion = document.components?.schemas
+      ?.UpdateQuestionRequestDto as SchemaObject;
+
+    expect(aiTask.properties?.langCode).toMatchObject(langCodeSchema);
+    expect(adminQuestion.properties?.langCode).toMatchObject(langCodeSchema);
+    expect(learnerQuestion.properties?.langCode).toMatchObject(langCodeSchema);
+    expect(previewQuestion.properties?.langCode).toMatchObject(langCodeSchema);
+    expect(createAiTask.properties?.langCode).toMatchObject(langCodeSchema);
+    expect(updateAiTask.properties?.langCode).toMatchObject(langCodeSchema);
+    expect(createQuestion.properties?.langCode).toMatchObject(langCodeSchema);
+    expect(updateQuestion.properties?.langCode).toMatchObject(langCodeSchema);
+
+    const listQuestions = document.paths['/api/v1/admin/questions']
+      ?.get as OperationObject | undefined;
+    const langCodeQuery = listQuestions?.parameters?.find(
+      (parameter) =>
+        !isReference(parameter) &&
+        parameter.in === 'query' &&
+        parameter.name === 'langCode',
+    );
+    expect(langCodeQuery).toMatchObject({
+      name: 'langCode',
+      required: false,
+      schema: langCodeSchema,
+    });
+  });
+
   it('题库批量接口契约', () => {
     const operation = document.paths['/api/v1/admin/questions/batch']?.post;
     expect(operation?.operationId).toBe('adminBatchQuestions');

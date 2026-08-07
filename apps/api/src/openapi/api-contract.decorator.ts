@@ -175,6 +175,14 @@ export const questionQueries: ApiQueryOptions[] = [
     required: false,
     schema: { type: 'boolean' },
   },
+  {
+    name: 'langCode',
+    required: false,
+    schema: {
+      type: 'string',
+      enum: ['en', 'ja', 'it', 'fr', 'de'],
+    },
+  },
   ...pageQueries,
 ];
 
