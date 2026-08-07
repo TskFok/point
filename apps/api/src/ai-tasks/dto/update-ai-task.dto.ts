@@ -61,6 +61,12 @@ export class UpdateAiTaskDto {
   @IsBoolean()
   isEnabled?: boolean;
 
+  @ValidateIf((_object, value: unknown) => value !== undefined)
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  maxConsecutiveFailures?: number;
+
   @IsOptional()
   @ValidateNested()
   @Type(() => WordMatchRulesDto)

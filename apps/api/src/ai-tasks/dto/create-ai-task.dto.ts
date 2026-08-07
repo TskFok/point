@@ -55,6 +55,12 @@ export class CreateAiTaskDto {
   isEnabled?: boolean;
 
   @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  maxConsecutiveFailures?: number;
+
+  @IsOptional()
   @ValidateNested()
   @Type(() => WordMatchRulesDto)
   wordMatchRules?: WordMatchRulesDto;

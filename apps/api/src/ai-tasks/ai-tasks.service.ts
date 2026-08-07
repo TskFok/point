@@ -57,6 +57,8 @@ export type AiTaskView = {
   basePoints: number;
   cronExpression: string;
   isEnabled: boolean;
+  maxConsecutiveFailures: number;
+  consecutiveFailureCount: number;
   wordMatchRules: WordMatchRules;
   lastEntryId: string | null;
   createdAt: string;
@@ -206,6 +208,8 @@ function toTaskView(row: TaskWithModelAndLatestRun): AiTaskView {
     basePoints: row.basePoints,
     cronExpression: row.cronExpression,
     isEnabled: row.isEnabled,
+    maxConsecutiveFailures: row.maxConsecutiveFailures,
+    consecutiveFailureCount: row.consecutiveFailureCount,
     wordMatchRules: readWordMatchRules(row.wordMatchRules),
     lastEntryId: row.lastEntryId?.toString() ?? null,
     createdAt: row.createdAt.toISOString(),
@@ -396,6 +400,15 @@ export class AiTasksService implements OnModuleInit {
       input.isEnabled === undefined
         ? true
         : normalizeBoolean(input.isEnabled, '启用状态');
+    const maxConsecutiveFailures =
+      input.maxConsecutiveFailures === undefined
+        ? 0
+        : normalizeInt(
+            input.maxConsecutiveFailures,
+            '连续失败停用阈值',
+            0,
+            100,
+          );
     const wordMatchRules = resolveWordMatchRulesInput(input.wordMatchRules);
     await this.requireEnabledModel(aiModelConfigId);
     try {
@@ -408,6 +421,7 @@ export class AiTasksService implements OnModuleInit {
           basePoints,
           cronExpression,
           isEnabled,
+          maxConsecutiveFailures,
           wordMatchRules,
           createdBy: userId,
           updatedBy: userId,
@@ -428,7 +442,7 @@ export class AiTasksService implements OnModuleInit {
     input: UpdateAiTaskDto,
     userId: string,
   ): Promise<AiTaskView> {
-    await this.requireTask(id);
+    const existing = await this.requireTask(id);
     const data: Prisma.AiTaskUpdateInput = {
       updater: { connect: { id: userId } },
     };
@@ -466,6 +480,17 @@ export class AiTasksService implements OnModuleInit {
     }
     if (input.isEnabled !== undefined) {
       data.isEnabled = normalizeBoolean(input.isEnabled, '启用状态');
+      if (existing.isEnabled === false && data.isEnabled === true) {
+        data.consecutiveFailureCount = 0;
+      }
+    }
+    if (input.maxConsecutiveFailures !== undefined) {
+      data.maxConsecutiveFailures = normalizeInt(
+        input.maxConsecutiveFailures,
+        '连续失败停用阈值',
+        0,
+        100,
+      );
     }
     if (input.wordMatchRules !== undefined) {
       data.wordMatchRules = resolveWordMatchRulesInput(input.wordMatchRules);
@@ -571,6 +596,9 @@ export class AiTasksService implements OnModuleInit {
             where: { id: taskId },
             data: { lastEntryId: fields.nextLastEntryId },
           });
+        }
+        if (options.trigger === 'CRON') {
+          await this.applyCronRunOutcome(tx, taskId, status);
         }
         return tx.aiTaskRun.update({
           where: { id: run.id },
@@ -784,6 +812,38 @@ export class AiTasksService implements OnModuleInit {
       word: row.word,
       pos: row.pos,
     }));
+  }
+
+  private async applyCronRunOutcome(
+    tx: Prisma.TransactionClient,
+    taskId: string,
+    status: 'SUCCESS' | 'FAILED',
+  ): Promise<void> {
+    if (status === 'SUCCESS') {
+      await tx.aiTask.update({
+        where: { id: taskId },
+        data: { consecutiveFailureCount: 0 },
+      });
+      return;
+    }
+    const task = await tx.aiTask.findUnique({
+      where: { id: taskId },
+      select: {
+        consecutiveFailureCount: true,
+        maxConsecutiveFailures: true,
+      },
+    });
+    if (!task) return;
+    const next = task.consecutiveFailureCount + 1;
+    const disable =
+      task.maxConsecutiveFailures > 0 && next >= task.maxConsecutiveFailures;
+    await tx.aiTask.update({
+      where: { id: taskId },
+      data: {
+        consecutiveFailureCount: next,
+        ...(disable ? { isEnabled: false } : {}),
+      },
+    });
   }
 
   private async requireTask(id: string): Promise<AiTask> {

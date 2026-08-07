@@ -56,6 +56,8 @@ function makeTask(overrides: Record<string, unknown> = {}) {
     basePoints: 10,
     cronExpression: '0 8 * * *',
     isEnabled: true,
+    maxConsecutiveFailures: 0,
+    consecutiveFailureCount: 0,
     lastEntryId: null as bigint | null,
     wordMatchRules: { ...defaultWordMatchRules, irregulars: {} },
     createdBy: 'admin-1',
@@ -164,6 +166,12 @@ function createService(options?: {
         if (typeof data.name === 'string') taskState.name = data.name;
         if (typeof data.isEnabled === 'boolean') {
           taskState.isEnabled = data.isEnabled;
+        }
+        if (typeof data.maxConsecutiveFailures === 'number') {
+          taskState.maxConsecutiveFailures = data.maxConsecutiveFailures;
+        }
+        if (typeof data.consecutiveFailureCount === 'number') {
+          taskState.consecutiveFailureCount = data.consecutiveFailureCount;
         }
         if (typeof data.cronExpression === 'string') {
           taskState.cronExpression = data.cronExpression;
@@ -984,5 +992,112 @@ describe('AiTasksService runTask', () => {
         process.env.AI_TASK_STORE_RESPONSE_BODY = previous;
       }
     }
+  });
+});
+
+describe('连续失败停用', () => {
+  const previousKey = process.env.AI_CONFIG_ENCRYPTION_KEY;
+
+  beforeEach(() => {
+    process.env.AI_CONFIG_ENCRYPTION_KEY = encryptionKeyBase64;
+  });
+
+  afterEach(() => {
+    process.env.AI_CONFIG_ENCRYPTION_KEY = previousKey;
+    jest.restoreAllMocks();
+  });
+
+  const sampleQuestions = [
+    {
+      word: 'abandon',
+      stem: 'What does abandon mean?',
+      explanation: '放弃',
+      options: [
+        { label: 'A', content: '放弃', isCorrect: true },
+        { label: 'B', content: '获得', isCorrect: false },
+      ],
+    },
+    {
+      word: 'ability',
+      stem: 'What does ability mean?',
+      explanation: '能力',
+      options: [
+        { label: 'A', content: '能力', isCorrect: true },
+        { label: 'B', content: '无力', isCorrect: false },
+      ],
+    },
+  ];
+
+  it('连续 cron FAILED 达阈值后停用', async () => {
+    const { service, taskState } = createService({
+      task: makeTask({ maxConsecutiveFailures: 2, consecutiveFailureCount: 1 }),
+      entryWords: [],
+    });
+    await service.runTask('task-1', {
+      trigger: 'CRON',
+      actorUserId: 'admin-1',
+    });
+    expect(taskState?.consecutiveFailureCount).toBe(2);
+    expect(taskState?.isEnabled).toBe(false);
+  });
+
+  it('cron SUCCESS 清零连续失败计数', async () => {
+    const { service, taskState } = createService({
+      task: makeTask({
+        maxConsecutiveFailures: 3,
+        consecutiveFailureCount: 2,
+      }),
+    });
+    const result = await service.runTask('task-1', {
+      trigger: 'CRON',
+      actorUserId: 'admin-1',
+      generate: async () => ({ ok: true, questions: sampleQuestions }),
+    });
+    expect(result.status).toBe('SUCCESS');
+    expect(taskState?.consecutiveFailureCount).toBe(0);
+    expect(taskState?.isEnabled).toBe(true);
+  });
+
+  it('阈值 0 时失败递增但不停用', async () => {
+    const { service, taskState } = createService({
+      task: makeTask({ maxConsecutiveFailures: 0, consecutiveFailureCount: 5 }),
+      entryWords: [],
+    });
+    await service.runTask('task-1', {
+      trigger: 'CRON',
+      actorUserId: 'admin-1',
+    });
+    expect(taskState?.consecutiveFailureCount).toBe(6);
+    expect(taskState?.isEnabled).toBe(true);
+  });
+
+  it('manual FAILED 不改变计数与启用状态', async () => {
+    const { service, taskState } = createService({
+      task: makeTask({
+        maxConsecutiveFailures: 1,
+        consecutiveFailureCount: 0,
+        isEnabled: true,
+      }),
+      entryWords: [],
+    });
+    await service.runTask('task-1', {
+      trigger: 'MANUAL',
+      actorUserId: 'admin-1',
+    });
+    expect(taskState?.consecutiveFailureCount).toBe(0);
+    expect(taskState?.isEnabled).toBe(true);
+  });
+
+  it('重新启用时清零连续失败计数', async () => {
+    const { service, taskState } = createService({
+      task: makeTask({
+        isEnabled: false,
+        consecutiveFailureCount: 3,
+        maxConsecutiveFailures: 3,
+      }),
+    });
+    await service.update('task-1', { isEnabled: true }, 'admin-1');
+    expect(taskState?.isEnabled).toBe(true);
+    expect(taskState?.consecutiveFailureCount).toBe(0);
   });
 });
