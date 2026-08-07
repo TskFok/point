@@ -244,4 +244,27 @@ describe("AiTaskForm", () => {
       screen.getByText(/游标 lastEntryId 须为正整数字符串/),
     ).toBeInTheDocument();
   });
+
+  it("编辑模式游标为 0 时不调用 API", async () => {
+    const user = userEvent.setup();
+    const updateAdminAiTask = jest.fn();
+    render(
+      <AiTaskForm
+        api={{ createAdminAiTask: jest.fn(), updateAdminAiTask }}
+        initialTask={makeTaskResponse({ lastEntryId: "20" }) as never}
+        mode="edit"
+        models={[{ id: "m1", name: "gpt-test" }]}
+      />,
+    );
+
+    const cursor = screen.getByLabelText("当前游标");
+    await user.clear(cursor);
+    await user.type(cursor, "0");
+    await user.click(screen.getByRole("button", { name: "保存" }));
+
+    expect(updateAdminAiTask).not.toHaveBeenCalled();
+    expect(
+      screen.getByText(/游标 lastEntryId 须为正整数字符串/),
+    ).toBeInTheDocument();
+  });
 });

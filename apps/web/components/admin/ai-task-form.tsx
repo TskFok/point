@@ -128,7 +128,7 @@ export function AiTaskForm({
       const cursor = lastEntryId.trim();
       if (cursor !== "" && !/^\d+$/.test(cursor)) {
         next.push("游标 lastEntryId 须为正整数字符串，或留空以重置");
-      } else if (cursor !== "" && BigInt(cursor) < 1n) {
+      } else if (cursor !== "" && BigInt(cursor) < BigInt(1)) {
         next.push("游标 lastEntryId 须为正整数字符串，或留空以重置");
       }
     }
