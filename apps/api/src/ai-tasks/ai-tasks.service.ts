@@ -261,17 +261,36 @@ export class AiTasksService implements OnModuleInit {
   /**
    * 进程被 docker compose down / SIGKILL 等强杀后，RUNNING 记录会遗留并挡住后续执行。
    * 服务启动时将全部遗留 RUNNING 标记为 FAILED，释放部分唯一索引锁。
+   * cron 触发的中断失败计入连续失败停用逻辑。
    */
   async recoverInterruptedRuns(): Promise<number> {
-    const result = await this.prisma.aiTaskRun.updateMany({
+    const running = await this.prisma.aiTaskRun.findMany({
       where: { status: 'RUNNING' },
-      data: {
-        status: 'FAILED',
-        finishedAt: new Date(),
-        errorMessage: INTERRUPTED_RUN_MESSAGE,
-      },
+      select: { id: true, aiTaskId: true, trigger: true },
     });
-    return result.count;
+    if (running.length === 0) {
+      return 0;
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.aiTaskRun.updateMany({
+        where: { id: { in: running.map((run) => run.id) } },
+        data: {
+          status: 'FAILED',
+          finishedAt: new Date(),
+          errorMessage: INTERRUPTED_RUN_MESSAGE,
+        },
+      });
+
+      const cronAdds = new Map<string, number>();
+      for (const run of running) {
+        if (run.trigger !== 'CRON') continue;
+        cronAdds.set(run.aiTaskId, (cronAdds.get(run.aiTaskId) ?? 0) + 1);
+      }
+      await this.applyCronFailureAdds(tx, cronAdds);
+    });
+
+    return running.length;
   }
 
   /**
@@ -279,24 +298,40 @@ export class AiTasksService implements OnModuleInit {
    * @returns 是否释放了至少一条
    */
   private async releaseStaleRunningLocks(taskId: string): Promise<boolean> {
-    const result = await this.prisma.aiTaskRun.updateMany({
+    const stale = await this.prisma.aiTaskRun.findMany({
       where: {
         aiTaskId: taskId,
         status: 'RUNNING',
         startedAt: { lt: new Date(Date.now() - STALE_RUNNING_MS) },
       },
-      data: {
-        status: 'FAILED',
-        finishedAt: new Date(),
-        errorMessage: INTERRUPTED_RUN_MESSAGE,
-      },
+      select: { id: true, trigger: true },
     });
-    if (result.count > 0) {
-      this.logger.warn(
-        `Released ${result.count} stale RUNNING run(s) for AI task ${taskId}`,
-      );
+    if (stale.length === 0) {
+      return false;
     }
-    return result.count > 0;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.aiTaskRun.updateMany({
+        where: { id: { in: stale.map((run) => run.id) } },
+        data: {
+          status: 'FAILED',
+          finishedAt: new Date(),
+          errorMessage: INTERRUPTED_RUN_MESSAGE,
+        },
+      });
+
+      const cronAdds = new Map<string, number>();
+      for (const run of stale) {
+        if (run.trigger !== 'CRON') continue;
+        cronAdds.set(taskId, (cronAdds.get(taskId) ?? 0) + 1);
+      }
+      await this.applyCronFailureAdds(tx, cronAdds);
+    });
+
+    this.logger.warn(
+      `Released ${stale.length} stale RUNNING run(s) for AI task ${taskId}`,
+    );
+    return true;
   }
 
   private async createRunningRun(
@@ -814,6 +849,40 @@ export class AiTasksService implements OnModuleInit {
     }));
   }
 
+  private async applyCronFailureAdds(
+    tx: Prisma.TransactionClient,
+    cronAdds: Map<string, number>,
+  ): Promise<void> {
+    const taskIds = [...cronAdds.keys()];
+    if (taskIds.length === 0) return;
+
+    // 批量取出任务配置，避免循环内查库
+    const tasks = await tx.aiTask.findMany({
+      where: { id: { in: taskIds } },
+      select: {
+        id: true,
+        consecutiveFailureCount: true,
+        maxConsecutiveFailures: true,
+      },
+    });
+    // 启动/超时恢复：任务数通常极少；每任务一次 update（非循环内查询）
+    for (const task of tasks) {
+      const add = cronAdds.get(task.id) ?? 0;
+      if (add <= 0) continue;
+      const next = task.consecutiveFailureCount + add;
+      const disable =
+        task.maxConsecutiveFailures > 0 &&
+        next >= task.maxConsecutiveFailures;
+      await tx.aiTask.update({
+        where: { id: task.id },
+        data: {
+          consecutiveFailureCount: next,
+          ...(disable ? { isEnabled: false } : {}),
+        },
+      });
+    }
+  }
+
   private async applyCronRunOutcome(
     tx: Prisma.TransactionClient,
     taskId: string,
@@ -826,24 +895,7 @@ export class AiTasksService implements OnModuleInit {
       });
       return;
     }
-    const task = await tx.aiTask.findUnique({
-      where: { id: taskId },
-      select: {
-        consecutiveFailureCount: true,
-        maxConsecutiveFailures: true,
-      },
-    });
-    if (!task) return;
-    const next = task.consecutiveFailureCount + 1;
-    const disable =
-      task.maxConsecutiveFailures > 0 && next >= task.maxConsecutiveFailures;
-    await tx.aiTask.update({
-      where: { id: taskId },
-      data: {
-        consecutiveFailureCount: next,
-        ...(disable ? { isEnabled: false } : {}),
-      },
-    });
+    await this.applyCronFailureAdds(tx, new Map([[taskId, 1]]));
   }
 
   private async requireTask(id: string): Promise<AiTask> {

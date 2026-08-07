@@ -123,20 +123,48 @@ function createService(options?: {
         }
         return Promise.resolve(taskState);
       },
-      findMany: () =>
-        Promise.resolve(
-          taskState
-            ? [
-                {
-                  ...taskState,
-                  aiModelConfig: model
-                    ? { id: model.id, name: model.name }
-                    : { id: 'x', name: '' },
-                  runs: [],
-                },
-              ]
-            : [],
-        ),
+      findMany: (args?: {
+        where?: { id?: string | { in?: string[] }; isEnabled?: boolean };
+        select?: Record<string, unknown>;
+        include?: Record<string, unknown>;
+      }) => {
+        if (!taskState) return Promise.resolve([]);
+        if (
+          args?.where?.id !== undefined &&
+          typeof args.where.id === 'object' &&
+          Array.isArray(args.where.id.in) &&
+          !args.where.id.in.includes(taskState.id as string)
+        ) {
+          return Promise.resolve([]);
+        }
+        if (
+          args?.where?.isEnabled !== undefined &&
+          taskState.isEnabled !== args.where.isEnabled
+        ) {
+          return Promise.resolve([]);
+        }
+        if (args?.select) {
+          return Promise.resolve([
+            {
+              id: taskState.id,
+              consecutiveFailureCount: taskState.consecutiveFailureCount,
+              maxConsecutiveFailures: taskState.maxConsecutiveFailures,
+              cronExpression: taskState.cronExpression,
+              updatedBy: taskState.updatedBy,
+              isEnabled: taskState.isEnabled,
+            },
+          ]);
+        }
+        return Promise.resolve([
+          {
+            ...taskState,
+            aiModelConfig: model
+              ? { id: model.id, name: model.name }
+              : { id: 'x', name: '' },
+            runs: [],
+          },
+        ]);
+      },
       count: () => Promise.resolve(taskState ? 1 : 0),
       create: ({ data }: { data: Record<string, unknown> }) =>
         Promise.resolve({
@@ -273,7 +301,7 @@ function createService(options?: {
         data,
       }: {
         where: {
-          id?: string;
+          id?: string | { in?: string[] };
           status?: string;
           aiTaskId?: string;
           startedAt?: { lt?: Date };
@@ -282,7 +310,15 @@ function createService(options?: {
       }) => {
         let count = 0;
         for (const run of runs) {
-          if (where.id !== undefined && run.id !== where.id) {
+          if (typeof where.id === 'string' && run.id !== where.id) {
+            continue;
+          }
+          if (
+            where.id !== undefined &&
+            typeof where.id === 'object' &&
+            Array.isArray(where.id.in) &&
+            !where.id.in.includes(String(run.id))
+          ) {
             continue;
           }
           if (
@@ -305,7 +341,49 @@ function createService(options?: {
         }
         return Promise.resolve({ count });
       },
-      findMany: () => Promise.resolve([]),
+      findMany: (args?: {
+        where?: {
+          id?: string | { in?: string[] };
+          status?: string;
+          aiTaskId?: string;
+          startedAt?: { lt?: Date };
+        };
+      }) => {
+        const where = args?.where ?? {};
+        const matched = runs.filter((item) => {
+          if (where.status !== undefined && item.status !== where.status) {
+            return false;
+          }
+          if (
+            where.aiTaskId !== undefined &&
+            item.aiTaskId !== where.aiTaskId
+          ) {
+            return false;
+          }
+          if (
+            where.id !== undefined &&
+            typeof where.id === 'object' &&
+            Array.isArray(where.id.in) &&
+            !where.id.in.includes(String(item.id))
+          ) {
+            return false;
+          }
+          if (typeof where.id === 'string' && item.id !== where.id) {
+            return false;
+          }
+          if (where.startedAt?.lt instanceof Date) {
+            const startedAt = item.startedAt;
+            if (
+              !(startedAt instanceof Date) ||
+              !(startedAt < where.startedAt.lt)
+            ) {
+              return false;
+            }
+          }
+          return true;
+        });
+        return Promise.resolve(matched);
+      },
       count: () => Promise.resolve(0),
     },
     question: {
@@ -1099,5 +1177,55 @@ describe('连续失败停用', () => {
     await service.update('task-1', { isEnabled: true }, 'admin-1');
     expect(taskState?.isEnabled).toBe(true);
     expect(taskState?.consecutiveFailureCount).toBe(0);
+  });
+
+  it('recoverInterruptedRuns 将 cron RUNNING 计为失败并可达阈值停用', async () => {
+    const { service, taskState, runs } = createService({
+      task: makeTask({ maxConsecutiveFailures: 1, consecutiveFailureCount: 0 }),
+      existingRuns: [
+        {
+          id: 'stuck-cron',
+          aiTaskId: 'task-1',
+          trigger: 'CRON',
+          status: 'RUNNING',
+          startedAt: new Date('2026-08-03T01:00:00.000Z'),
+          finishedAt: null,
+          questionsCreated: 0,
+          lastEntryIdBefore: null,
+          lastEntryIdAfter: null,
+          errorMessage: null,
+          aiResponseBody: null,
+        },
+      ],
+    });
+    const count = await service.recoverInterruptedRuns();
+    expect(count).toBe(1);
+    expect(runs[0]?.status).toBe('FAILED');
+    expect(taskState?.consecutiveFailureCount).toBe(1);
+    expect(taskState?.isEnabled).toBe(false);
+  });
+
+  it('recoverInterruptedRuns 对 MANUAL RUNNING 不计失败次数', async () => {
+    const { service, taskState } = createService({
+      task: makeTask({ maxConsecutiveFailures: 1, consecutiveFailureCount: 0 }),
+      existingRuns: [
+        {
+          id: 'stuck-manual',
+          aiTaskId: 'task-1',
+          trigger: 'MANUAL',
+          status: 'RUNNING',
+          startedAt: new Date('2026-08-03T01:00:00.000Z'),
+          finishedAt: null,
+          questionsCreated: 0,
+          lastEntryIdBefore: null,
+          lastEntryIdAfter: null,
+          errorMessage: null,
+          aiResponseBody: null,
+        },
+      ],
+    });
+    await service.recoverInterruptedRuns();
+    expect(taskState?.consecutiveFailureCount).toBe(0);
+    expect(taskState?.isEnabled).toBe(true);
   });
 });
