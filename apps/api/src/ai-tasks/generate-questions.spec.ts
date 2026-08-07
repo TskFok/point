@@ -3,6 +3,7 @@ import {
   generateQuestionsWithChatCompletions,
   parseGeneratedQuestionsJson,
   shuffleQuestionOptions,
+  stemNamesTargetWord,
   summarizeApiErrorBody,
   summarizeNonJsonResponse,
   truncateErrorDetail,
@@ -551,6 +552,66 @@ describe('generate-questions parse', () => {
       DEFAULT_WORD_MATCH_RULES,
     );
     expect(result.ok).toBe(true);
+  });
+
+  it('ja prompt 要求日文例句与点名问句', () => {
+    const p = buildGeneratePrompt({
+      words: [{ id: '1', word: '食べる', pos: 'verb' }],
+      optionCount: 4,
+      wordMatchRules: DEFAULT_WORD_MATCH_RULES,
+      langCode: 'ja',
+    });
+    expect(p).toMatch(/Japanese|日語|日语|日本語|target language/i);
+    expect(p).toContain('「WORD」はどういう意味ですか？');
+    expect(p).not.toMatch(/What does \\"WORD\\" mean\?/);
+  });
+
+  it('stemNamesTargetWord 接受各语言点名问句', () => {
+    expect(
+      stemNamesTargetWord(
+        'She left early. What does "leave" mean?',
+        'leave',
+        'en',
+      ),
+    ).toBe(true);
+    expect(
+      stemNamesTargetWord(
+        '彼はパンを食べる。「食べる」はどういう意味ですか？',
+        '食べる',
+        'ja',
+      ),
+    ).toBe(true);
+    expect(
+      stemNamesTargetWord(
+        'Lui mangia pane. Che cosa significa "mangiare"?',
+        'mangiare',
+        'it',
+      ),
+    ).toBe(true);
+    expect(
+      stemNamesTargetWord(
+        'Il mange du pain. Que signifie "manger" ?',
+        'manger',
+        'fr',
+      ),
+    ).toBe(true);
+    expect(
+      stemNamesTargetWord(
+        'Er isst Brot. Was bedeutet "essen"?',
+        'essen',
+        'de',
+      ),
+    ).toBe(true);
+  });
+
+  it('stemNamesTargetWord 拒绝错误语言点名问句', () => {
+    expect(
+      stemNamesTargetWord(
+        '彼はパンを食べる。What does "食べる" mean?',
+        '食べる',
+        'ja',
+      ),
+    ).toBe(false);
   });
 });
 

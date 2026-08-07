@@ -1,3 +1,4 @@
+import { type LangCode, DEFAULT_LANG_CODE } from '../common/lang-code';
 import {
   formatWordMatchRulesForPrompt,
   stemIncludesWord,
@@ -37,8 +38,53 @@ export type GenerateQuestionsInput = {
   words: DictionaryWord[];
   optionCount: number;
   wordMatchRules: WordMatchRules;
+  langCode?: LangCode;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
+};
+
+type StemPromptProfile = {
+  languageNameEn: string;
+  askSuffixInstruction: string; // Prompt 中 Exact 后缀说明
+  goodStemExample: string;
+};
+
+const STEM_PROMPT_BY_LANG: Record<LangCode, StemPromptProfile> = {
+  en: {
+    languageNameEn: 'English',
+    askSuffixInstruction:
+      'Exactly What does \\"WORD\\" mean? (WORD = the listed target word with escaped quotes)',
+    goodStemExample:
+      'The scholar claimed to abhor violence in all forms. What does \\"abhor\\" mean?',
+  },
+  ja: {
+    languageNameEn: 'Japanese',
+    askSuffixInstruction:
+      'Exactly 「WORD」はどういう意味ですか？ (WORD = the listed target word; use Japanese corner brackets)',
+    goodStemExample:
+      '彼は毎朝パンを食べる。「食べる」はどういう意味ですか？',
+  },
+  it: {
+    languageNameEn: 'Italian',
+    askSuffixInstruction:
+      'Exactly Che cosa significa \\"WORD\\"? (WORD = the listed target word with escaped quotes)',
+    goodStemExample:
+      'Lui mangia il pane ogni mattina. Che cosa significa \\"mangiare\\"?',
+  },
+  fr: {
+    languageNameEn: 'French',
+    askSuffixInstruction:
+      'Exactly Que signifie \\"WORD\\" ? (WORD = the listed target word with escaped quotes; keep the space before ?)',
+    goodStemExample:
+      'Il mange du pain chaque matin. Que signifie \\"manger\\" ?',
+  },
+  de: {
+    languageNameEn: 'German',
+    askSuffixInstruction:
+      'Exactly Was bedeutet \\"WORD\\"? (WORD = the listed target word with escaped quotes)',
+    goodStemExample:
+      'Er isst jeden Morgen Brot. Was bedeutet \\"essen\\"?',
+  },
 };
 
 export type GenerateQuestionsResult =
@@ -61,7 +107,10 @@ export function buildGeneratePrompt(input: {
   words: DictionaryWord[];
   optionCount: number;
   wordMatchRules: WordMatchRules;
+  langCode?: LangCode;
 }): string {
+  const langCode = input.langCode ?? DEFAULT_LANG_CODE;
+  const profile = STEM_PROMPT_BY_LANG[langCode];
   const wordList = input.words
     .map(
       (item, index) =>
@@ -77,11 +126,11 @@ export function buildGeneratePrompt(input: {
     formatWordMatchRulesForPrompt(input.wordMatchRules),
     'Each question\'s "word" field MUST match the listed word exactly. Never substitute a near-form or different word (e.g. "when" for "why", "catch" for "cat").',
     'Do NOT use blanks, underscores (___), ellipsis placeholders, or [blank] in the stem.',
-    'Stem format is REQUIRED and MUST follow: one complete English example sentence that uses the target word, then a space, then Exactly What does \\"WORD\\" mean? (WORD = the listed target word with escaped quotes).',
-    'Forbidden stems: only an interrogative/question that uses the word without the What does \\"WORD\\" mean? suffix (e.g. reject "When did you arrive?"); also forbidden: only What does \\"WORD\\" mean? without a preceding example sentence.',
-    'Good stem example: The scholar claimed to abhor violence in all forms. What does \\"abhor\\" mean?',
+    `Stem format is REQUIRED and MUST follow: one complete ${profile.languageNameEn} example sentence that uses the target word, then a space, then ${profile.askSuffixInstruction}.`,
+    `Forbidden stems: only an interrogative/question that uses the word without the required ask suffix (e.g. reject a bare question with no meaning-ask); also forbidden: only the ask suffix without a preceding example sentence.`,
+    `Good stem example: ${profile.goodStemExample}`,
     'In JSON string values, every double quote MUST be escaped as \\". Never write raw " inside a string (invalid JSON).',
-    'Example stem JSON fragment: "stem":"The scholar claimed to abhor violence in all forms. What does \\"abhor\\" mean?"',
+    `Example stem JSON fragment: "stem":"${profile.goodStemExample}"`,
     'Option contents must be Chinese meanings matching the tested part of speech.',
     'Explanation must be Chinese and MUST include: (1) a full Chinese translation of the entire stem sentence, (2) the part of speech in Chinese (如 名词/动词/形容词), and (3) a brief meaning note for the target word.',
     'Example explanation: 他们决定放弃这个计划。「abandon」是动词，表示放弃、抛弃。',
@@ -147,15 +196,24 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/** stem 是否以 What does "word" mean? 形式点名考查目标词（引号可选） */
-export function stemNamesTargetWord(stem: string, word: string): boolean {
+/** stem 是否以目标语言点名问句考查目标词（引号可选） */
+export function stemNamesTargetWord(
+  stem: string,
+  word: string,
+  langCode: LangCode = DEFAULT_LANG_CODE,
+): boolean {
   const base = word.trim();
   if (!base) return false;
-  const pattern = new RegExp(
-    `what\\s+does\\s+["'\\u201c\\u201d\\u300c]?${escapeRegExp(base)}["'\\u201c\\u201d\\u300d]?\\s+mean\\s*\\?`,
-    'i',
-  );
-  return pattern.test(stem);
+  const escaped = escapeRegExp(base);
+  const q = `["'\\u201c\\u201d\\u300c]?${escaped}["'\\u201c\\u201d\\u300d]?`;
+  const patterns: Record<LangCode, RegExp> = {
+    en: new RegExp(`what\\s+does\\s+${q}\\s+mean\\s*\\?`, 'i'),
+    ja: new RegExp(`[「"']?${escaped}[」"']?はどういう意味ですか\\s*？?`),
+    it: new RegExp(`che\\s+cosa\\s+significa\\s+${q}\\s*\\?`, 'i'),
+    fr: new RegExp(`que\\s+signifie\\s+${q}\\s*\\?`, 'i'),
+    de: new RegExp(`was\\s+bedeutet\\s+${q}\\s*\\?`, 'i'),
+  };
+  return patterns[langCode].test(stem);
 }
 
 /**
@@ -169,6 +227,7 @@ export function validateOneGeneratedQuestion(
   optionCount: number,
   expectedWord: string,
   wordMatchRules: WordMatchRules,
+  langCode: LangCode = DEFAULT_LANG_CODE,
 ):
   | {
       ok: true;
@@ -196,7 +255,7 @@ export function validateOneGeneratedQuestion(
   if (!stemIncludesWord(stem, expected, wordMatchRules)) {
     return { ok: false, message: `题目 ${expected} stem 未包含目标词` };
   }
-  if (!stemNamesTargetWord(stem, expected)) {
+  if (!stemNamesTargetWord(stem, expected, langCode)) {
     return { ok: false, message: `题目 ${expected} stem 未点名考查目标词` };
   }
   if (typeof value.explanation !== 'string' || !value.explanation.trim()) {
@@ -254,6 +313,7 @@ export function alignGeneratedQuestions(
   optionCount: number,
   words: DictionaryWord[],
   wordMatchRules: WordMatchRules,
+  langCode: LangCode = DEFAULT_LANG_CODE,
 ): {
   accepted: GeneratedQuestion[];
   skipMessages: string[];
@@ -270,6 +330,7 @@ export function alignGeneratedQuestions(
       optionCount,
       expected.word,
       wordMatchRules,
+      langCode,
     );
     if (!validated.ok) {
       skipMessages.push(
@@ -298,6 +359,7 @@ export function parseGeneratedQuestionsJson(
   words: DictionaryWord[],
   wordMatchRules: WordMatchRules,
   rng: () => number = Math.random,
+  langCode: LangCode = DEFAULT_LANG_CODE,
 ):
   | {
       ok: true;
@@ -318,6 +380,7 @@ export function parseGeneratedQuestionsJson(
     optionCount,
     words,
     wordMatchRules,
+    langCode,
   );
   if (accepted.length === 0) {
     return {
@@ -415,10 +478,12 @@ export async function generateQuestionsWithChatCompletions(
   const fetchImpl = input.fetchImpl ?? globalThis.fetch;
   const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const url = `${normalizeBaseUrl(input.baseUrl)}/chat/completions`;
+  const langCode = input.langCode ?? DEFAULT_LANG_CODE;
   const prompt = buildGeneratePrompt({
     words: input.words,
     optionCount: input.optionCount,
     wordMatchRules: input.wordMatchRules,
+    langCode,
   });
   let response: Response;
   try {
@@ -527,6 +592,8 @@ export async function generateQuestionsWithChatCompletions(
     input.optionCount,
     input.words,
     input.wordMatchRules,
+    Math.random,
+    langCode,
   );
   return {
     ...parsed,
