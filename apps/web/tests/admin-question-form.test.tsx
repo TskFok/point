@@ -69,6 +69,30 @@ describe("管理员题目表单", () => {
     expect(enable.closest("label")).toHaveClass("admin-field--wide");
   });
 
+  it("基础积分占据单独一行", () => {
+    render(
+      <QuestionForm
+        api={createApi()}
+        mode="create"
+      />,
+    );
+    expect(screen.getByLabelText("基础积分").closest("label")).toHaveClass(
+      "admin-field--wide",
+    );
+  });
+
+  it("语言选项占据单独一行", () => {
+    render(
+      <QuestionForm
+        api={createApi()}
+        mode="create"
+      />,
+    );
+    expect(screen.getByLabelText("语言").closest("label")).toHaveClass(
+      "admin-field--wide",
+    );
+  });
+
   it("已有答题记录时字段只读且停用只发送 isActive false", async () => {
     const user = userEvent.setup();
     const api = createApi();

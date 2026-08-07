@@ -293,7 +293,7 @@ export function QuestionForm({
             />
             <small>{Array.from(explanation).length} / 5000</small>
           </label>
-          <label className="admin-field">
+          <label className="admin-field admin-field--wide">
             <span>基础积分</span>
             <input
               aria-label="基础积分"
@@ -308,7 +308,7 @@ export function QuestionForm({
             />
             <small>1–1000 的整数</small>
           </label>
-          <label className="admin-field">
+          <label className="admin-field admin-field--wide">
             <span>语言</span>
             <select
               aria-label="语言"
