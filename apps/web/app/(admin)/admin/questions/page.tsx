@@ -325,7 +325,7 @@ export default function AdminQuestionsPage({
       <div className="list-page__chrome">
         <Card className="admin-filter-card">
           <form
-            className="admin-filter-grid"
+            className="admin-filter-grid admin-filter-grid--questions"
             onSubmit={(event) => {
               event.preventDefault();
               setPage(1);
@@ -360,6 +360,16 @@ export default function AdminQuestionsPage({
               ]}
               value={filters.isActive}
             />
+            <Button
+              disabled={busy || loading}
+              onClick={() => openConfirm({ kind: "clear" })}
+              size="sm"
+              type="button"
+              variant="danger"
+            >
+              <Trash2 aria-hidden="true" />
+              清理题库
+            </Button>
             <Button disabled={loading} type="submit">
               <Filter aria-hidden="true" />
               应用筛选
@@ -367,15 +377,6 @@ export default function AdminQuestionsPage({
             <Button onClick={() => setEditing("create")} type="button">
               <Plus aria-hidden="true" />
               添加题目
-            </Button>
-            <Button
-              disabled={busy || loading}
-              onClick={() => openConfirm({ kind: "clear" })}
-              type="button"
-              variant="danger"
-            >
-              <Trash2 aria-hidden="true" />
-              清理题库
             </Button>
           </form>
         </Card>

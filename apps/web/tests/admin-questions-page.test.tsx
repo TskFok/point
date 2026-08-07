@@ -361,9 +361,19 @@ describe("AdminQuestionsPage 清理题库", () => {
   });
 
   it("展示清理题库按钮", async () => {
-    render(<AdminQuestionsPage api={createApi()} />);
+    const { container } = render(<AdminQuestionsPage api={createApi()} />);
     await screen.findByText("启用中的题目");
-    expect(screen.getByRole("button", { name: "清理题库" })).toBeVisible();
+    const clearButton = screen.getByRole("button", { name: "清理题库" });
+    expect(clearButton).toBeVisible();
+    expect(clearButton).toHaveClass("pq-button--sm");
+    const filterGrid = container.querySelector(".admin-filter-grid--questions");
+    expect(filterGrid).not.toBeNull();
+    const buttons = within(filterGrid as HTMLElement).getAllByRole("button");
+    expect(buttons.map((button) => button.textContent?.trim())).toEqual([
+      "清理题库",
+      "应用筛选",
+      "添加题目",
+    ]);
   });
 
   it("须输入清空题库后才调用 clearAdminQuestions", async () => {

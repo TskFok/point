@@ -2,12 +2,14 @@ import type { ButtonHTMLAttributes } from "react";
 
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "secondary" | "danger";
+  size?: "md" | "sm";
   fullWidth?: boolean;
 };
 
 export function Button({
   className = "",
   variant = "primary",
+  size = "md",
   fullWidth = false,
   type = "button",
   ...props
@@ -15,6 +17,7 @@ export function Button({
   const classes = [
     "pq-button",
     `pq-button--${variant}`,
+    size === "sm" ? "pq-button--sm" : "",
     fullWidth ? "pq-button--full" : "",
     className,
   ]
